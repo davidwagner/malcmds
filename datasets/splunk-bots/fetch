@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Fetch the public dataset, preserving completed downloads."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+os.chdir(HERE)
+sys.path.insert(0, str(HERE.parent))
+from _fetch import download
+
+download(
+    "https://botsdataset.s3.amazonaws.com/botsv3/botsv3_data_set.tgz",
+    "botsv3_data_set.tgz",
+    size=335251397,
+    checksum="md5:d7ccca99a01cff070dff3c139cdc10eb",
+)

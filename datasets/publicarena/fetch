@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Fetch the public system-audit archives and attack annotations."""
+
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import github
+
+
+def selected(name):
+    """Keep command-bearing archives and all published attack annotations."""
+    return (
+        name.startswith(("SystemAuditLogs/", "UserLogs/"))
+        or name == "AttackCampaignsDescriptions.xlsx"
+        or name.startswith("AttackGraphs/")
+        and name.endswith(".pdf")
+    )
+
+
+github("security0528/PublicArena", selected, ref="ba3dbeb6d17df6d44a0a0fa727144f1619bae2ed")

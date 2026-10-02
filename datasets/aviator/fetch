@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""Fetch the published AVIATOR archive and versioned ground-truth material."""
+
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import download
+
+# The individual-file service returned HTTP 500 during verification. The
+# publisher's complete archived BagIt download is independently available.
+download(
+    "https://gitlab.kit.edu/api/v4/projects/kit%2Fiai%2Frsa%2Faviator/repository/archive.tar.gz?sha=4a8a815ee723ee7c6dec871409be67fef272da6b",
+    "aviator-ground-truth-and-tools.tar.gz",
+    657057,
+    "sha256:4a21043a62126bc382e21dc70a5ef144988a3f3439a3a09fb3e0d6b4325ca2f6",
+)
+download(
+    "https://radar.kit.edu/radar-backend/archives/8s5b0u5yqgfs2y0d/versions/1/content",
+    "10.35097-8s5b0u5yqgfs2y0d.tar",
+    109261265408,
+    "md5:4d03f85f6d65b6e3849646fac4b5d734",
+)

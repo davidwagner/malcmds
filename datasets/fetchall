@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Run each dataset fetcher, retaining a nonzero exit status if any fail."""
+
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main():
+    """Fetch every dataset, continuing past errors so other downloads can finish."""
+    root = Path(__file__).resolve().parent
+    failed = []
+    for script in sorted(root.glob("*/fetch")):
+        print(f"\n=== {script.parent.name} ===", flush=True)
+        result = subprocess.run([str(script)], cwd=script.parent, check=False)
+        if result.returncode:
+            failed.append(script.parent.name)
+    if failed:
+        print("Failed datasets: " + ", ".join(failed), file=sys.stderr)
+    return bool(failed)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

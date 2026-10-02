@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""Fetch ATLASv2 and the authors' recommended REAPr process labels."""
+
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import cached_json, download
+
+REAP = "32babb5613f7d8c4c9f7ab0a0e602da64521f149"
+BASE = f"https://api.bitbucket.org/2.0/repositories/sts-lab/reapr-ground-truth/src/{REAP}/"
+url = BASE + "atlasv2/?pagelen=100"
+page = 1
+while url:
+    data = cached_json(url, f"reapr-atlasv2-{REAP}-{page}.json")
+    for item in data["values"]:
+        if item["type"] == "commit_file":
+            download(item["links"]["self"]["href"], "reapr/" + item["path"], item["size"])
+    url = data.get("next")
+    page += 1
+
+download(BASE + "README.md", "reapr/README.md")
+download(
+    "https://uofi.box.com/index.php?rm=box_download_shared_file&shared_name=c5apkkqjvl64zay9ivondhop5pwfdefm&file_id=f_2488193147128",
+    "atlasv2_attack_igraphs.tar.gz",
+    21011377,
+    "sha1:2ea29f646cb682afd98f27d5d5428ec3eb03601d",
+)
+download(
+    "https://uofi.box.com/index.php?rm=box_download_shared_file&shared_name=feunur7280afxrfeb0af73recexa73yc&file_id=f_1294229670092",
+    "atlasv2.tar.gz",
+    12208351555,
+    "sha1:af18e4f07fea4a05431b81f10ed273a5e1b1281e",
+)

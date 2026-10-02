@@ -1,0 +1,5 @@
+# Only downloader source and documentation belong in this repository.
+/*/*
+!/*/fetch
+!/*/README.md
+/__pycache__/

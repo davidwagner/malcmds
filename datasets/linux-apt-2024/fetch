@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Fetch the public dataset, preserving completed downloads."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+os.chdir(HERE)
+sys.path.insert(0, str(HERE.parent))
+from _fetch import mendeley, zenodo
+
+mendeley("5x68fv63sh", 2)
+
+
+def selected(name):
+    """Keep custom labeling rules, omitting redundant raw CSV shards."""
+    return name == "local_rules.xml"
+
+
+zenodo("10685642", selected)

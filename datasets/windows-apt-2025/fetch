@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Fetch the public dataset, preserving completed downloads."""
+
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+os.chdir(HERE)
+sys.path.insert(0, str(HERE.parent))
+from _fetch import mendeley
+
+FILES = {
+    "combined.csv",
+    "scenario_manifest.csv",
+    "validation_summary.csv",
+    "checksums.sha256",
+    "README.md",
+}
+
+
+def selected(name):
+    """Keep merged data and annotations, omitting redundant date shards."""
+    return name in FILES
+
+
+mendeley("b8fmtzvpy8", 3, selected)
