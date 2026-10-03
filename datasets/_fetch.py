@@ -72,6 +72,23 @@ def valid(path, size, checksum):
     return size is not None
 
 
+def html_error(part, destination):
+    """Recognize HTML error responses without reading large payloads into memory."""
+    if destination.suffix.lower() in {".html", ".htm"} or not part.exists():
+        return None
+    with part.open("rb") as stream:
+        prefix = stream.read(8192).lstrip().lower()
+    if not prefix.startswith((b"<!doctype html", b"<html")):
+        return None
+    if b"quota exceeded" in prefix:
+        return (
+            f"Google Drive download quota exceeded for {destination}. "
+            "Retry later (Google advises allowing up to 24 hours); "
+            "the error page was saved as .part.bad."
+        )
+    return f"Received an HTML page instead of {destination}; saved as .part.bad"
+
+
 def download(url, relative_dest, size=None, checksum=None):
     """Fetch atomically, resume partial files, and skip verified completed files.
 
@@ -109,6 +126,9 @@ def download(url, relative_dest, size=None, checksum=None):
             path.replace(part)
         else:
             raise RuntimeError(f"Existing file failed verification; move it aside: {path}")
+    if html_error(part, path):
+        # Older versions left HTTP-success error pages as resumable payloads.
+        part.replace(part.with_name(part.name + ".bad"))
     print(f"Downloading: {path}", flush=True)
     if not valid(part, size, checksum):
         command = [
@@ -138,6 +158,10 @@ def download(url, relative_dest, size=None, checksum=None):
             part.unlink(missing_ok=True)
             result = subprocess.run(command, check=False)
         result.check_returncode()
+    error = html_error(part, path)
+    if error:
+        part.replace(part.with_name(part.name + ".bad"))
+        raise RuntimeError(error)
     if size is not None and part.stat().st_size != size:
         raise RuntimeError(f"Size mismatch for {part}: expected {size}, got {part.stat().st_size}")
     if checksum:
@@ -146,13 +170,6 @@ def download(url, relative_dest, size=None, checksum=None):
             # A complete but corrupt partial cannot be repaired by appending bytes.
             part.replace(part.with_name(part.name + ".bad"))
             raise RuntimeError(f"Checksum mismatch for {path}; saved as .part.bad; rerun to retry")
-    with part.open("rb") as stream:
-        prefix = stream.read(256).lstrip().lower()
-    if path.suffix.lower() not in {".html", ".htm"} and (
-        prefix.startswith(b"<!doctype html") or prefix.startswith(b"<html")
-    ):
-        part.replace(part.with_name(part.name + ".bad"))
-        raise RuntimeError(f"Received an HTML page instead of {path}")
     part.replace(path)
     stat = path.stat()
     write_json(receipt, identity | {"bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns})

@@ -125,6 +125,41 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(self.run_download(size=None, checksum=None).returncode, 0)
         self.assertIn("Already downloaded", self.run_download(size=None, checksum=None).stdout)
 
+    def test_html_partial_recovery(self):
+        """A saved quota page is discarded before resuming the actual payload."""
+        part = self.output / "data.bin.part"
+        page = b"<!DOCTYPE html><html><title>Google Drive - Quota exceeded</title></html>"
+        part.write_bytes(page)
+        result = self.run_download()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.output / "data.bin").read_bytes(), self.source.read_bytes())
+        self.assertEqual((self.output / "data.bin.part.bad").read_bytes(), page)
+
+    def test_quota_page_before_size_verification(self):
+        """HTTP-success quota pages produce an actionable error and no resume data."""
+        self.source.write_bytes(
+            b"<!DOCTYPE html><html><title>Google Drive - Quota exceeded</title></html>"
+        )
+        result = self.run_download(size=635185416)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Google Drive download quota exceeded", result.stderr)
+        self.assertNotIn("Size mismatch", result.stderr)
+        self.assertFalse((self.output / "data.bin.part").exists())
+        self.assertFalse((self.output / "data.bin.download.json").exists())
+        self.assertEqual(
+            (self.output / "data.bin.part.bad").read_bytes(), self.source.read_bytes()
+        )
+
+    def test_intentional_html_download(self):
+        """An explicitly requested HTML file remains a valid download."""
+        content = b"<!DOCTYPE html><html>dataset documentation</html>"
+        self.source.write_bytes(content)
+        result = self.run_download(
+            relative_dest="index.html", size=len(content), checksum=None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.output / "index.html").read_bytes(), content)
+
     def test_interrupted_receipt(self):
         """A damaged completion receipt does not force manual intervention."""
         self.assertEqual(self.run_download().returncode, 0)
@@ -170,7 +205,7 @@ github('splunk/attack_data', selected, 'a28608b53aa3d8222052e8f3ada59e2d9a4adfff
         env.pop("FETCH_LIST", None)
         script = target / "kypo" / "fetch"
         first = subprocess.run(
-            [str(script)], cwd=self.base, env=env, capture_output=True, text=True
+            [str(script)], cwd=self.base, env=env, capture_output=True, text=True, check=False
         )
         self.assertEqual(first.returncode, 0, first.stderr)
         import zipfile
@@ -179,7 +214,7 @@ github('splunk/attack_data', selected, 'a28608b53aa3d8222052e8f3ada59e2d9a4adfff
         self.assertTrue(zipfile.is_zipfile(archive))
         before = archive.stat().st_mtime_ns
         second = subprocess.run(
-            [str(script)], cwd=self.base, env=env, capture_output=True, text=True
+            [str(script)], cwd=self.base, env=env, capture_output=True, text=True, check=False
         )
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertIn("Already downloaded", second.stdout)
