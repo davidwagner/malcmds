@@ -1,30 +1,38 @@
 # ATLASv2
 
-Windows endpoint logs from two Windows 7 32-bit virtual machines used as researchers' primary workstations in July 2022. Four benign days precede a day of ten attack scenarios (four single-host and six multi-host), with benign activity continuing during attacks. Collection combines Sysmon, Microsoft Security auditing/ETW, Carbon Black Cloud, Firefox and DNS telemetry. Process records describe launches and endpoint activity, rather than every shell input. The Kali attacker machine's shell history is not a released command stream.
+Windows endpoint logs from two Windows 7 virtual machines used as researchers' primary workstations in July 2022. Four days of benign activity precede ten attack scenarios: four on a single machine and six involving both machines. Ordinary activity continues during the attacks. The dataset includes Sysmon, Windows Security, Carbon Black, Firefox, and DNS logs.
 
-Run `./fetch` with Python 3.10+ and curl. It downloads:
+`atlasv2/data/{benign,attack}/{h1,h2}/` groups the logs by collection period and machine. Attack scenarios are named `s1`–`s4` and `m1`–`m6`. Sysmon and Windows Security logs are XML files; Carbon Black logs are JSONL files.
 
-- `atlasv2.tar.gz`: the publisher's 12,208,351,555-byte compressed dataset. Command-bearing logs cannot be separately downloaded from this single gzip archive.
-- `reapr/atlasv2/*.labels` and `*.seeds`, plus the dataset and methodology READMEs: REAPr labels, pinned to commit `32babb5613f7d8c4c9f7ab0a0e602da64521f149`.
-- `atlasv2_attack_igraphs.tar.gz`: the authors' serialized attack graphs, 21,011,377 bytes, for interpreting the labels.
+## Commands and fields
 
-The Box archives are verified against their published byte counts and SHA-1 hashes. Files remain compressed; completed files are skipped and partial downloads resumed. `FETCH_LIST=1 ./fetch` lists the selection without fetching payloads.
+Sysmon process-creation records contain commands. They have provider `Microsoft-Windows-Sysmon` and event ID `1`. The fields below are named entries in `EventData`, except for paths beginning with `System/`.
 
-Inside the main archive, `atlasv2/data/{benign,attack}/{h1,h2}/` separates collection period and host. `sysmon/*.xml` and `msft-security/*.xml` are Windows Event Viewer XML exports. `cbc-edr/*.jsonl`, `cbc-edr-alerts/*.jsonl`, `ngav/*.jsonl` and `ngav-alerts/*.jsonl` hold Carbon Black telemetry/alerts. `firefox/` and `dns/` contain text logs. Attack files are organized by `s1`–`s4` and `m1`–`m6`; only multi-host attacks have host-2 counterparts. Multiple sensors may describe the same process launch.
-
-For command extraction, start with Sysmon XML. Its standard process-creation schema is:
-
-| XML location or field | Use |
+| Field | Meaning |
 | --- | --- |
-| `System/Provider`, `System/EventID` | Microsoft Sysmon, event 1 identifies process creation. Event IDs from other providers have different meanings. |
-| `EventData/Data[@Name='CommandLine']`, `Image` | Full command and executable. Named Data entries, not positional columns. |
-| `ProcessGuid`, `ProcessId`, `ParentProcessGuid`, `ParentProcessId`, `ParentCommandLine` | Process identity and ancestry. |
-| `System/EventRecordID`, `System/Computer` | Record ID, scoped to the machine and channel. |
-| `UtcTime`, `System/TimeCreated/@SystemTime` | Execution/event timestamps. |
-| `User`, `LogonGuid`, `LogonId`, `TerminalSessionId` | Account and session correlation where present; scope session numbers to host and lifetime. |
+| `CommandLine` | Full command line. |
+| `Image` | Executable path. |
+| `System/EventRecordID` | Event number. Machine and event channel together with this number identify a record. |
+| `System/Computer`, `System/Channel` | Machine and event channel used to identify records. |
+| `UtcTime` | UTC time of process creation. |
+| `System/TimeCreated/@SystemTime` | Windows event timestamp. |
+| `LogonGuid`, `LogonId`, `TerminalSessionId` | Login and terminal session identifiers when included. Numeric session identifiers are local to a machine and can repeat after a restart. |
+| `ProcessGuid`, `ProcessId` | Process identifiers used to associate commands with process labels. |
 
-Use the Windows event XML namespace when parsing. The inspected Microsoft Security sample also has `System/EventRecordID`, `System/Computer`, ISO UTC `TimeCreated`, `SubjectLogonId`, and process identifiers. Event 4688 is process creation, but Windows 7 Security auditing does not provide the modern command-line coverage of Sysmon. Security events such as file access are not command launches. Carbon Black JSONL offers additional process context; its exact command-field inventory was not sampled during this verification, so the extraction fields above specifically describe Sysmon rather than an assumed common JSON schema.
+## Labels
 
-REAPr labels are **process labels** derived from provenance tracing and manually checked attack root/impact nodes. The inspected comma-separated `.labels` header is `attack, process_name, process_id, process_uuid, label`; trim whitespace. The first file inspected uses `label=attack`. The methodology distinguishes malicious, contaminated and benign processes; preserve the actual values in each release rather than assuming a universal binary encoding. `.seeds` files identify tracing seeds, and the serialized graphs provide correlation context. The `process_uuid` values in these labels belong to the graph/telemetry representation and must not be equated blindly with Sysmon `ProcessGuid`; establish the mapping through host, scenario and process lifetime. PID alone is insufficient. The benign directory gives a collection-level designation; the attack directory contains both kinds of activity. Antivirus alarms are detector outputs, not ground truth. Labels do not declare every command in a login session malicious.
+The `benign` directory contains ordinary activity. The `attack` directory contains attacks alongside ordinary activity.
 
-Sources: [dataset repository, layout and Box links](https://bitbucket.org/sts-lab/atlasv2), [author paper](https://arxiv.org/abs/2401.01341), [REAPr methodology](https://bitbucket.org/sts-lab/reapr-ground-truth), [Sysmon event documentation](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon). No explicit dataset redistribution license was identified in the inspected source README. Box metadata, initial archive bytes, Microsoft Security XML and a REAPr label file were checked on 2026-10-02; a full archive download was not performed.
+REAPr `.labels` files contain process labels. Their comma-separated fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `attack` | Attack scenario. |
+| `process_name` | Process name. |
+| `process_id` | Numeric process ID. |
+| `process_uuid` | Process identifier in the authors' attack graphs. |
+| `label` | Process classification, including `attack`. The methodology distinguishes malicious, contaminated, and benign processes; contaminated processes are those affected by the attack. |
+
+The `.seeds` files identify processes used as starting points for tracing an attack. `atlasv2_attack_igraphs.tar.gz` contains the attack graphs that connect those processes to other activity. The graph's `process_uuid`, scenario, machine, process ID, and process lifetime provide the information for associating a process label with its command records. Sysmon's `ProcessGuid` and the graph's `process_uuid` use their respective systems' identifiers.
+
+Sources: [dataset repository](https://bitbucket.org/sts-lab/atlasv2), [paper](https://arxiv.org/abs/2401.01341), [REAPr label methodology](https://bitbucket.org/sts-lab/reapr-ground-truth), [Sysmon event reference](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon).

@@ -1,51 +1,21 @@
 # KYPO / Masaryk shell commands, version 4
 
-Run `./fetch` with Python 3 and curl. It downloads only `data.zip` (411,710
-bytes) from [Zenodo record 8136017](https://zenodo.org/records/8136017).
-`toolset.zip` contains analysis tools and is excluded. The ZIP stays compressed;
-repeat runs verify and skip it. The publisher's MD5 is
-`a11b58d28a4c7d16482e84ed9540e238`. License: CC BY 4.0.
+Human-entered Linux Bash and Metasploit console commands from cybersecurity training. The commands include offensive exercises and typing mistakes.
 
-These are human-entered Linux Bash and Metasploit console commands from
-cybersecurity training, collected by a host logging toolset. This is shell and
-console input, including mistakes, rather than a kernel process-launch feed.
-There are no Windows command traces. Training tasks include offensive actions;
-they do not constitute an ordinary-user benign baseline.
+`data.zip` contains 267 JSON files grouped by training name and training instance, such as `House of cards/2019-08-15 KYPO Summer School/sandbox-396-useractions.json`. Each file has one JSON object per line. There are 21,108 records: 16,083 Bash records and 5,025 Metasploit records. Of these, 21,089 contain a `cmd` field.
 
-## Files and fields
+## Commands and fields
 
-`data.zip` has 267 `.json` files under training-name and training-instance
-directories, for example
-`House of cards/2019-08-15 KYPO Summer School/sandbox-396-useractions.json`.
-Despite the extension, each file contains newline-delimited JSON objects.
-
-| Field | Use |
+| Field | Meaning |
 | --- | --- |
-| `cmd` | Full entered command string; absent in some records. |
-| `cmd_type` | `bash-command` or `msf-command`; select Bash for shell-only research. |
-| `timestamp_str` | ISO 8601 UTC time, normally with fractional seconds and `Z`. |
-| `pool_id`, `sandbox_id` | Training infrastructure identifiers for grouping related records. |
-| `hostname`, `ip` | Host context inside the training. |
-| `username`, `wd` | User and working directory, generally on Bash records. |
-| `tags` | Present on the 19 inspected rows missing `cmd`; not a maliciousness label. |
+| `cmd` | Full command entered by the trainee. Records containing this field contain commands. |
+| `cmd_type` | `bash-command` for Bash input or `msf-command` for Metasploit console input. |
+| `timestamp_str` | UTC timestamp in ISO 8601 format, usually with fractional seconds and a `Z` suffix. |
 
-There is no explicit unique command ID or shell/login-session ID. Use archive
-member path and line number as a stable row key. Combine training-instance
-path, pool, sandbox, and host for participant/environment context; sandbox IDs
-alone can recur, and this grouping is broader than one login session.
+File path and line number identify each record. The dataset has no command ID or shell/login-session ID.
 
-## Labels and size discrepancy
+## Labels
 
-The archive contains no per-command benign/malicious labels and no separate
-intrusion ground truth. A training directory or a host named `attacker` records
-exercise context, not a validated security label for each command.
+The dataset has no per-command malicious/benign labels or separate attack-label file. Training directories identify the exercises, which include offensive tasks.
 
-The publisher reports 21,459 records from 275 trainees. Direct inspection of the
-checksum-matching v4 ZIP on 2026-10-02 counted 21,108 nonempty JSON records:
-16,083 `bash-command` and 5,025 `msf-command`; 21,089 have `cmd`.
-Preserve this metadata/payload discrepancy rather than silently assuming the
-published total. The original paper describes an earlier, smaller version.
-
-Sources: [v4 dataset and version history](https://zenodo.org/records/8136017),
-[collection toolset](https://zenodo.org/records/5126693),
-[dataset paper](https://doi.org/10.1016/j.dib.2021.107398).
+Sources: [version 4 dataset](https://zenodo.org/records/8136017), [collection toolset](https://zenodo.org/records/5126693), [paper](https://doi.org/10.1016/j.dib.2021.107398).

@@ -1,28 +1,27 @@
 # AVIATOR
 
-AVIATOR contains eight controlled attack scenarios based on MITRE emulation plans for APT29, OilRig, Sandworm and Wizard Spider, including extensions into industrial-control environments. It includes **Windows and Linux** host logging: the released collection scripts configure Windows Sysmon, Security and PowerShell logs, ETW tracing, and Linux auditd on Ubuntu Server 22. The Sandworm scripts explicitly start Linux collection. These provide process executions and PowerShell script content, rather than complete interactive shell transcripts.
+Windows and Linux logs from eight controlled attack scenarios based on MITRE emulation plans for APT29, OilRig, Sandworm, and Wizard Spider. Some scenarios extend into industrial-control systems. Windows logs include Sysmon, Security, PowerShell, and ETW events; Linux logs include auditd records from Ubuntu Server 22.
 
-Run `./fetch` with Python 3.10+ and curl. It downloads two archives and never extracts or executes their contents:
+The scenario files are named `APT29`, `APT29-1`, `APT29-2`, `Oilrig`, `Oilrig_ext`, `Sandworm-1`, `Sandworm_ext`, and `WizardSpider`. ZIP files with `ex_` and `ra_` prefixes contain exported and raw logs, respectively. Both versions can contain the same events. Windows files include `sysmon_audit_<tag>.evtx`, `msft_security_audit_<tag>.evtx`, and `powershell_audit_<tag>.evtx`. Linux audit files use `auditd_<date>_<tag>.log`.
 
-- `10.35097-8s5b0u5yqgfs2y0d.tar`: the published RADAR BagIt archive, 109,261,265,408 bytes, verified with publisher MD5 `4d03f85f6d65b6e3849646fac4b5d734`. Its payload is already ZIP-compressed. The individual-file download service returned HTTP 500 during verification, so the working complete archive is used. This includes other telemetry alongside the command-bearing logs.
-- `aviator-ground-truth-and-tools.tar.gz`: the small GitLab source archive at commit `4a8a815ee723ee7c6dec871409be67fef272da6b`, including `ground_truth/`, `logging_conf/` and `log_shipping/`. A fixed byte count and SHA-256 verify this archive.
+## Commands and fields
 
-Completed downloads are skipped and interrupted downloads resumed. `FETCH_LIST=1 ./fetch` lists these URLs without transferring payloads. RADAR can temporarily return HTTP 429; the downloader retries and otherwise exits unsuccessfully, preserving partial data for a later run.
-
-The large tar has a `10.35097-8s5b0u5yqgfs2y0d/data/dataset/` payload directory. Its 16 ZIP files use `ex_` and `ra_` prefixes with suffixes `APT29`, `APT29-1`, `APT29-2`, `Oilrig`, `Oilrig_ext`, `Sandworm-1`, `Sandworm_ext`, and `WizardSpider`. The export/raw collections can represent overlapping events. An inspected `ex_Sandworm-1.zip` contains XML event exports and text trace summaries, including `Sandworm-1/alpc_<date>_<host>_sandworm_scenario1.xml`. A text trace summary reports collection statistics, not commands. The logging configuration names Windows files `sysmon_audit_<tag>.evtx`, `msft_security_audit_<tag>.evtx`, and `powershell_audit_<tag>.evtx`; Linux audit files use `auditd_<date>_<tag>.log`. Match the sensor as well as the suffix when selecting records.
-
-Relevant extraction schema depends on the stream:
-
-| Stream | Command selection, identity, time and session information |
+| Records | Command fields |
 | --- | --- |
-| Sysmon EVTX / exported XML | Provider Microsoft-Windows-Sysmon, event 1. Named `EventData` fields `CommandLine`, `Image`, `ProcessGuid`, `ProcessId`, `ParentProcessGuid`, `ParentProcessId`, `ParentCommandLine`, `UtcTime`, `User`, `LogonGuid`, `LogonId`, `TerminalSessionId`, where recorded. |
-| Windows Security | Provider Microsoft-Windows-Security-Auditing, event 4688. `NewProcessName`, `CommandLine` when enabled, `NewProcessId`, and `SubjectLogonId`; fields depend on event version. |
-| PowerShell Operational | Event 4104: `ScriptBlockText`, `ScriptBlockId`, `MessageNumber`, `MessageTotal`, and `Path`. Reassemble fragments by host and script-block ID in message order. Script blocks are not separate process launches, and an ID is not a login-session ID. |
-| Windows event envelope | `System/Computer`, `System/EventRecordID`, `System/TimeCreated/@SystemTime`, `System/Execution/@ProcessID` and `ThreadID`. Scope record IDs to host/channel; an ETW trace need not carry all event-log fields. The inspected XML includes an explicit timestamp offset. |
-| Linux auditd | `type=EXECVE` argument fields `argc,a0,a1,...`, `PROCTITLE` when present, and companion `SYSCALL` fields `exe,pid,ppid,auid,uid,ses`. Join records using the shared `msg=audit(epoch:serial)` identifier, scoped to host. Decode audit encodings before rebuilding argv. `ses` is an audit login-session identifier when set. |
+| Sysmon event 1 | `CommandLine` is the full command; `Image` is the executable path. |
+| Windows Security event 4688 | `NewProcessName` is the executable path; `CommandLine` contains the command when command-line logging is enabled. |
+| PowerShell Operational event 4104 | `ScriptBlockText` contains PowerShell code. `ScriptBlockId` identifies the script block, and `MessageNumber` and `MessageTotal` give the order and count of fragments when code spans several records. |
+| Linux audit `EXECVE` | `argc` is the argument count; `a0`, `a1`, and subsequent fields hold the program and ordered arguments. |
+| Linux audit `PROCTITLE` | `proctitle` contains program arguments, often encoded as hexadecimal with NUL characters between arguments. |
 
-The field names above describe the configured sensor formats. Only the initial XML export and collection/configuration files were sampled here; coverage and missing fields must be checked per archive. The supplied Winlogbeat configurations also support ingestion into Elasticsearch; they do not make every archived file JSON.
+Windows events have `System/EventRecordID`, `System/Computer`, and `System/Channel`; together they identify a record within a run. `System/TimeCreated/@SystemTime` is the event timestamp, and Sysmon `UtcTime` is the UTC process-creation time. Sysmon `LogonGuid`, `LogonId`, and `TerminalSessionId`, and Security `SubjectLogonId`, provide session identifiers when included. Numeric session identifiers are local to the machine and can repeat after a restart. PowerShell fragments belong to the same script block when their machine and `ScriptBlockId` match.
 
-Ground truth is published in `ground_truth/{apt29,oilrig,oilrig_ext,sandworm,sandworm_ext,wizard_spider}/*.sh` in the source archive. These are **emulation procedures**, containing attack steps, commands, MITRE technique IDs, host roles and collection start/stop instructions. They are not row-by-row command labels and should not be executed to read the dataset. Match procedure actions to observed hosts, times and process/script relationships when deriving labels. Filenames and scenario tags distinguish runs; `normal_operation` is the collection script's benign tag. An attack run can include benign operations, and a command appearing in a scenario script is not proof that every occurrence of that text in telemetry is malicious. No comprehensive event-ID-to-label table was found in the source repository.
+Linux audit records share `msg=audit(epoch:serial)` across one event. It contains the Unix timestamp and event number. Run, host, and this identifier connect the command arguments with companion audit records. The companion `SYSCALL` record's `ses` field is the audit login session number; `4294967295` means unset. Run, host, and `ses` identify the session. File path and line number identify individual audit records.
 
-Sources: [RADAR record and CC BY 4.0 license](https://radar.kit.edu/radar/en/dataset/8s5b0u5yqgfs2y0d), [publisher source, ground truth and logging configuration](https://gitlab.kit.edu/kit/iai/rsa/aviator), [paper record](https://publikationen.bibliothek.kit.edu/1000178581). Metadata, complete source archive and selected payload bytes checked on 2026-10-02. The 109 GB dataset was not fully downloaded for verification.
+## Labels
+
+`ground_truth/{apt29,oilrig,oilrig_ext,sandworm,sandworm_ext,wizard_spider}/*.sh` contains the attack procedures. These scripts list attack commands, MITRE ATT&CK technique IDs, the machines involved, and the order of attack steps. The scenario names and run tags connect procedures to their logs. `normal_operation` identifies benign collection runs; attack runs include ordinary activity as well.
+
+Command labels are derived by matching procedure steps to the corresponding commands, machines, and times in the logs. The release provides these procedures as its attack ground truth and has no per-event benign/malicious label table.
+
+Sources: [RADAR dataset](https://radar.kit.edu/radar/en/dataset/8s5b0u5yqgfs2y0d), [attack procedures and logging configuration](https://gitlab.kit.edu/kit/iai/rsa/aviator), [paper](https://publikationen.bibliothek.kit.edu/1000178581).

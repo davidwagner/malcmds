@@ -1,78 +1,34 @@
-# Splunk Attack Data: command-bearing host telemetry
+# Splunk Attack Data
 
-Run `./fetch` with Python 3.10+ and curl. It downloads a pinned selection from
-`splunk/attack_data` commit
-`a28608b53aa3d8222052e8f3ada59e2d9a4adfff`, preserving repository paths under
-`source/`. The shared downloader resolves Git LFS pointers to actual files,
-checks Git/SHA-256 integrity, resumes partial files and reuses completed files.
-Compressed source files are kept compressed. `FETCH_LIST=1 ./fetch` lists the
-selection without downloading payloads (small repository metadata may be fetched).
+Splunk Attack Data contains security logs from attack exercises, including Atomic Red Team and Attack Range tests. It covers Windows, Unix/Linux, macOS and ESXi systems. Commands appear in process-creation events, Linux audit records, PowerShell logs and process lists. Each exercise has a description and associated log files. The logs include both attack activity and background activity.
 
-The collection contains **Windows and Unix/Linux commands**, with some macOS or
-ESXi telemetry in host scenarios. Splunk and contributors run attack simulations,
-including Atomic Red Team and Attack Range exercises, and export security logs.
-These are chiefly process launches and interpreter/script telemetry, not a
-representative population of human shell histories. Collection dates and tools
-vary by scenario. The repository license is Apache-2.0.
+Files under `source/` include Windows XML events, Windows events rendered as text, Linux audit and syslog records, and JSON records. Some files contain events exported from Splunk. YAML files describe the exercises and identify their logs.
 
-## What is downloaded
+## Records containing commands
 
-The explicit path inventory embedded in `fetch` is a reproducible snapshot:
-2,615 files totaling 11,610,397,120 bytes (about 10.8 GiB), including 1,586
-Git LFS payloads. These totals come from the pinned Git tree and LFS pointers.
-Selection uses the upstream YAML `sourcetype`/`source` descriptors for Windows
-host event logs, Sysmon for Linux, auditd, osquery, Linux authentication/syslog,
-ESXi, CrowdStrike sensor logs, Exchange management and Isovalent process logs.
-It also includes legacy host files recognized by source-specific names, and
-additional log prefixes containing command/argument or script-block fields.
-Associated scenario YAML/Markdown files, environment descriptions and the
-upstream README/license are retained. Cloud-only and network-only files are
-omitted unless their inspected records contain command text.
-
-This is a selection of command-relevant **files**, not a row-level command
-extraction. A selected Sysmon file can also contain file, registry, image-load or
-network events. Conversely, prefix inspection cannot establish every field
-appearing later in a heterogeneous unclassified file. The inventory does not
-claim complete command coverage of every unclassified upstream file.
-
-Most payloads are raw `.log` files: concatenated Windows XML events, rendered
-Windows event text, Linux audit/syslog lines, or newline-delimited JSON. Some
-files have Splunk-export wrappers. Do not assume a single JSON schema, one event
-per physical line, or that a `.log` suffix implies syslog.
-
-## Relevant schema by source
-
-| Source | Command/event selection | Identity, time and session context |
+| Records | Command fields | Event ID, time and session |
 | --- | --- | --- |
-| Windows or Linux Sysmon | Provider/channel identifies Sysmon; Event ID 1 is process creation. XML `EventData/Data` attributes name `CommandLine`, `Image`, `ParentCommandLine`, `ParentImage`; rendered/JSON equivalents vary. | `UtcTime`, `System/TimeCreated/@SystemTime`, `System/EventRecordID`, `Computer`, `ProcessGuid`, `ParentProcessGuid`, PIDs; Windows `User`, `LogonId`, `LogonGuid` when present. |
-| Windows Security | Event ID 4688 process creation: `CommandLine`, `NewProcessName`, `NewProcessId`, `ProcessId` (creator PID), `ParentProcessName` on supported event versions. | `TimeCreated`, `EventRecordID`, computer; `SubjectUserName`, `SubjectLogonId`, `TargetLogonId` where present. Empty command lines reflect capture configuration, not empty executed commands. |
-| PowerShell | Operational 4104: `ScriptBlockText`, `ScriptBlockId`, `MessageNumber`, `MessageTotal`; reconstruct multi-part blocks. Module/pipeline events can contain `Payload` and context. | Event time/record ID; script-block, runspace or pipeline IDs when present. A script-block ID is not a login session, and logged script text need not be a separate OS process. |
-| Linux auditd | `type=EXECVE`: `argc`, `a0`, `a1`, ...; `PROCTITLE`: encoded `proctitle` or rendered `argc`/argument fields. Related `SYSCALL` records provide `exe`, `comm`, `pid`, `ppid`. | `msg=audit(time:serial)` groups records for one event; host scopes the serial. Timestamp rendering varies (epoch or human date). `auid`, `uid`, `ses`, `tty` where present associate login identity/session. |
-| osquery | Inspect query `name` and `columns`, e.g. `cmdline`, `path`, `name`, `pid`, `parent`; snapshots differ from event tables. | Host/decorations, `unixTime`/`calendarTime`, query-specific identifiers. No universal session key. |
-| Other endpoint/syslog sources | Source-specific process command-line/argument fields or embedded command text. Use the scenario descriptor's source/sourcetype and inspect each format before parsing. | Preserve original timestamp, hostname, user, source file and event offset; identifiers vary by product. |
+| Windows or Linux Sysmon, Event ID 1 | `CommandLine` is the full command line; `Image` names the program. | `UtcTime` and XML `System/TimeCreated/@SystemTime` give the event time. `System/EventRecordID` identifies the record within a computer's event log. Windows records can include `LogonGuid` or `LogonId` for the logon session. |
+| Windows Security, Event ID 4688 | `CommandLine` gives the command line and `NewProcessName` gives the executable. Command lines are empty when command-line auditing is disabled. | `TimeCreated` gives the time. `EventRecordID` identifies the record within a computer's Security log. `SubjectLogonId` and `TargetLogonId` identify the associated Windows logon sessions. |
+| PowerShell Operational, Event ID 4104 | `ScriptBlockText` contains the PowerShell code. `ScriptBlockId` connects pieces of the same script; `MessageNumber` orders them and `MessageTotal` gives the number of pieces. | The Windows event time and record number identify each event within the computer's PowerShell log. |
+| Linux audit, `type=EXECVE` | `argc` gives the argument count; `a0`, `a1`, and subsequent fields contain the program and arguments. `PROCTITLE` records also contain arguments, sometimes encoded. The related `SYSCALL` record gives the executable in `exe`. | `msg=audit(time:serial)` contains the timestamp and event number and connects records from the same execution. The computer plus time and serial identify the event. `ses` identifies the audit session on that computer until restart. |
+| osquery process queries | `columns.cmdline` contains the command line when included by the query; `columns.path` gives the executable path. | `unixTime` or `calendarTime` gives the query time. Process lists can include the same running command in successive queries. |
 
-A verified Windows Security sample uses XML `EventID=4688`, `CommandLine`,
-`SubjectLogonId` and `EventRecordID`. A verified audit sample contains two linked
-`EXECVE`/`PROCTITLE` records with `argc` and `a0` through `a4`. These samples show
-why command strings and argument vectors need different parsers.
-
-Windows event record IDs need computer/channel/log-lifetime scope. PIDs can be
-reused. Audit `ses`, Windows logon IDs and parent process relationships express
-different associations; none proves that every command sharing it is malicious.
+Windows logon IDs are used together with the computer and the period between restarts. Windows event record numbers are used together with the computer and log name; numbering can restart after a log is cleared. Field names and formatting differ between XML, text and JSON files.
 
 ## Labels
 
-Scenario YAML files provide `id`, `date`, `description`, `environment`,
-`mitre_technique`, and a `datasets` list with `name`, `path`, `source`,
-`sourcetype`. Their ATT&CK annotations and emulation descriptions apply to the
-**scenario or log collection**, not a universal per-command binary label.
-Descriptions sometimes report test success or uncertainty. The files can contain
-background events and unrelated commands. Keep these annotations as provenance;
-do not label every event malicious solely because its enclosing scenario is an
-attack simulation. Likewise, an unmatched event is not established benign.
+The YAML file for each exercise contains:
 
-Sources: [repository and collection instructions](https://github.com/splunk/attack_data),
-[pinned snapshot](https://github.com/splunk/attack_data/tree/a28608b53aa3d8222052e8f3ada59e2d9a4adfff),
-[scenario catalog](https://research.splunk.com/attack_data/).
-The repository tree, scenario descriptors and representative payload prefixes
-were inspected directly; the complete selected corpus was not downloaded.
+| Field | Meaning |
+| --- | --- |
+| `id` | Unique ID of the exercise. |
+| `date` | Date associated with the exercise. |
+| `description` | Attack actions performed during the exercise. |
+| `mitre_technique` | ATT&CK technique tested. |
+| `datasets[].path` | Log file belonging to the exercise; connects the attack description to its events. |
+| `datasets[].source`, `datasets[].sourcetype` | Source and format of the log records. |
+
+The description and ATT&CK technique identify the attack being tested. They apply to the exercise, whose logs also contain ordinary activity. Individual commands have no common malicious/benign field across the collection. Attack commands can be identified by matching the actions in the exercise description to commands in its log files.
+
+Sources: [publisher repository](https://github.com/splunk/attack_data), [source files](https://github.com/splunk/attack_data/tree/a28608b53aa3d8222052e8f3ada59e2d9a4adfff), [scenario catalog](https://research.splunk.com/attack_data/).

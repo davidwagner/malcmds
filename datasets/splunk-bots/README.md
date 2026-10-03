@@ -1,65 +1,29 @@
 # Splunk Boss of the SOC, version 3
 
-Run `./fetch` with Python 3.10+ and curl. It retrieves the official
-`botsv3_data_set.tgz` (335,251,397 bytes), verifies the publisher's MD5
-`d7ccca99a01cff070dff3c139cdc10eb`, resumes partial transfers and skips completed
-files. The archive stays compressed. This directory implements **BOTS v3**, the
-release linked in the supplied research report; it does not fetch v1 or v2.
+BOTS v3 contains logs from a fictional organization's Windows and Unix/Linux systems, applications, cloud services and network. It was created for a security investigation competition. The data includes ordinary activity and attacks, with commands in process-creation events, Linux audit events and shell history.
 
-BOTS is security incident/CTF material containing **Windows and Unix/Linux**
-activity from a constructed environment. It mixes ordinary background activity
-and incident evidence across host, application, cloud and network sources. Host
-telemetry includes Sysmon process launches, Linux audit records, shell history
-and process inventory. The release is CC0-1.0.
+## What the Splunk app contains
 
-## Format and access
+Splunk is software for storing, searching and analyzing logs. A Splunk **app** is a folder of files that extends or configures Splunk. It can contain settings, dashboards and data.
 
-The download is a **pre-indexed Splunk app**, not a CSV/JSON export. The inspected
-archive prefix contains `botsv3_data_set/default/{props,transforms,indexes}.conf`
-and index buckets under `botsv3_data_set/var/lib/splunk/botsv3/db/`, including
-`.tsidx`, source metadata and compressed raw-data storage. The publisher supplies
-one mixed-source archive; command-bearing sources cannot be downloaded as
-separate public files.
+The BOTS app, `botsv3_data_set`, contains the event data already organized for searching in Splunk, plus configuration files that tell Splunk how to read it. The events belong to an index named `botsv3`. An index is a named collection of stored events that Splunk can search.
 
-Fetching requires no Splunk installation. To inspect/export events later, follow
-the upstream installation instructions and search `index=botsv3 earliest=0`.
-The original Splunk/app versions and required add-ons are documented upstream;
-field extraction can differ with installed add-ons. The fetcher does not install
-or configure Splunk. Its archive contains app configurations and data, not an
-independently labeled command table.
+The app's `default/` directory contains configuration files. Its `var/lib/splunk/botsv3/db/` directory contains the events and search indexes. The event data combines multiple log formats and sources.
 
-## Command-bearing records
+## Records containing commands
 
-These source types appear in the publisher inventory. Field names below describe
-the source formats and expected extractions; the indexed event payloads were not
-fully exported or counted during preparation.
-
-| Source type | Selection and command information | Time, IDs and session context |
+| Records | Command fields | Event ID, time and session |
 | --- | --- | --- |
-| `xmlwineventlog:microsoft-windows-sysmon/operational` | Sysmon Event ID 1 process creation: XML `EventData/Data[@Name='CommandLine']`, `Image`, `ParentCommandLine`, `ParentImage`; extracted names typically `CommandLine`, `Image`, `EventCode`. | XML `System/TimeCreated/@SystemTime`, `UtcTime`, `EventRecordID`, `ProcessGuid`, `ParentProcessGuid`, `ProcessId`; `LogonGuid`/`LogonId` where present. Scope record IDs and logons to host/channel/lifetime. |
-| `wineventlog` | Windows event logs: distinguish provider/channel and process creation events such as Security 4688. Command-line availability depends on audit settings and event version. | Source event time, computer, event record number, subject/target logon IDs where present. |
-| `linux_audit` | Match `type=EXECVE` argument records (`argc`, `a0`, `a1`, ...); `PROCTITLE` can contain encoded arguments. Join related `SYSCALL` records for `exe`, `comm`, PID/PPID and identity. | `msg=audit(timestamp:serial)` joins records for one audit event; host scopes the serial. `ses` is audit session, `auid` login UID, `uid` effective context where recorded. |
-| `bash_history` | Shell input is in the raw history record; preserve shell operators and quoting. It can include built-ins and commands that failed. History collection is not proof every command completed. | Preserve Splunk host/source and any original history timestamps. History ordering alone does not supply a unique login session or reliable execution time. |
-| `osquery:results`, `ps`, `top`, `perfmonmk:process` | Process snapshots may expose arguments depending on the query/output. For osquery, inspect `name` and `columns` (e.g. process `cmdline`, `path`, `name`, PID). A snapshot is not one new execution per row. | Query time, host and PID can associate snapshots; no universal login-session key. |
+| Sysmon, source type `xmlwineventlog:microsoft-windows-sysmon/operational`, Event ID 1 | `CommandLine` contains the full command; `Image` names the program. | `UtcTime` and XML `System/TimeCreated/@SystemTime` give the event time. `EventRecordID` identifies the record within a computer's event log. `LogonGuid` identifies a Windows logon session; `LogonId` identifies it on a particular computer until restart. |
+| Windows event logs, source type `wineventlog`, Security Event ID 4688 | The process-creation event contains the program name and, when command-line auditing is enabled, its command line. | Event time and record number identify the event within the computer's Security log. Subject and target logon IDs associate it with Windows logon sessions. |
+| Linux audit, source type `linux_audit`, `type=EXECVE` | `argc` is the argument count; `a0`, `a1`, and subsequent fields give the program and arguments. `PROCTITLE` records can also contain the arguments in encoded form. The related `SYSCALL` record gives the executable in `exe`. | `msg=audit(timestamp:serial)` gives the event time and event number and connects records belonging to the same execution. The computer plus timestamp and serial identify the event. `ses` identifies the audit session on that computer until restart. |
+| Shell history, source type `bash_history` | The raw record contains the text entered in the shell, including shell operators and quoting. | Some history records include timestamps. The history has no login-session ID. |
+| Process lists, source types `osquery:results`, `ps`, `top`, `perfmonmk:process` | Process-list records contain running programs; the fields depend on the query or listing. For osquery, `columns.cmdline` contains a command line when the query includes that column. | The event time gives the time of the process listing. Repeated listings can include the same running command. |
 
-Splunk adds `_time`, `host`, `source`, `sourcetype` and `_raw`. Preserve these when
-exporting. `_cd` is a useful bucket/event locator within a particular index
-instance; it is not a portable global dataset ID. Retain original OS event IDs
-where available and assign a reproducible export record ID otherwise. A parent
-process link does not by itself establish a login session.
+Splunk's `_time` is the event timestamp, `_raw` contains the original event text, and `sourcetype` identifies its format. `host` identifies the computer and combines with Windows logon IDs or Linux audit session numbers to distinguish sessions on different computers. `source` identifies the originating log. `_cd` identifies an event's location within the Splunk index.
 
 ## Labels
 
-The public v3 release does not publish a universal per-command malicious/benign
-label file. CTF incident questions and investigator conclusions provide scenario
-context, not a binary label for every background event or session. The archive's
-lookup configuration includes indicators such as ransomware extensions and DDNS
-providers; these are enrichment, not authoritative per-event ground truth. The
-fetcher downloads the entire app, retaining any bundled lookups. Deriving labels
-requires documented incident reconstruction; unselected events are not thereby
-proven benign.
+The competition's incident questions describe attacks to investigate. The dataset has no per-command malicious/benign labels or session labels. It includes lookup tables such as ransomware file extensions and dynamic DNS providers; these can help identify suspicious activity while investigating an incident.
 
-Sources: [official release, checksum, source inventory and installation guide](https://github.com/splunk/botsv3),
-[official archive](https://botsdataset.s3.amazonaws.com/botsv3/botsv3_data_set.tgz).
-The archive size, HTTP range support, app configurations and initial index
-structure were inspected directly without downloading the full archive.
+Sources: [official release and list of log sources](https://github.com/splunk/botsv3), [BOTS v3 archive](https://botsdataset.s3.amazonaws.com/botsv3/botsv3_data_set.tgz).
