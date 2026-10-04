@@ -1,4 +1,4 @@
-A duckdb Parquet database with a main table, COMMANDS, which has one row per command line listed in one of the datasets.  Each row has the following columns:
+A duckdb-native database with a main table, COMMANDS, which has one row per command line listed in one of the datasets.  Each row has the following columns:
 - `pgm` - the program being executed (full path to executable; or if it's not available, one of argv[0] or first word of the command line or proctitle)
 - `pgm_base` - `pgm`, but with leading directory components removed (e.g., if `pgm` = `/a/b/c/d`, then `pgm_base` = `d`)
 - `args` - the arguments to the command (argv[1..]), as a list of strings (LIST(VARCHAR))
