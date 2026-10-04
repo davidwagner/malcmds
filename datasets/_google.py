@@ -20,6 +20,7 @@ import venv
 import warnings
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 BROWSERS = ("firefox", "chrome", "chromium", "brave", "edge", "vivaldi", "opera", "safari", "whale")
@@ -122,7 +123,7 @@ def google_cookies():
                         ):
                             _import_cookies_from_browser(browser=candidate, cookies_file=str(path))
                         jar = read_google_cookies(path)
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S112 -- browser errors may contain cookies
                         continue
                     print(f"Using Google session from {candidate}", file=sys.stderr)
                     break
@@ -134,6 +135,64 @@ def google_cookies():
             yield str(path)
         finally:
             tempfile.tempdir = previous
+
+
+def resolve_download(url, cookies, output):
+    """Resolve Drive's confirmation form without modifying a resumable payload.
+
+    Stream and close the initial response without consuming file data. Only
+    bounded HTML pages are read. gdown submits all hidden confirmation fields,
+    including Google's fresh uuid and at token; confirm=t alone is insufficient.
+    """
+    import requests
+    from _fetch import html_error
+    from gdown.download import get_url_from_gdrive_confirmation
+    from gdown.exceptions import FileURLRetrievalError
+
+    original = url
+    with requests.Session() as session:
+        if cookies:
+            jar = MozillaCookieJar(cookies)
+            jar.load(ignore_discard=True)
+            session.cookies.update(jar)
+        for _ in range(3):
+            parsed = urlparse(url)
+            if (parsed.scheme != "https" or parsed.hostname not in {
+                "drive.google.com", "drive.usercontent.google.com", "docs.google.com"
+            } or parsed.username or parsed.password):
+                raise RuntimeError("Google returned an unexpected confirmation URL; "
+                                   "open the original file in your browser: " + original)
+            try:
+                with session.get(url, stream=True, timeout=(30, 60)) as response:
+                    is_html = "text/html" in response.headers.get("Content-Type", "").lower()
+                    if not is_html:
+                        response.raise_for_status()
+                        if cookies:
+                            jar = MozillaCookieJar(cookies)
+                            for cookie in session.cookies:
+                                jar.set_cookie(cookie)
+                            jar.save(ignore_discard=True)
+                        return url
+                    page = next(response.iter_content(chunk_size=65536), b"")
+            except requests.RequestException:
+                # Request exceptions can contain the signed confirmation URL.
+                raise RuntimeError("Google download connection or HTTP failure; retry later. "
+                                   "Check access in your browser: " + original) from None
+            bad = Path(output + ".bad")
+            bad.write_bytes(page)
+            try:
+                next_url = get_url_from_gdrive_confirmation(page.decode("utf-8", "replace"))
+            except (FileURLRetrievalError, KeyError, ValueError, AssertionError):
+                error = html_error(bad, Path(output)) or "Unrecognized Google download response."
+                raise RuntimeError(f"{error}\nResponse saved at {bad}. "
+                                   f"Open the file in your signed-in browser: {original}") from None
+            if next_url == url:
+                break
+            print("Accepting Google Drive's large-file virus-scan warning", file=sys.stderr)
+            url = next_url
+    raise RuntimeError("Google repeated its download confirmation instead of sending the file. "
+                       "Open the file in your signed-in browser and choose Download anyway, "
+                       f"then retry. Response saved at {output}.bad. File: {original}")
 
 
 def main(arguments):
@@ -148,6 +207,14 @@ def main(arguments):
             return 0
         if arguments[0] == "curl":
             options = ["--cookie", cookies] if cookies else []
+            if urlparse(arguments[-1]).hostname in {
+                "drive.google.com", "drive.usercontent.google.com"
+            }:
+                if "--output" not in arguments:
+                    raise RuntimeError("Google curl downloads require --output PATH")
+                output = arguments[arguments.index("--output") + 1]
+                arguments = list(arguments)
+                arguments[-1] = resolve_download(arguments[-1], cookies, output)
             # --disable must remain curl's first argument; retain its exit code.
             return subprocess.run(
                 ["curl", "--disable", *options, *arguments[1:]], check=False

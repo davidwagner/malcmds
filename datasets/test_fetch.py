@@ -150,6 +150,30 @@ class DownloadTests(unittest.TestCase):
             (self.output / "data.bin.part.bad").read_bytes(), self.source.read_bytes()
         )
 
+    def test_virus_scan_error(self):
+        """Unresolved confirmation is explained before size/checksum verification."""
+        self.source.write_bytes(
+            b"<!DOCTYPE html><html><title>Google Drive - Virus scan warning</title>"
+            b"This file is too large for Google to scan for viruses.</html>"
+        )
+        result = self.run_download()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Download anyway", result.stderr)
+        self.assertIn("signed-in browser", result.stderr)
+        self.assertNotIn("Size mismatch", result.stderr)
+        self.assertFalse((self.output / "data.bin.part").exists())
+        self.assertEqual((self.output / "data.bin.part.bad").read_bytes(),
+                         self.source.read_bytes())
+
+    def test_login_error(self):
+        """An HTML access failure explains how to choose a signed-in browser."""
+        self.source.write_bytes(b"<!DOCTYPE html><html>Sign in to Google</html>")
+        result = self.run_download()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FETCH_GOOGLE_BROWSER", result.stderr)
+        self.assertIn("Ask the owner for access", result.stderr)
+        self.assertFalse((self.output / "data.bin.download.json").exists())
+
     def test_intentional_html_download(self):
         """An explicitly requested HTML file remains a valid download."""
         content = b"<!DOCTYPE html><html>dataset documentation</html>"

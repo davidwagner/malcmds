@@ -83,10 +83,32 @@ def html_error(part, destination):
     if b"quota exceeded" in prefix:
         return (
             f"Google Drive download quota exceeded for {destination}. "
-            "Retry later (Google advises allowing up to 24 hours); "
-            "the error page was saved as .part.bad."
+            "Google has limited downloads of this shared file. Browser cookies and "
+            "accepting the virus-scan warning cannot remove this file-level quota. "
+            "Wait up to 24 hours and rerun ./fetch (or ./fetchall tc-*). "
+            "If it persists, ask the dataset publisher for a mirror or restored access. "
+            "The error page was saved as .part.bad; completed downloads are retained."
         )
-    return f"Received an HTML page instead of {destination}; saved as .part.bad"
+    if b"virus scan warning" in prefix or b"too large for google to scan" in prefix:
+        return (
+            f"Google Drive requires Download anyway confirmation for {destination}. "
+            "Automatic confirmation did not complete. Open the file's Google URL in "
+            "your signed-in browser, choose Download anyway, and retry. "
+            "If this repeats, the Google confirmation format may have changed; "
+            "report the .part.bad page to the downloader maintainer."
+        )
+    if b"accounts.google.com" in prefix or b"sign in" in prefix or b"request access" in prefix:
+        return (
+            f"Received an HTML page requiring Google sign-in or access for {destination}. "
+            "Sign in to an account with access in Firefox (or set FETCH_GOOGLE_BROWSER "
+            "to your browser), verify that the file opens there, and retry. "
+            "Ask the owner for access if needed; saved as .part.bad."
+        )
+    return (
+        f"Received an HTML page instead of {destination}; saved as .part.bad. "
+        "Inspect that page and open the source URL in your browser to check access; "
+        "if browser download works, report the page to the downloader maintainer."
+    )
 
 
 def run_curl(command):
