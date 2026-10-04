@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 
 def get_json(url):
@@ -89,6 +89,11 @@ def html_error(part, destination):
     return f"Received an HTML page instead of {destination}; saved as .part.bad"
 
 
+def run_curl(command):
+    """Run a public transfer without accessing browser credentials."""
+    return subprocess.run(command, check=False)
+
+
 def download(url, relative_dest, size=None, checksum=None):
     """Fetch atomically, resume partial files, and skip verified completed files.
 
@@ -153,10 +158,16 @@ def download(url, relative_dest, size=None, checksum=None):
             str(part),
             url,
         ]
-        result = subprocess.run(command, check=False)
+        if urlparse(url).hostname in {"drive.google.com", "drive.usercontent.google.com"}:
+            from _google import run_google
+
+            transfer = run_google
+        else:
+            transfer = run_curl
+        result = transfer(command)
         if result.returncode == 33:  # Server does not support range requests.
             part.unlink(missing_ok=True)
-            result = subprocess.run(command, check=False)
+            result = transfer(command)
         result.check_returncode()
     error = html_error(part, path)
     if error:

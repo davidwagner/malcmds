@@ -2,14 +2,13 @@
 """Fetch only OpTC endpoint data and its published red-team ground truth."""
 
 import os
-import subprocess
 import sys
-import venv
 from pathlib import Path
 
 os.chdir(Path(__file__).resolve().parent)
 sys.path.insert(0, str(Path.cwd().parent))
-from _fetch import github
+from _fetch import github  # noqa: E402 -- shared helpers need the parent on sys.path
+from _google import run_google  # noqa: E402
 
 FOLDER = "1NwaCWRyr_coyPbF2SvScbani5O9MXp7_"
 
@@ -25,35 +24,5 @@ if os.environ.get("FETCH_LIST") == "1":
         f"ecar/ (recursive: benign, evaluation, short)\t?\thttps://drive.google.com/drive/folders/{FOLDER}"
     )
 else:
-    # Isolated, pinned dependency; never prompt or modify system Python.
-    python = Path(".fetch-venv/bin/python").resolve()
-    if not python.exists():
-        venv.create(python.parent.parent, with_pip=True)
-    ready = python.parent.parent / "gdown-6.4.1.ready"
-    if not ready.exists():
-        subprocess.run(
-            [
-                str(python),
-                "-m",
-                "pip",
-                "--disable-pip-version-check",
-                "install",
-                "--no-input",
-                "gdown==6.4.1",
-            ],
-            check=True,
-        )
-        ready.touch()
-    # 6.4.1 uses Drive's embedded folder listing, without the old 50-item cutoff.
-    # resume=True skips completed files and resumes gdown's partial files.
-    subprocess.run(
-        [
-            str(python),
-            "-c",
-            "import gdown; files = gdown.download_folder("
-            f"id={FOLDER!r}, output='ecar', resume=True, "
-            "use_cookies=False, timeout=60, retries=4); "
-            "assert files, 'Drive returned no files'",
-        ],
-        check=True,
-    )
+    # Shared browser-cookie support; preserve gdown's completed-file/resume logic.
+    run_google(["folder", FOLDER, "ecar"]).check_returncode()
