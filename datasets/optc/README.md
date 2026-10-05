@@ -32,6 +32,9 @@ Sources: [official release](https://github.com/FiveDirections/OpTC-data), [eCAR 
 records with `properties.command_line`, including CREATE, OPEN, and TERMINATE:
 OPEN and TERMINATE can supply a command whose creation is outside the capture.
 Non-process events and records containing only an image name are excluded.
+For speed, a line is JSON-decoded only if it contains `"PROCESS"` or a `\u00`
+escape (which could spell `PROCESS`); 85-95% of lines are skipped this way.
+Files are parsed in parallel (`--workers`); see `../README.md`.
 Actual files use ISO-8601 timestamps with `-04:00`; the reader also supports the
 numeric epoch-millisecond fields documented by the eCAR schema.
 
