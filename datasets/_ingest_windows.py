@@ -7,6 +7,7 @@ import html
 import io
 import json
 import re
+import sys
 import tarfile
 import xml.etree.ElementTree as ET
 import zipfile
@@ -40,25 +41,42 @@ class Budget:
         return self.remaining is not None and self.remaining <= 0
 
 
-def xml_events(stream):
-    """Yield complete XML events from concatenated events or an Events wrapper."""
+def xml_events(stream, commands_only=False):
+    """Yield numbered events, optionally leaving command-free events unparsed.
+
+    Empty fields still count toward source-record limits and progress. Broad
+    markers cover all command fields accepted by event_commands; escaped Name
+    attributes fall back to XML parsing so encoded field names are preserved.
+    """
     buffer = ""
     number = 0
     while True:
         chunk = stream.read(65536)
         buffer += chunk
+        offset = 0
         while True:
-            start = EVENT_START.search(buffer)
+            start = EVENT_START.search(buffer, offset)
             if not start:
-                buffer = buffer[-16:]
+                buffer = buffer[max(offset, len(buffer) - 16) :]
                 break
             end = buffer.find("</Event>", start.start())
             if end < 0:
                 buffer = buffer[start.start() :]
                 break
             end += len("</Event>")
-            raw, buffer = buffer[start.start() : end], buffer[end:]
+            raw = buffer[start.start() : end]
+            offset = end
             number += 1
+            if (
+                commands_only
+                and not any(
+                    marker in raw
+                    for marker in ("Command", "command", "cmdline", "HostApplication")
+                )
+                and not re.search(r"Name\s*=\s*[^<>]*&", raw)
+            ):
+                yield number, {}
+                continue
             try:
                 event = ET.fromstring(raw)
             except ET.ParseError:
@@ -270,6 +288,7 @@ def bounded_lines(stream, budget):
 
 def parse_log(binary, source, dataset, budget, label="unknown", group=None):
     """Stream XML, JSONL, rendered Windows events, and Linux audit records."""
+    print(f"{dataset}: reading {source}", file=sys.stderr, flush=True)
     # BufferedReader also works for archive members without materializing them.
     buffered = io.BufferedReader(binary)
     prefix = buffered.peek(4096)[:4096]
@@ -279,10 +298,17 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
     stream = io.TextIOWrapper(buffered, encoding=encoding, errors="replace")
     sample = prefix.decode(encoding, errors="replace")
     if EVENT_START.search(sample):
-        for number, fields in xml_events(stream):
+        for number, fields in xml_events(stream, commands_only=True):
             if not budget.take():
                 return
-            yield from event_commands(fields, dataset, source, number, label, group)
+            if number % 100000 == 0:
+                print(
+                    f"{dataset}: {number:,} XML events scanned in {source}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            if fields:
+                yield from event_commands(fields, dataset, source, number, label, group)
     elif re.search(r"\btype=(?:SYSCALL|EXECVE|PROCTITLE|PATH|USER_CMD)\b", sample):
         from _ingest_misc import audit_events, audit_value
 

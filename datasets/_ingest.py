@@ -311,7 +311,7 @@ def run(dataset_dir, records_callable):
                     }
                 )
                 count += 1
-                if len(rows) >= 10000:
+                if len(rows) >= 100000:
                     _insert(con, rows)
                     rows.clear()
                     print(
@@ -327,6 +327,9 @@ def run(dataset_dir, records_callable):
                 close()
         if rows:
             _insert(con, rows)
+        print(
+            f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
+        )
         con.execute("COMMIT")
         total = con.execute(
             "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]

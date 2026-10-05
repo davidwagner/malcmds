@@ -83,7 +83,7 @@ sys.path.insert(0, ROOT_PATH)
 from _ingest import Command, run
 
 def records(root, options):
-    for i in range(10001):
+    for i in range(100001):
         yield Command('echo', [str(i)], str(i))
     raise ValueError('source corruption')
 run(Path(__file__).parent, records)
