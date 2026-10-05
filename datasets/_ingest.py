@@ -1,4 +1,4 @@
-"""Shared command normalization and transactional native DuckDB ingestion."""
+"""Shared command normalization and resumable native DuckDB ingestion."""
 
 import argparse
 import json
@@ -6,6 +6,7 @@ import random
 import re
 import shlex
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -234,6 +235,13 @@ def arguments(dataset_dir):
         "--sample-files", type=_positive, help="sample this many input files"
     )
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--batch-size", type=_positive, default=100000,
+        help="commands per durable transaction (default: 100000)",
+    )
+    parser.add_argument(
+        "--memory-limit", default="2GB", help="DuckDB memory budget (default: 2GB)"
+    )
     return parser.parse_args()
 
 
@@ -268,85 +276,102 @@ def _insert(con, rows):
             )
         ]
     )
-    batch = pa.Table.from_pylist(rows, schema=schema)
+    # Keep the first observation deterministically even with unordered execution.
+    unique = {}
+    for row in rows:
+        unique.setdefault((row["dataset"], row["record_id"]), row)
+    batch = pa.Table.from_pylist(list(unique.values()), schema=schema)
     con.register("ingest_batch", batch)
-    con.execute("INSERT OR IGNORE INTO COMMANDS SELECT * FROM ingest_batch")
-    con.unregister("ingest_batch")
+    try:
+        # Autocommit makes each batch atomic, including constraint/commit failures.
+        con.execute("INSERT OR IGNORE INTO COMMANDS SELECT * FROM ingest_batch")
+    finally:
+        con.unregister("ingest_batch")
+
+
+def _connect(options, scratch):
+    return duckdb.connect(str(options.db), config={
+        "memory_limit": options.memory_limit,
+        "threads": 1,
+        "preserve_insertion_order": False,
+        "temp_directory": str(scratch),
+    })
 
 
 def run(dataset_dir, records_callable):
-    """Ingest an iterator atomically; repeats preserve one row per source command."""
+    """Commit bounded batches; repeats preserve one row per source command.
+
+    Completed batches survive reader/write failures. Rerunning the source safely
+    fills missing records using the existing (dataset, record_id) primary key.
+    """
     root = Path(dataset_dir).resolve()
     options = arguments(root)
     options.db.parent.mkdir(parents=True, exist_ok=True)
     scratch = root.parent.parent / "tmp" / "ingest" / "duckdb-spill"
     scratch.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(options.db))
-    con.execute("SET memory_limit='2GB'")
-    con.execute("SET threads=2")
-    con.execute("SET temp_directory=?", [str(scratch)])
-    _initialize(con)
-    count = 0
-    rows = []
-    con.execute("BEGIN TRANSACTION")
-    try:
-        records = iter(records_callable(root, options))
+    with tempfile.TemporaryDirectory(prefix="duckdb-", dir=scratch) as spill:
+        con = _connect(options, spill)
+        count = 0
+        rows = []
         try:
-            for command in records:
-                if not command.pgm or not command.record_id:
-                    raise ValueError("Command requires nonempty pgm and record_id")
-                separators = r"[/\\]" if command.os == "windows" else "/"
-                rows.append(
-                    {
-                        "pgm": command.pgm,
-                        "pgm_base": re.split(separators, command.pgm)[-1],
-                        "args": command.args,
-                        "dataset": root.name,
-                        "record_id": command.record_id,
-                        "label": command.label,
-                        "group_id": command.group_id,
-                        "session_id": command.session_id
-                        or f"{root.name}:record:{command.record_id}",
-                        "os": command.os,
-                    }
-                )
-                count += 1
-                if len(rows) >= 100000:
-                    _insert(con, rows)
-                    rows.clear()
-                    print(
-                        f"{root.name}: {count:,} commands processed",
-                        file=sys.stderr,
-                        flush=True,
+            _initialize(con)
+            records = iter(records_callable(root, options))
+            try:
+                for command in records:
+                    if not command.pgm or not command.record_id:
+                        raise ValueError("Command requires nonempty pgm and record_id")
+                    separators = r"[/\\]" if command.os == "windows" else "/"
+                    rows.append(
+                        {
+                            "pgm": command.pgm,
+                            "pgm_base": re.split(separators, command.pgm)[-1],
+                            "args": command.args,
+                            "dataset": root.name,
+                            "record_id": command.record_id,
+                            "label": command.label,
+                            "group_id": command.group_id,
+                            "session_id": command.session_id
+                            or f"{root.name}:record:{command.record_id}",
+                            "os": command.os,
+                        }
                     )
-                if options.limit is not None and count >= options.limit:
-                    break
+                    count += 1
+                    if len(rows) >= options.batch_size:
+                        _insert(con, rows)
+                        rows.clear()
+                        # ART index buffers cannot spill. Reopening releases them and
+                        # loads only the index pages needed by the next batch.
+                        con.close()
+                        con = _connect(options, spill)
+                        print(
+                            f"{root.name}: {count:,} commands processed (batches committed)",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    if options.limit is not None and count >= options.limit:
+                        break
+            finally:
+                close = getattr(records, "close", None)
+                if close is not None:
+                    close()
+            print(
+                f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
+            )
+            if rows:
+                _insert(con, rows)
+            total = con.execute(
+                "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]
+            ).fetchall()[0][0]
+            print(
+                json.dumps(
+                    {
+                        "dataset": root.name,
+                        "processed": count,
+                        "stored": total,
+                        "db": str(options.db),
+                    }
+                ),
+                flush=True,
+            )
         finally:
-            close = getattr(records, "close", None)
-            if close is not None:
-                close()
-        if rows:
-            _insert(con, rows)
-        print(
-            f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
-        )
-        con.execute("COMMIT")
-        total = con.execute(
-            "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]
-        ).fetchall()[0][0]
-        print(
-            json.dumps(
-                {
-                    "dataset": root.name,
-                    "processed": count,
-                    "stored": total,
-                    "db": str(options.db),
-                }
-            ),
-            flush=True,
-        )
-    except BaseException:
-        con.execute("ROLLBACK")
-        raise
-    finally:
-        con.close()
+            con.close()

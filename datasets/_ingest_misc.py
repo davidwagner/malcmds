@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
 import html
 import io
 import json
 import re
 import subprocess
+import sys
 import zipfile
+import zlib
 from collections import OrderedDict
 from datetime import datetime
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -30,10 +34,7 @@ def emitted(
 
 def limited(rows, options):
     """Bound source scanning independently of emitted command count."""
-    for i, row in enumerate(rows):
-        if options.max_records is not None and i >= options.max_records:
-            break
-        yield row
+    yield from islice(rows, options.max_records)
 
 
 def audit_value(value):
@@ -227,44 +228,96 @@ def microsoft_iot(root, options):
                 )
 
 
+def gzip_json_items(path, *, allow_truncated=False):
+    """Stream complete JSON array items; optionally recover a known truncated gzip.
+
+    read1 delivers decompressed bytes before checking the next gzip block/footer.
+    A push parser therefore preserves complete objects in the final short read.
+    Syntax errors are always fatal; only EOF from gzip permits partial recovery.
+    """
+    pending = ijson.sendable_list()
+    parser = ijson.items_coro(pending, "item")
+    truncated = False
+    try:
+        with gzip.open(path, "rb") as stream:
+            while True:
+                try:
+                    chunk = stream.read1(64 * 1024)
+                except EOFError:
+                    if not allow_truncated:
+                        raise
+                    truncated = True
+                    break
+                if not chunk:
+                    break
+                parser.send(chunk)
+                yield from pending
+                pending.clear()
+        try:
+            parser.close()
+        except ijson.IncompleteJSONError:
+            if not truncated:
+                raise
+        if truncated:
+            print(
+                f"WARNING: {path}: incomplete publisher archive; retained complete "
+                "JSON records and discarded the unfinished final record.",
+                file=sys.stderr,
+                flush=True,
+            )
+    except (EOFError, OSError, zlib.error, ijson.JSONError) as error:
+        raise ValueError(f"Cannot read {path}: {error}") from error
+
+
+def known_truncated_cyberlab(path):
+    """Recognize the exact corrupt bytes published by Zenodo record 3687527."""
+    if path.name != "cyberlab_2020-01-29.json.gz" or path.stat().st_size != 31660520:
+        return False
+    checksum = hashlib.md5()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            checksum.update(chunk)
+    return checksum.hexdigest() == "7d2b798aa797115d181ae920cca59002"
+
+
 def cyberlab(root, options):
     """Read Cowrie input; suppress handler echoes when original input exists."""
     for path in select_files(root.glob("*.json.gz"), options):
-        with gzip.open(path, "rb") as stream:
-            for index, obj in enumerate(limited(ijson.items(stream, "item"), options)):
-                for sid, events in obj.items():
-                    has_input = any(
-                        e.get("eventid") == "cowrie.command.input" for e in events
+        rows = gzip_json_items(path, allow_truncated=known_truncated_cyberlab(path))
+        for index, obj in enumerate(limited(rows, options)):
+            for sid, events in obj.items():
+                has_input = any(
+                    e.get("eventid") == "cowrie.command.input" for e in events
+                )
+                for n, event in enumerate(events):
+                    kind = event.get("eventid", "")
+                    prefixes = {
+                        "cowrie.command.input": "CMD: ",
+                        "cowrie.command.success": "Command found: ",
+                        "cowrie.command.failed": "Command not found: ",
+                    }
+                    if kind not in prefixes or (
+                        has_input and kind != "cowrie.command.input"
+                    ):
+                        continue
+                    message = event.get("message", "")
+                    text = event.get("input") or message.removeprefix(
+                        prefixes[kind]
                     )
-                    for n, event in enumerate(events):
-                        kind = event.get("eventid", "")
-                        prefixes = {
-                            "cowrie.command.input": "CMD: ",
-                            "cowrie.command.success": "Command found: ",
-                            "cowrie.command.failed": "Command not found: ",
-                        }
-                        if kind not in prefixes or (
-                            has_input and kind != "cowrie.command.input"
-                        ):
-                            continue
-                        message = event.get("message", "")
-                        text = event.get("input") or message.removeprefix(
-                            prefixes[kind]
-                        )
-                        host = (
-                            event.get("dst_host_identifier")
-                            or event.get("sensor")
-                            or ""
-                        )
-                        session = f"cyberlab:{path.name}:{host}:{sid}"
-                        yield from emitted(
-                            text,
-                            f"{path.name}:{index}:{sid}:{n}",
-                            session,
-                            "malicious-group",
-                            session,
-                            shell=True,
-                        )
+                    host = (
+                        event.get("dst_host_identifier")
+                        or event.get("sensor")
+                        or ""
+                    )
+                    session = f"cyberlab:{path.name}:{host}:{sid}"
+                    yield from emitted(
+                        text,
+                        f"{path.name}:{index}:{sid}:{n}",
+                        session,
+                        "malicious-group",
+                        session,
+                        shell=True,
+                    )
 
 
 def concatenated_csv(stream):

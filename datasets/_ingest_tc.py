@@ -85,8 +85,6 @@ def command_line(text, collector, pgm=None, require_arguments=True):
     # Titles such as "sshd: admin [priv]" are not an executed argv vector.
     if re.match(r'^(?:sshd|sshd-session|sudo|postgres|sendmail|pickup|qmgr):\s', text):
         return []
-    if '\ufffd' in text.split(maxsplit=1)[0]:
-        return []
     os_name = 'windows' if collector in {'fivedirections', 'marple'} else 'linux'
     if os_name == 'linux' and '\0' in text:
         tokens = text.split('\0')
@@ -115,7 +113,10 @@ def command_line(text, collector, pgm=None, require_arguments=True):
         match = re.match(r'^\S+\s+(-[a-zA-Z]*c)\s+(.+)$', text, re.DOTALL)
         if match and match[2][0] not in "\"'" and len(tokens) > 3:
             tokens = [tokens[0], match[1], match[2]]
-    if not tokens or (require_arguments and len(tokens) < 2) or not tokens[0] or any(ord(c) < 32 for c in tokens[0]):
+    # Check the parsed executable: raw whitespace splitting can be empty, split
+    # a quoted executable, or include NUL-delimited arguments in the first word.
+    if (not tokens or (require_arguments and len(tokens) < 2) or not tokens[0]
+            or '\ufffd' in tokens[0] or any(ord(c) < 32 for c in tokens[0])):
         return []
     return [(pgm or tokens[0], tokens[1:])]
 

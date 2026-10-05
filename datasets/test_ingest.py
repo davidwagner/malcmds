@@ -72,8 +72,8 @@ run(Path(__file__).parent, records)
     con.close()
 
 
-def test_rollback(tmp_path):
-    """A parser failure after a flushed batch leaves no partial dataset behind."""
+def test_reader_failure_retains_completed_batches(tmp_path):
+    """A parser failure retains committed batches; retry completes missing rows."""
     driver = tmp_path / "ingest.py"
     driver.write_text(
         """
@@ -85,7 +85,8 @@ from _ingest import Command, run
 def records(root, options):
     for i in range(100001):
         yield Command('echo', [str(i)], str(i))
-    raise ValueError('source corruption')
+    if not (root / 'repaired').exists():
+        raise ValueError('source corruption')
 run(Path(__file__).parent, records)
 """.replace("ROOT_PATH", repr(str(ROOT)))
     )
@@ -98,7 +99,8 @@ run(Path(__file__).parent, records)
     )
     assert result.returncode != 0 and "source corruption" in result.stderr
     con = duckdb.connect(str(db), read_only=True)
-    assert con.execute("SELECT count(*) FROM COMMANDS").fetchall()[0][0] == 0
+    assert con.execute("SELECT count(*) FROM COMMANDS").fetchall()[0][0] == 100000
+    assert con.execute("SELECT count(*) FROM COMMANDS WHERE record_id='100000'").fetchone() == (0,)
     con.close()
     result = subprocess.run(
         [sys.executable, str(driver), "--db", str(db), "--limit", "3"],
@@ -106,7 +108,13 @@ run(Path(__file__).parent, records)
         text=True,
         capture_output=True,
     )
-    assert json.loads(result.stdout)["stored"] == 3
+    assert json.loads(result.stdout)["stored"] == 100000
+    (tmp_path / 'repaired').touch()
+    result = subprocess.run(
+        [sys.executable, str(driver), '--db', str(db)],
+        check=True, text=True, capture_output=True,
+    )
+    assert json.loads(result.stdout)['stored'] == 100001
 
 
 def test_empty_argv_and_continuations(tmp_path):
@@ -143,6 +151,10 @@ def test_ingest_all_order_and_failure_reporting(tmp_path):
         "1",
         "--seed",
         "3",
+        "--batch-size",
+        "2",
+        "--memory-limit",
+        "64MB",
     ]
     result = subprocess.run(command, check=True, text=True, capture_output=True)
     assert result.stdout.index("Ingesting kypo") < result.stdout.index("Ingesting optc")

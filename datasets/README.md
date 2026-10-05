@@ -37,6 +37,17 @@ It is safe to run `./ingestall` or `./ingest` multiple times.
 A `(dataset, record_id)` primary key prevents duplicate insertion
 when rerunning these scripts.
 
+Each batch of 100,000 commands commits separately. If parsing or writing fails,
+completed batches remain saved; fix the input and rerun to fill in missing rows.
+Connections reopen between batches to release DuckDB's primary-key index memory.
+Both `ingest` and `ingestall` accept `--batch-size` and `--memory-limit` (default
+`2GB`). For example, use `--batch-size 10000 --memory-limit 1GB` on a smaller machine.
+
+The published Cyberlab file `cyberlab_2020-01-29.json.gz` is truncated. After
+verifying its known publisher checksum, ingestion retains complete JSON objects,
+discards the incomplete final object, warns, and continues with the next file.
+Unexpected archive or JSON corruption still fails with the affected file named.
+
 For datasets containing shell input, `ingest` uses a Bash syntax
 parser to split compound commands, remove redirections and assignments
 preceding commands, and remove shell quoting.  Substitution commands
