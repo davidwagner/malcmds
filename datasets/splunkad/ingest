@@ -1,0 +1,19 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "duckdb==1.5.6", "pyarrow==25.0.1", "tree-sitter==0.26.0",
+#   "tree-sitter-bash==0.25.1", "PyYAML==6.0.3", "ijson==3.5.1", "openpyxl==3.1.5",
+# ]
+# ///
+"""Ingest the locally downloaded splunkad dataset."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _ingest import run
+from _ingest_windows import splunkad
+
+if __name__ == "__main__":
+    run(Path(__file__).resolve().parent, splunkad)

@@ -33,3 +33,13 @@ Each attack `.config` file contains `[occurTime]` start and end times and `[PNam
 The user-activity CSVs use `id` to identify records. Membership in `groundtruth.csv` marks a user-activity record as malicious. `pc` identifies the computer and `date` gives the activity time. These fields connect user actions with system events on the same computer at the same time; the CSVs have no shared command ID.
 
 Sources: [publisher repository and file descriptions](https://github.com/security0528/PublicArena), [attack annotations](https://github.com/security0528/PublicArena/tree/main/SystemAuditLogs/GroundTruth).
+
+## Ingestion
+
+Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+
+The reader streams split ZIP members through 7z without unpacking them to the dataset directory. Install 7-Zip to run this ingester. Only Process/Start is included; Process/Stop repeats the same launch. HTML entities and doubled backslashes in CommandLine are decoded before Windows argument parsing.
+
+`record_id` is archive + member + uuid (source line fallback) + normalized-command index. `session_id` is `publicarena:` + archive scenario + pc + observation day + SessionID. Benign-named members are benign. Attack records matching the host, inclusive occurTime interval and PName in a ground-truth config are malicious-group, with `group_id=publicarena:` + host + config path. Other attack-file commands remain unknown. E configs and F configs explicitly marked onHostB apply to Host B; other F configs apply to Host A.
+
+A complete validation run emitted 18,528 commands: 15,801 benign, 44 malicious-group and 2,683 unknown. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.

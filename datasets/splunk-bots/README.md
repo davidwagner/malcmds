@@ -27,3 +27,43 @@ Splunk's `_time` is the event timestamp, `_raw` contains the original event text
 The competition's incident questions describe attacks to investigate. The dataset has no per-command malicious/benign labels or session labels. It includes lookup tables such as ransomware file extensions and dynamic DNS providers; these can help identify suspicious activity while investigating an incident.
 
 Sources: [official release and list of log sources](https://github.com/splunk/botsv3), [BOTS v3 archive](https://botsdataset.s3.amazonaws.com/botsv3/botsv3_data_set.tgz).
+
+## Ingestion
+
+`./ingest` reads the original indexed archive using Splunk's native `exporttool`.
+It uses `SPLUNK_HOME` when set; otherwise it downloads the pinned Splunk 9.1.3
+Linux x86-64 distribution, verifies its SHA-256, and caches it under
+`../../tmp/ingest/splunk`. It runs the offline exporter only. Extracted buckets
+and CSV exports are cached under `../../tmp/ingest/`; source files are unchanged.
+
+Commands come from Sysmon XML, rendered Windows process events, WinHostMon
+process command lines, osquery `columns.cmdline`, Bash history, sudo messages,
+joined Linux audit events, and `ps` process tables. WinHostMon's outer value
+quotes are removed only when they wrap the entire value; quotes belonging to
+the executable or its arguments are preserved for argument parsing. The `ps` collector separates COMMAND from
+ARGS and joins arguments with underscores; ingestion restores those separators.
+Process titles, kernel threads, `<noArgs>` rows, and `top`/performance listings
+without arguments are excluded. Audit records join across buckets by host and
+audit event ID. The release contains 112 audit records; the join retains these
+small records while streaming all other sources.
+
+- `record_id`: archive name, native index bucket name, exported event ordinal,
+  and the XML event/JSON object/process-table row/shell-command ordinal as needed.
+  Audit IDs additionally include the original `audit(timestamp:serial)` value.
+- `label`: `unknown`; competition questions are not individual command labels.
+- `group_id`: NULL.
+- `session_id`: host and native LogonGuid when present; otherwise host, collection
+  scope and numeric logon ID. Osquery uses host, UID, and parent PID (audit UID
+  when no parent is present). Shell history uses host and history-file path;
+  process tables add user and TTY. WinHostMon uses host, `ProcessId`, and
+  `StartTime` to distinguish process instances when login/parent IDs are absent.
+  Audit records use host, source and `ses`, with
+  parent PID as fallback. All IDs start with `splunk-bots`.
+
+The complete native export contains 1,944,094 source events across 17 buckets.
+Use `--sample-files` to select buckets reproducibly and `--max-records` to bound
+source records per selected bucket. Normal invocations process every bucket.
+
+Full local validation ingested 320,479 commands from all 17 buckets. A seeded
+bucket passed repeat-ingestion equality checks; a regression verifies that apt
+history metadata produces only the recorded `apt-get install netcat` command.

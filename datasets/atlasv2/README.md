@@ -36,3 +36,13 @@ REAPr `.labels` files contain process labels. Their comma-separated fields are:
 The `.seeds` files identify processes used as starting points for tracing an attack. `atlasv2_attack_igraphs.tar.gz` contains the attack graphs that connect those processes to other activity. The graph's `process_uuid`, scenario, machine, process ID, and process lifetime provide the information for associating a process label with its command records. Sysmon's `ProcessGuid` and the graph's `process_uuid` use their respective systems' identifiers.
 
 Sources: [dataset repository](https://bitbucket.org/sts-lab/atlasv2), [paper](https://arxiv.org/abs/2401.01341), [REAPr label methodology](https://bitbucket.org/sts-lab/reapr-ground-truth), [Sysmon event reference](https://learn.microsoft.com/en-us/sysinternals/downloads/sysmon).
+
+## Ingestion
+
+Run `./datasets/atlasv2/ingest` from the project root. The reader streams Sysmon and Security XML and Carbon Black JSONL directly from `atlasv2.tar.gz`. It imports observed command-line fields, including command lines attached to EDR observations. Distinct `target_cmdline` values are also imported with `childproc_guid`/`childproc_name` or `crossproc_guid`/`crossproc_name`; exact target GUIDs receive the same REAPr label join. Executable-only event fields are insufficient. The archive's double-escaped Carbon Black path separators are decoded once more.
+
+`record_id` contains the archive/member path, event record number (or JSONL line number), source record ordinal, and command ordinal. `label` is `benign` in the benign collection. Exact matches between Carbon Black `process_guid` and REAPr `process_uuid` with `label=attack` are `malicious`. Other attack-run commands are `malicious-group`, with `group_id=atlasv2:<scenario>`; ordinary activity inside an attack run stays part of this coarse group. Sysmon GUIDs are not equated to Carbon Black GUIDs, and unmatched processes are not assigned a benign label.
+
+`session_id` uses dataset, computer and a nonzero `LogonGuid`. Otherwise it uses scenario, computer, event date and logon ID; absent logon identifiers fall back to parent process GUID/ID, then user. Multiple source observations of a process remain separate records.
+
+`--sample-files N --seed S` samples archive members; building the member list scans the compressed archive. `--max-records N` bounds source records globally, so a small prefix can stop inside Security records that contain no command lines.

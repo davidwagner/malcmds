@@ -1,0 +1,48 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Run every dataset ingester serially, with OpTC last."""
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+def main():
+    """Forward sample/database options and report every unsuccessful dataset."""
+    root = Path(__file__).resolve().parent
+    scripts = {p.parent.name: p for p in sorted(root.glob("*/ingest"))}
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("datasets", nargs="*", choices=None)
+    parser.add_argument("--db")
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--max-records", type=int)
+    parser.add_argument("--sample-files", type=int)
+    parser.add_argument("--seed", type=int)
+    options = parser.parse_args()
+    names = list(dict.fromkeys(options.datasets or scripts))
+    unknown = sorted(set(names) - scripts.keys())
+    if unknown:
+        parser.error("Unknown datasets: " + ", ".join(unknown))
+    names = [n for n in names if n != "optc"] + (["optc"] if "optc" in names else [])
+    forwarded = []
+    for key in ("db", "limit", "max_records", "sample_files", "seed"):
+        value = getattr(options, key)
+        if value is not None:
+            forwarded.extend(["--" + key.replace("_", "-"), str(value)])
+    failed = []
+    for name in names:
+        print(f"Ingesting {name}", flush=True)
+        result = subprocess.run([str(scripts[name]), *forwarded], check=False)
+        if result.returncode:
+            failed.append(name)
+    if failed:
+        print("Failed datasets: " + ", ".join(failed), file=sys.stderr)
+    return bool(failed)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -36,3 +36,13 @@ The relevant workbook headers are `timestamp`, `agent\.name`, `full_log`, `rule\
 The workbook omits the raw event IDs. Its `timestamp`, `agent\.name`, `full_log`, and `rule\.description` correspond to the CSV's `_source.timestamp`, `_source.agent.name`, `_source.full_log`, and `_source.rule.description`. Those values connect the binary labels to the command records in the CSV. Workbook sheet and row number identify an individual processed record; repeated combinations of the matching fields can correspond to multiple raw records.
 
 Sources: [Mendeley version 2](https://data.mendeley.com/datasets/5x68fv63sh/2), [original CSV files and local rules](https://zenodo.org/records/10685642), [paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC11220842/).
+
+## Ingestion
+
+Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+
+combine.csv concatenates original CSV exports with different column orders. Most subsequent headers are attached to the preceding final row without a newline. The reader recovers these headers and changes its column mapping for each section. It reads sudo commands and joined EXECVE/PROCTITLE records embedded in Wazuh full_log. EXECVE arguments take precedence over PROCTITLE.
+
+The spreadsheet labels join on timestamp, agent.name, full_log and rule.description after decoding Excel control-character escapes and trimming outer whitespace. Conflicting or unmatched labels remain unknown; 0 becomes benign and 1 malicious. `group_id` is NULL. `record_id` is index + event ID + normalized-command index (audit entries append their audit event ID). `session_id` is `linux-apt-2024:` + host + observation day + audit ses, using parent PID when unset. Sudo entries use host + observation day + source user + TTY.
+
+A complete validation run emitted 83,109 commands: 81,640 benign and 1,469 malicious. All command records joined to workbook labels after recovering the CSV sections and Excel escapes. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.

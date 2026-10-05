@@ -21,3 +21,13 @@ A record can be identified by the filename, session object's position in the fil
 The publisher describes the honeypot connections as attack sessions. Commands are associated with those sessions through `session_id` and the containing JSON object. The files have no separate per-command malicious/benign field or benign dataset. The `success` and `failed` event types report how Cowrie handled a command.
 
 Sources: [dataset description and files](https://zenodo.org/records/3687527), [Cowrie event reference](https://docs.cowrie.org/en/latest/OUTPUT.html).
+
+## Ingestion
+
+Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+
+The reader streams daily compressed JSON arrays. It uses cowrie.command.input when a session contains original input; otherwise it reads success/failed command messages after removing their documented prefixes. This avoids counting Cowrie's handler echoes in addition to the original input. Shell syntax is parsed into individual commands.
+
+`record_id` is daily filename + zero-based session-object index + session ID + event index + normalized-command index. `session_id` is `cyberlab:` + daily filename + destination host identifier (sensor fallback) + Cowrie session ID. Honeypot attack sessions have `label=malicious-group` and `group_id=session_id`.
+
+Validation sampled daily files with seed 83 and checked 100 normalized commands. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.

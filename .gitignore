@@ -1,1 +1,4 @@
 /tmp/
+/cmds.duckdb
+/cmds.duckdb.wal
+/.pytest_cache/

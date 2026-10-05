@@ -25,3 +25,11 @@ Linux audit records share `msg=audit(epoch:serial)` across one event. It contain
 Command labels are derived by matching procedure steps to the corresponding commands, machines, and times in the logs. The release provides these procedures as its attack ground truth and has no per-event benign/malicious label table.
 
 Sources: [RADAR dataset](https://radar.kit.edu/radar/en/dataset/8s5b0u5yqgfs2y0d), [attack procedures and logging configuration](https://gitlab.kit.edu/kit/iai/rsa/aviator), [paper](https://publikationen.bibliothek.kit.edu/1000178581).
+
+## Ingestion
+
+Run `./datasets/aviator/ingest`. The reader opens the uncompressed RADAR tar and reads `ex_*.zip` members without extracting them. Exported XML is the canonical representation of the corresponding raw EVTX; `ra_*.zip` is not ingested again. Sysmon, Security and other event fields containing an observed command line are read, along with Linux audit logs. Audit EXECVE arguments are joined with SYSCALL/PROCTITLE by audit event ID. PowerShell `HostApplication` is an invocation; script-block code and industrial-device diagnostic CSV messages are not process argument lists.
+
+`record_id` contains both archive paths, the log member, event record ID or audit event ID, source ordinal, and command ordinal. `normal_operation` files are `benign`; other files are `malicious-group`, with `group_id=aviator:<scenario ZIP name without ex_>`. The attack procedures establish these run-level labels; individual command matches are not guessed from command-name similarity.
+
+Windows `session_id` uses dataset, computer and nonzero `LogonGuid`. Its fallback combines scenario ZIP, computer, event date and logon ID, then parent process or user. Linux uses dataset, source log, host and audit `ses`, with parent PID as fallback. `--sample-files N --seed S` selects scenario ZIPs.

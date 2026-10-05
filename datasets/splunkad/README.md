@@ -32,3 +32,15 @@ The YAML file for each exercise contains:
 The description and ATT&CK technique identify the attack being tested. They apply to the exercise, whose logs also contain ordinary activity. Individual commands have no common malicious/benign field across the collection. Attack commands can be identified by matching the actions in the exercise description to commands in its log files.
 
 Sources: [publisher repository](https://github.com/splunk/attack_data), [source files](https://github.com/splunk/attack_data/tree/a28608b53aa3d8222052e8f3ada59e2d9a4adfff), [scenario catalog](https://research.splunk.com/attack_data/).
+
+## Ingestion
+
+Run `./datasets/splunkad/ingest`. The reader handles concatenated Windows/Linux Sysmon XML, rendered Windows events, JSONL process observations and Linux audit logs. Known publisher exports with unescaped XML operators are read using their named Data-field delimiters, preserving the original command arguments. Audit EXECVE/SYSCALL/PROCTITLE records are joined by audit event ID. Only observed command fields are imported; PowerShell script-block definitions are not treated as process executions.
+
+`record_id` contains the source path, event record number or audit event ID, record ordinal and command ordinal. YAML `datasets[].path` joins a file to its exercise `id`. Exercise files are `malicious-group` with `group_id=splunkad:<exercise id>`; logs include background commands. Uncatalogued files and honeypot collections remain `unknown` with no label group.
+
+Windows `session_id` is dataset, machine and a nonzero `LogonGuid`. Otherwise it combines exercise directory, machine, date and logon ID, falling back to parent process or user. Linux audit sessions combine dataset, source log, host and `ses`, falling back to parent PID. `--sample-files N --seed S` samples actual log files, excluding download metadata.
+
+Full local validation emitted 158,028 commands (144,907 Windows and 13,121 Linux),
+with unique source identifiers and nonempty program/session fields. Long command
+outliers were checked against their recorded cmd.exe and PowerShell arguments.

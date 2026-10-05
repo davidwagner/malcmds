@@ -30,3 +30,13 @@ The publisher labels lines matching attack rules with the attack-step names and 
 `dataset.yaml` gives the start and end of the experiment. `gather/attacker_0/logs/attacks.log` contains timestamps and attack-step names. The rules and label-processing code are in `rules/` and `processing/`.
 
 Source: [publisher description, label examples, and files](https://zenodo.org/records/19483937).
+
+## Ingestion
+
+Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+
+Audit records are joined by their timestamp/serial within a network archive and host. EXECVE arguments take precedence over decoded, NUL-separated PROCTITLE, followed by USER_CMD. Sudo COMMAND records in authentication logs are also included; sudo's `COMMAND=list` is normalized to `sudo -l` ([vendor example](https://access.redhat.com/solutions/7106892)). Arguments from executed processes are preserved without shell expansion.
+
+`record_id` is archive + audit member + audit event ID, or archive + authentication member + one-based line + normalized-command index. `label` is malicious when any joined audit line has an attack annotation, otherwise benign, following the publisher's normal-event convention. Authentication records use their own line annotations. `group_id` is NULL. `session_id` is `ait:` + network archive + host + audit `ses`; unset sessions use parent PID (or PID/event ID). Authentication commands use host + calendar day + sudo user + TTY.
+
+A complete validation run emitted 2,822 commands (41 malicious and 2,781 benign). A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.
