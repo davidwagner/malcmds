@@ -132,7 +132,7 @@ def test_ingest_all_order_and_failure_reporting(tmp_path):
     """The real orchestrator runs OpTC last and reports failures across datasets."""
     db = tmp_path / "all.duckdb"
     command = [
-        str(ROOT / "ingest-all"),
+        str(ROOT / "ingestall"),
         "optc",
         "kypo",
         "--db",
@@ -152,7 +152,7 @@ def test_ingest_all_order_and_failure_reporting(tmp_path):
         ).fetchall() == [("kypo", 3), ("optc", 3)]
     failed = subprocess.run(
         [
-            str(ROOT / "ingest-all"),
+            str(ROOT / "ingestall"),
             "kypo",
             "microsoft-iot",
             "--limit",
@@ -168,7 +168,7 @@ def test_ingest_all_order_and_failure_reporting(tmp_path):
     assert "Failed datasets: kypo, microsoft-iot" in failed.stderr
     assert not (tmp_path / "failed.duckdb").exists()
     invalid = subprocess.run(
-        [str(ROOT / "ingest-all"), "nonexistent-dataset"],
+        [str(ROOT / "ingestall"), "nonexistent-dataset"],
         text=True,
         capture_output=True,
         check=False,

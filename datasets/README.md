@@ -1,7 +1,7 @@
 # Datasets containing Unix/Microsoft commands
 
 Download all datasets with `./fetchall`.
-Then, run `./ingest-all` to populate `../cmds.duckdb`.
+Then, run `./ingestall` to populate `../cmds.duckdb`.
 
 # Contents
 
@@ -31,9 +31,9 @@ been downloaded.
 
 ## Ingest commands
 
-Run `./ingest-all` or a dataset's `./ingest` to populate `../cmds.duckdb`.
+Run `./ingestall` or a dataset's `./ingest` to populate `../cmds.duckdb`.
 
-It is safe to run `./ingest-all` or `./ingest` multiple times.
+It is safe to run `./ingestall` or `./ingest` multiple times.
 A `(dataset, record_id)` primary key prevents duplicate insertion
 when rerunning these scripts.
 
