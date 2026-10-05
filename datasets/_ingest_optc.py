@@ -3,6 +3,7 @@ import gzip
 import json
 import re
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import PureWindowsPath
 from zoneinfo import ZoneInfo
 
@@ -67,6 +68,21 @@ def observed_command(event):
     if not isinstance(text, str) or not text.strip():
         return []
     image = props.get('image_path') or ''
+    # Cache parsing only: labels, IDs, timestamps and sessions belong to events.
+    # Bound retained input as well as entry count; oversized commands still parse.
+    parse = _cached_command if len(text) + len(image) <= 4096 else _parse_command
+    pairs = parse(text, image, event.get('action') == 'OPEN')
+    # Consumers may mutate arguments without changing a later cached observation.
+    return [(pgm, list(args)) for pgm, args in pairs]
+
+
+def _parse_command(text, image, is_open):
+    plain = normalize(text, os='windows')
+    if not plain:
+        return []
+    # PROCESS OPEN image_path often names the accessor rather than the target.
+    if is_open or not image:
+        return plain
     parse_image = image
     if image.lower().startswith('\\device\\') and len(text) > 2 and text[1] == ':':
         parts = image.split('\\', 3)
@@ -74,20 +90,15 @@ def observed_command(event):
             candidate = text[:2] + '\\' + parts[3]
             if text.lower().startswith(candidate.lower()):
                 parse_image = candidate
-    parsed = normalize(text, os='windows', pgm=parse_image or None)
-    plain = normalize(text, os='windows')
-    if not plain:
-        return []
-    # PROCESS OPEN image_path often names the accessor rather than the target.
-    if event.get('action') == 'OPEN':
-        return plain
-    if not image:
-        return plain
     own_name = PureWindowsPath(plain[0][0]).name.lower().removesuffix('.exe')
     image_name = PureWindowsPath(image).name.lower().removesuffix('.exe')
     if own_name != image_name and parse_image == image:
         return plain
+    parsed = normalize(text, os='windows', pgm=parse_image)
     return [(image, args) for _, args in parsed]
+
+
+_cached_command = lru_cache(maxsize=4096)(_parse_command)
 
 
 def records(root, options):
