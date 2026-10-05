@@ -184,7 +184,7 @@ def resolve_download(url, cookies, output):
                 next_url = get_url_from_gdrive_confirmation(page.decode("utf-8", "replace"))
             except (FileURLRetrievalError, KeyError, ValueError, AssertionError):
                 error = html_error(bad, Path(output)) or "Unrecognized Google download response."
-                raise RuntimeError(f"{error}\nResponse saved at {bad}. "
+                raise RuntimeError(f"{error}\nHTTP {response.status_code}. Response saved at {bad}. "
                                    f"Open the file in your signed-in browser: {original}") from None
             if next_url == url:
                 break
@@ -193,6 +193,37 @@ def resolve_download(url, cookies, output):
     raise RuntimeError("Google repeated its download confirmation instead of sending the file. "
                        "Open the file in your signed-in browser and choose Download anyway, "
                        f"then retry. Response saved at {output}.bad. File: {original}")
+
+
+def download_drive_file(file_id, output, cookies):
+    """Skip completed files locally; preserve gdown partials and diagnose failures.
+
+    gdown checks resume=True only after resolving the remote file. Checking here
+    avoids requests for every completed OpTC file when a long run is restarted.
+    Its generic public-link error loses the response that caused it; a bounded
+    second attempt uses our confirmation resolver to recover or save diagnostics.
+    """
+    path = Path(output)
+    if path.is_file():
+        print(f"Already downloaded: {path}", flush=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    import gdown
+    from gdown.exceptions import FileURLRetrievalError
+
+    options = {"output": str(path), "resume": True, "use_cookies": bool(cookies),
+               "cookies_file": cookies, "timeout": 60, "retries": 4}
+    try:
+        gdown.download(id=file_id, **options)
+    except FileURLRetrievalError:
+        print(f"Checking Google download response for {path}", file=sys.stderr)
+        resolve_download(
+            f"https://drive.google.com/uc?export=download&id={file_id}",
+            cookies, str(path) + ".part",
+        )
+        # Retry through Drive-aware parsing: a resolved usercontent URL could
+        # return HTML on the next request, which a plain-URL transfer would save.
+        gdown.download(id=file_id, **options)
 
 
 def main(arguments):
@@ -224,17 +255,23 @@ def main(arguments):
         files = gdown.download_folder(
             id=arguments[1],
             output=arguments[2] if len(arguments) > 2 else "ecar",
-            resume=True,
             use_cookies=bool(cookies),
             cookies_file=cookies,
             timeout=60,
-            retries=4,
-            skip_download=arguments[0] == "list-folder",
+            skip_download=True,
         )
         if not files:
             raise RuntimeError("Drive returned no files")
         if arguments[0] == "list-folder":
             print(f"Drive folder accessible: {len(files)} files")
+        else:
+            # Stop on failure rather than sending requests for the rest of a
+            # large folder after Google starts rejecting downloads.
+            for entry in files:
+                try:
+                    download_drive_file(entry.id, entry.local_path, cookies)
+                except gdown.exceptions.DownloadError as error:
+                    raise RuntimeError(f"Failed to download {entry.local_path}: {error}") from None
         return 0
 
 

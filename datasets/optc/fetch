@@ -24,5 +24,5 @@ if os.environ.get("FETCH_LIST") == "1":
         f"ecar/ (recursive: benign, evaluation, short)\t?\thttps://drive.google.com/drive/folders/{FOLDER}"
     )
 else:
-    # Shared browser-cookie support; preserve gdown's completed-file/resume logic.
+    # Skip completed files before contacting Google; retain gdown partial resumes.
     run_google(["folder", FOLDER, "ecar"]).check_returncode()
