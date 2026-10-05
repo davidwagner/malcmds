@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--seed", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--memory-limit")
+    parser.add_argument("--workers", type=int)
     options = parser.parse_args()
     names = list(dict.fromkeys(options.datasets or scripts))
     unknown = sorted(set(names) - scripts.keys())
@@ -31,7 +32,7 @@ def main():
         parser.error("Unknown datasets: " + ", ".join(unknown))
     names = [n for n in names if n != "optc"] + (["optc"] if "optc" in names else [])
     forwarded = []
-    for key in ("db", "limit", "max_records", "sample_files", "seed", "batch_size", "memory_limit"):
+    for key in ("db", "limit", "max_records", "sample_files", "seed", "batch_size", "memory_limit", "workers"):
         value = getattr(options, key)
         if value is not None:
             forwarded.extend(["--" + key.replace("_", "-"), str(value)])
