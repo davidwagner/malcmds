@@ -262,31 +262,11 @@ def _initialize(con):
         ("command_os", "'windows', 'linux'"),
     ):
         con.execute(f"CREATE TYPE IF NOT EXISTS {name} AS ENUM ({values})")
-    create_commands = """CREATE TABLE IF NOT EXISTS COMMANDS (
+    con.execute("""CREATE TABLE IF NOT EXISTS COMMANDS (
         pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
         dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-        CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))"""
-    primary_key = con.execute(
-        "SELECT 1 FROM duckdb_constraints() "
-        "WHERE database_name = current_database() AND schema_name = current_schema() "
-        "AND lower(table_name) = 'commands' AND constraint_type = 'PRIMARY KEY'"
-    ).fetchone()
-    if primary_key:
-        # DuckDB cannot drop a primary-key constraint in place. Preserve the
-        # data and remaining constraints while replacing the indexed table.
-        con.execute("BEGIN TRANSACTION")
-        try:
-            con.execute("ALTER TABLE COMMANDS RENAME TO commands_with_primary_key")
-            con.execute(create_commands)
-            con.execute("INSERT INTO COMMANDS SELECT * FROM commands_with_primary_key")
-            con.execute("DROP TABLE commands_with_primary_key")
-            con.execute("COMMIT")
-        except Exception:
-            con.execute("ROLLBACK")
-            raise
-    else:
-        con.execute(create_commands)
+        CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
 
 
 COLUMNS = (

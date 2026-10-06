@@ -1,6 +1,6 @@
 """Exercise dataset completion and retries through subprocesses and real DuckDB.
 
-Disk failures during migration or marker commits require external fault injection;
+Disk failures during marker commits require external fault injection;
 these tests exercise ordinary SQL failures and reader failures without mocks.
 """
 
@@ -11,22 +11,19 @@ import pytest
 from test_ingest_batches import invoke
 
 
-@pytest.mark.parametrize('legacy', [False, True])
 @pytest.mark.parametrize('markers', [None, [False, False], [None]])
-def test_retry_replaces_dataset_and_preserves_other_datasets(tmp_path, legacy, markers):
-    """Migrate old tables and replace all stale rows and incomplete markers."""
+def test_retry_replaces_dataset_and_preserves_other_datasets(tmp_path, markers):
+    """Replace all stale rows and incomplete markers."""
     root = tmp_path / "dataset'quoted"
     root.mkdir()
     database = tmp_path / 'commands.duckdb'
     with duckdb.connect(str(database)) as con:
         con.execute("CREATE TYPE command_label AS ENUM ('malicious', 'benign', 'unknown', 'malicious-group')")
         con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
-        primary_key = 'PRIMARY KEY (dataset, record_id),' if legacy else ''
-        con.execute(f"""CREATE TABLE COMMANDS (
+        con.execute("""CREATE TABLE COMMANDS (
             pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
             dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
             group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-            {primary_key}
             CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
         for dataset in (root.name, 'other'):
             con.execute("INSERT INTO COMMANDS VALUES ('old', 'old', [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
@@ -49,7 +46,7 @@ def records(root, options):
         assert con.execute('SELECT ingested FROM INGESTED WHERE dataset=?', [root.name]).fetchall() == [(True,)]
         assert con.execute("SELECT ingested FROM INGESTED WHERE dataset='other'").fetchall() == ([] if markers is None else [(True,)])
         constraints = con.execute("SELECT constraint_type FROM duckdb_constraints() WHERE table_name='COMMANDS'").fetchall()
-        assert ('PRIMARY KEY',) not in constraints, 'Legacy DuckDB migration must remove the ART primary key'
+        assert ('PRIMARY KEY',) not in constraints, 'COMMANDS must not require a primary-key index'
         assert ('CHECK',) in constraints and ('NOT NULL',) in constraints
         assert con.execute("SELECT typeof(label),typeof(os),typeof(args) FROM COMMANDS LIMIT 1").fetchone() == (
             "ENUM('malicious', 'benign', 'unknown', 'malicious-group')", "ENUM('windows', 'linux')", 'VARCHAR[]',
@@ -104,22 +101,6 @@ def test_empty_dataset_is_completed(tmp_path):
     result = invoke(tmp_path, database, "def records(root, options):\n    raise ValueError('must skip')\n")
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['skipped'] is True
-
-
-def test_legacy_migration_failure_rolls_back(tmp_path):
-    """A real catalog conflict must leave the original indexed table intact."""
-    database = tmp_path / 'commands.duckdb'
-    with duckdb.connect(str(database)) as con:
-        con.execute('CREATE TABLE COMMANDS (dataset VARCHAR, record_id VARCHAR, PRIMARY KEY(dataset, record_id))')
-        con.execute("INSERT INTO COMMANDS VALUES ('other', 'saved')")
-        con.execute('CREATE TABLE commands_with_primary_key (value INTEGER)')
-    result = invoke(tmp_path, database, 'def records(root, options):\n    return []\n')
-    assert result.returncode != 0
-    assert 'already exists' in result.stderr
-    with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT * FROM COMMANDS').fetchall() == [('other', 'saved')]
-        assert con.execute('SELECT * FROM INGESTED').fetchall() == []
-        assert con.execute("SELECT constraint_type FROM duckdb_constraints() WHERE table_name='COMMANDS' AND constraint_type='PRIMARY KEY'").fetchall() == [('PRIMARY KEY',)]
 
 
 def test_dataset_reset_failure_rolls_back(tmp_path):
