@@ -124,7 +124,7 @@ def test_truncated_xml_rolls_back_and_empty_xml_finishes(tmp_path):
 
 
 def test_large_batches_preserve_existing_rows_and_internal_duplicates(tmp_path):
-    """Duplicates within/across batches and limited repeats keep the first row."""
+    """Every input is inserted; completed datasets skip even with new limits."""
     root = tmp_path / "batch"
     root.mkdir()
     database = tmp_path / "commands.duckdb"
@@ -137,20 +137,20 @@ def records(root, options):
 """
     first = ingest(root, database, reader)
     assert first.returncode == 0, first.stderr
-    assert json.loads(first.stdout)["stored"] == 100005
+    assert json.loads(first.stdout)["stored"] == 100007
     second = ingest(root, database, reader, "--limit", "3")
     assert second.returncode == 0, second.stderr
-    assert json.loads(second.stdout)["stored"] == 100005
+    assert json.loads(second.stdout)["skipped"] is True
     with duckdb.connect(str(database)) as con:
         assert con.execute(
-            "SELECT pgm FROM COMMANDS WHERE record_id='0'"
-        ).fetchone() == ("first",)
+            "SELECT pgm FROM COMMANDS WHERE record_id='0' ORDER BY pgm"
+        ).fetchall() == [("first",), ("later",)]
         assert con.execute(
-            "SELECT pgm FROM COMMANDS WHERE record_id='1'"
-        ).fetchone() == ("later",)
+            "SELECT pgm FROM COMMANDS WHERE record_id='1' ORDER BY pgm"
+        ).fetchall() == [("duplicate",), ("later",)]
         assert con.execute(
             "SELECT count(*)-count(DISTINCT record_id) FROM COMMANDS"
-        ).fetchone() == (0,)
+        ).fetchone() == (2,)
 
 
 @pytest.mark.parametrize("with_command", [False, True])

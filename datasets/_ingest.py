@@ -1,4 +1,4 @@
-"""Shared command normalization and resumable native DuckDB ingestion."""
+"""Shared command normalization and dataset-level native DuckDB ingestion."""
 
 import argparse
 import json
@@ -262,12 +262,31 @@ def _initialize(con):
         ("command_os", "'windows', 'linux'"),
     ):
         con.execute(f"CREATE TYPE IF NOT EXISTS {name} AS ENUM ({values})")
-    con.execute("""CREATE TABLE IF NOT EXISTS COMMANDS (
+    create_commands = """CREATE TABLE IF NOT EXISTS COMMANDS (
         pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
         dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-        PRIMARY KEY (dataset, record_id),
-        CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
+        CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))"""
+    primary_key = con.execute(
+        "SELECT 1 FROM duckdb_constraints() "
+        "WHERE database_name = current_database() AND schema_name = current_schema() "
+        "AND lower(table_name) = 'commands' AND constraint_type = 'PRIMARY KEY'"
+    ).fetchone()
+    if primary_key:
+        # DuckDB cannot drop a primary-key constraint in place. Preserve the
+        # data and remaining constraints while replacing the indexed table.
+        con.execute("BEGIN TRANSACTION")
+        try:
+            con.execute("ALTER TABLE COMMANDS RENAME TO commands_with_primary_key")
+            con.execute(create_commands)
+            con.execute("INSERT INTO COMMANDS SELECT * FROM commands_with_primary_key")
+            con.execute("DROP TABLE commands_with_primary_key")
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+    else:
+        con.execute(create_commands)
 
 
 COLUMNS = (
@@ -289,18 +308,14 @@ SCHEMA = pa.schema(
 def command_table(commands, dataset):
     """Convert Commands into an Arrow table holding one batch of COMMANDS rows.
 
-    Adds `dataset`, `pgm_base` and a per-record default `session_id`. When several
-    Commands share a record_id, the first one is kept. Raises ValueError for a
-    Command with an empty pgm or record_id.
+    Adds `dataset`, `pgm_base` and a per-record default `session_id`. Raises
+    ValueError for a Command with an empty pgm or record_id. Input records are
+    assumed to be unique; no deduplication is performed.
     """
     columns: dict[str, list] = {name: [] for name in COLUMNS}
-    seen = set()
     for command in commands:
         if not command.pgm or not command.record_id:
             raise ValueError("Command requires nonempty pgm and record_id")
-        if command.record_id in seen:
-            continue
-        seen.add(command.record_id)
         separators = r"[/\\]" if command.os == "windows" else "/"
         columns["pgm"].append(command.pgm)
         columns["pgm_base"].append(re.split(separators, command.pgm)[-1])
@@ -320,7 +335,7 @@ def _insert(con, batch):
     con.register("ingest_batch", batch)
     try:
         # Autocommit makes each batch atomic, including constraint/commit failures.
-        con.execute("INSERT OR IGNORE INTO COMMANDS SELECT * FROM ingest_batch")
+        con.execute("INSERT INTO COMMANDS SELECT * FROM ingest_batch")
     finally:
         con.unregister("ingest_batch")
 
@@ -334,34 +349,31 @@ def _connect(options, scratch):
     })
 
 
-def _commit(con, batch, options, spill, dataset, count, started, write_seconds):
+def _commit(con, batch, dataset, count, started, write_seconds):
     batch_started = monotonic()
     _insert(con, batch)
-    # ART index buffers cannot spill. Reopening releases them and
-    # loads only the index pages needed by the next batch.
-    con.close()
-    con = _connect(options, spill)
     batch_seconds = monotonic() - batch_started
     write_seconds += batch_seconds
     elapsed = monotonic() - started
     print(
         f"{dataset}: {count:,} commands processed (batches committed); "
         f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
-        f"batch write/reopen {batch_seconds:.2f}s, "
-        f"total write/reopen {write_seconds:.2f}s",
+        f"batch write {batch_seconds:.2f}s, "
+        f"total write {write_seconds:.2f}s",
         file=sys.stderr,
         flush=True,
     )
-    return con, write_seconds
+    return write_seconds
 
 
 def run(dataset_dir, records_callable):
-    """Commit bounded batches; repeats preserve one row per source command.
+    """Commit bounded batches and track successful runs per dataset.
 
     records_callable(root, options) yields Commands, or pyarrow Tables built
     by command_table(); each Table is committed as one batch, in order.
-    Completed batches survive reader/write failures. Rerunning the source safely
-    fills missing records using the existing (dataset, record_id) primary key.
+    Completed datasets are skipped. Otherwise, discard the previous attempt
+    before reading. Failures leave ingested=false; a retry starts over. A
+    successful run, including one with sampling/limit options, sets it true.
     """
     root = Path(dataset_dir).resolve()
     options = arguments(root)
@@ -375,7 +387,25 @@ def run(dataset_dir, records_callable):
         count = 0
         commands: list[Command] = []
         try:
+            con.execute("CREATE TABLE IF NOT EXISTS INGESTED (dataset VARCHAR, ingested BOOLEAN)")
+            if con.execute(
+                "SELECT 1 FROM INGESTED WHERE dataset=? AND ingested=true LIMIT 1", [root.name]
+            ).fetchone():
+                print(
+                    json.dumps({"dataset": root.name, "processed": 0, "skipped": True, "db": str(options.db)}),
+                    flush=True,
+                )
+                return
             _initialize(con)
+            con.execute("BEGIN TRANSACTION")
+            try:
+                con.execute("DELETE FROM COMMANDS WHERE dataset=?", [root.name])
+                con.execute("DELETE FROM INGESTED WHERE dataset=?", [root.name])
+                con.execute("INSERT INTO INGESTED VALUES (?, false)", [root.name])
+                con.execute("COMMIT")
+            except Exception:
+                con.execute("ROLLBACK")
+                raise
             records = iter(records_callable(root, options))
             try:
                 for item in records:
@@ -384,23 +414,23 @@ def run(dataset_dir, records_callable):
                         # command_table() results; earlier Commands go first.
                         if commands:
                             batch = command_table(commands, root.name)
-                            con, write_seconds = _commit(
-                                con, batch, options, spill, root.name, count, started, write_seconds
+                            write_seconds = _commit(
+                                con, batch, root.name, count, started, write_seconds
                             )
                             commands.clear()
                         if options.limit is not None:
                             item = item.slice(0, options.limit - count)
                         count += item.num_rows
-                        con, write_seconds = _commit(
-                            con, item, options, spill, root.name, count, started, write_seconds
+                        write_seconds = _commit(
+                            con, item, root.name, count, started, write_seconds
                         )
                     else:
                         commands.append(item)
                         count += 1
                         if len(commands) >= options.batch_size:
                             batch = command_table(commands, root.name)
-                            con, write_seconds = _commit(
-                                con, batch, options, spill, root.name, count, started, write_seconds
+                            write_seconds = _commit(
+                                con, batch, root.name, count, started, write_seconds
                             )
                             commands.clear()
                     if options.limit is not None and count >= options.limit:
@@ -417,22 +447,20 @@ def run(dataset_dir, records_callable):
                 batch_started = monotonic()
                 _insert(con, batch)
                 write_seconds += monotonic() - batch_started
+            con.execute("UPDATE INGESTED SET ingested=true WHERE dataset=?", [root.name])
             elapsed = monotonic() - started
             print(
                 f"{root.name}: finished in {elapsed:.1f}s; "
                 f"read/normalize {elapsed - write_seconds:.2f}s, "
-                f"write/reopen {write_seconds:.2f}s",
+                f"write {write_seconds:.2f}s",
                 file=sys.stderr, flush=True,
             )
-            total = con.execute(
-                "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]
-            ).fetchall()[0][0]
             print(
                 json.dumps(
                     {
                         "dataset": root.name,
                         "processed": count,
-                        "stored": total,
+                        "stored": count,
                         "db": str(options.db),
                     }
                 ),

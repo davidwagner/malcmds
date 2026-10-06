@@ -24,7 +24,7 @@ def invoke(root, database, source, *options):
     )
 
 
-def test_failed_batch_preserves_commits_and_retry_deduplicates(tmp_path):
+def test_failed_batch_preserves_commits_and_retry_replaces(tmp_path):
     """A real constraint failure loses only its batch; corrected retries finish."""
     database = tmp_path / 'commands.duckdb'
     source = """
@@ -39,14 +39,17 @@ def records(root, options):
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT record_id FROM COMMANDS ORDER BY record_id').fetchall() == [('0',), ('1',), ('2',)]
     corrected = source.replace("label='malicious-group' if i == 5 else 'unknown'", "label='unknown'")
-    for _ in range(2):
+    for attempt in range(2):
         result = invoke(tmp_path, database, corrected, '--batch-size', '3')
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)['stored'] == 7
+        if attempt == 0:
+            assert json.loads(result.stdout)['stored'] == 7
+        else:
+            assert json.loads(result.stdout)['skipped'] is True
 
 
-def test_large_index_under_small_memory_limit(tmp_path):
-    """Reopening between batches prevents accumulation of non-evictable ART nodes."""
+def test_large_ingest_under_small_memory_limit(tmp_path):
+    """Plain inserts fit a small memory budget even with large record identifiers."""
     source = """
 def records(root, options):
     for i in range(300000):
@@ -59,7 +62,9 @@ def records(root, options):
     # Repeat with a different batch size and a bounded source sample.
     result = invoke(tmp_path, database, source, '--memory-limit', '64MB', '--batch-size', '777', '--limit', '3000')
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)['stored'] == 300000
+    assert json.loads(result.stdout)['skipped'] is True
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (300000,)
 
 
 def test_write_oom_reports_original_error(tmp_path):
@@ -69,7 +74,7 @@ def records(root, options):
     for i in range(100000):
         yield Command('echo', [str(i)], f'{i:09d}:' + 'x' * 500)
 """
-    result = invoke(tmp_path, tmp_path / 'commands.duckdb', source, '--memory-limit', '16MB')
+    result = invoke(tmp_path, tmp_path / 'commands.duckdb', source, '--memory-limit', '4MB')
     assert result.returncode != 0
     assert 'Memory' in result.stderr or 'memory' in result.stderr
     assert 'cannot rollback' not in result.stderr
@@ -83,6 +88,8 @@ def test_empty_iterable_and_invalid_commands(tmp_path):
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['stored'] == 0
     for command in ("Command('', [], 'id')", "Command('echo', [], '')"):
+        with duckdb.connect(str(database)) as con:
+            con.execute("DELETE FROM INGESTED")
         result = invoke(tmp_path, database, source.replace('[]', f'[{command}]'))
         assert result.returncode != 0
         assert 'Command requires nonempty pgm and record_id' in result.stderr
@@ -110,17 +117,17 @@ def records(root, options):
     result = invoke(tmp_path, database, source, '--batch-size', '2')
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['processed'] == 6
-    assert json.loads(result.stdout)['stored'] == 5
+    assert json.loads(result.stdout)['stored'] == 6
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id, args FROM COMMANDS ORDER BY record_id').fetchall() == [
-            ('arrow', ['arrow']), ('duplicate', ['first']),
+        assert con.execute('SELECT record_id, args FROM COMMANDS ORDER BY record_id, args').fetchall() == [
+            ('arrow', ['arrow']), ('duplicate', ['first']), ('duplicate', ['later']),
             ('full-1', ['full-1']), ('full-2', ['full-2']), ('tail', ['tail']),
         ]
     progress = [line for line in result.stderr.splitlines() if 'batches committed' in line]
     assert len(progress) == 3
     for line in progress:
         assert 'commands/s' in line
-        assert 'batch write/reopen' in line
-        assert 'total write/reopen' in line
+        assert 'batch write' in line
+        assert 'total write' in line
     assert 'read/normalize' in result.stderr
     assert 'finished in' in result.stderr
