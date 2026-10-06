@@ -12,3 +12,7 @@ A duckdb-native database with a main table, COMMANDS, which has one row per comm
 For uniformity, entries in this table are intended to simulate what an in-kernel audit log would/could see. Some datasets record command lines typed into the shell or sent over the network; those should be parsed and normalized into this format. For example, if a dataset contains a line typed into a shell, which might contain multiple commands (`cd ..; ls docs > /dev/null`), that will be expanded into multiple rows in this table (`cd ..` and `ls docs`) and only program names/args will be preserved.
 
 All entries should be populated in a best-effort fashion. Don't document all the caveats about why they might be imperfect. We don't try to preserve everything from the original dataset.
+
+Also, the table INGESTED will record which datasets have been fully ingested into COMMANDS.  It has two columns:
+- `dataset` - the original dataset this command line appeared in came from, e.g., `optc`
+- `ingested` - boolean, true if the `ingest` script has finished fully ingesting the database and adding it all to COMMANDS
