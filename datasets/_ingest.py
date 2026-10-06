@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import random
 import re
 import shlex
@@ -9,6 +10,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 
 import duckdb
 import pyarrow as pa
@@ -240,6 +242,10 @@ def arguments(dataset_dir):
         help="commands per durable transaction (default: 100000)",
     )
     parser.add_argument(
+        "--tc-workers", type=_positive, default=min(8, os.cpu_count() or 1),
+        help="parallel TC Avro decoders (default: up to 8; --limit uses one)",
+    )
+    parser.add_argument(
         "--memory-limit", default="2GB", help="DuckDB memory budget (default: 2GB)"
     )
     return parser.parse_args()
@@ -277,7 +283,7 @@ def _insert(con, rows):
         ]
     )
     # Keep the first observation deterministically even with unordered execution.
-    unique = {}
+    unique: dict[tuple[str, str], dict] = {}
     for row in rows:
         unique.setdefault((row["dataset"], row["record_id"]), row)
     batch = pa.Table.from_pylist(list(unique.values()), schema=schema)
@@ -311,6 +317,8 @@ def run(dataset_dir, records_callable):
     scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="duckdb-", dir=scratch) as spill:
         con = _connect(options, spill)
+        started = monotonic()
+        write_seconds = 0.0
         count = 0
         rows = []
         try:
@@ -337,14 +345,21 @@ def run(dataset_dir, records_callable):
                     )
                     count += 1
                     if len(rows) >= options.batch_size:
+                        batch_started = monotonic()
                         _insert(con, rows)
                         rows.clear()
                         # ART index buffers cannot spill. Reopening releases them and
                         # loads only the index pages needed by the next batch.
                         con.close()
                         con = _connect(options, spill)
+                        batch_seconds = monotonic() - batch_started
+                        write_seconds += batch_seconds
+                        elapsed = monotonic() - started
                         print(
-                            f"{root.name}: {count:,} commands processed (batches committed)",
+                            f"{root.name}: {count:,} commands processed (batches committed); "
+                            f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
+                            f"batch write/reopen {batch_seconds:.2f}s, "
+                            f"total write/reopen {write_seconds:.2f}s",
                             file=sys.stderr,
                             flush=True,
                         )
@@ -358,7 +373,16 @@ def run(dataset_dir, records_callable):
                 f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
             )
             if rows:
+                batch_started = monotonic()
                 _insert(con, rows)
+                write_seconds += monotonic() - batch_started
+            elapsed = monotonic() - started
+            print(
+                f"{root.name}: finished in {elapsed:.1f}s; "
+                f"read/normalize {elapsed - write_seconds:.2f}s, "
+                f"write/reopen {write_seconds:.2f}s",
+                file=sys.stderr, flush=True,
+            )
             total = con.execute(
                 "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]
             ).fetchall()[0][0]
