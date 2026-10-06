@@ -1,6 +1,5 @@
 """Stream the native CDM18/CDM20 Avro command observations."""
 
-import gzip
 import hashlib
 import io
 import json
@@ -22,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 import fastavro
 from _ingest import Command, normalize, select_files
+from isal import igzip as gzip
 
 # Successful attacks described in TC_Ground_Truth_Report_E3_Update.pdf,
 # sections 3 and 4. Dates refer to the attack host's calendar day.
@@ -76,7 +76,8 @@ class _AvroStream:
 def avro_blocks(stream, source):
     """Recover after malformed records using the container's block boundaries."""
     for number, block in enumerate(fastavro.block_reader(
-        _AvroStream(stream), return_record_name=True, handle_unicode_errors='replace'
+        # fastavro needs read/tell, although its stub requires the full IO API.
+        _AvroStream(stream), return_record_name=True, handle_unicode_errors='replace',  # type: ignore[arg-type]
     )):
         try:
             yield from block
@@ -88,7 +89,7 @@ def avro_blocks(stream, source):
 def avro_records(path):
     """Read gzip Avro or every regular Avro member in an E3 tar archive."""
     if '.tar.' in path.name:
-        with tarfile.open(path, 'r|gz') as archive:
+        with gzip.open(path, 'rb') as compressed, tarfile.open(fileobj=compressed, mode='r|') as archive:
             for member in archive:
                 if member.isfile() and '.bin' in member.name:
                     stream = archive.extractfile(member)

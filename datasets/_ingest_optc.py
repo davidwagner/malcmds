@@ -1,18 +1,18 @@
 """Stream OpTC eCAR command observations and apply report host/time groups."""
-import gzip
 import json
 import multiprocessing
 import re
 import tempfile
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from functools import lru_cache
+from multiprocessing.pool import AsyncResult
 from pathlib import Path, PureWindowsPath
 from zoneinfo import ZoneInfo
 
 import pyarrow as pa
-
 from _ingest import SCHEMA, Command, command_table, normalize, select_files
+from isal import igzip as gzip
 
 # The report omits a zone. Interpret its clocks in the observed eCAR -04:00
 # offset; America/New_York has that offset on all three exercise dates.
@@ -38,6 +38,15 @@ for _host in (10, 69, 203, 358, 618, 851):
     ATTACK_WINDOWS.append((f'sysclient{_host:04}', '2019-09-24T15:42:36', '2019-09-25T09:00:00', 'empire-overnight'))
 
 
+EASTERN = ZoneInfo('America/New_York')
+HOST_WINDOWS: dict[str, list[tuple[datetime, datetime, str]]] = defaultdict(list)
+for _machine, _start, _end, _attack in ATTACK_WINDOWS:
+    HOST_WINDOWS[_machine].append((
+        datetime.fromisoformat(_start), datetime.fromisoformat(_end),
+        f'optc:{_attack}:{_machine}:{_start}/{_end}:America_New_York',
+    ))
+
+
 def timestamp(value):
     """Read actual ISO-8601 timestamps and the numeric schema's milliseconds."""
     if isinstance(value, (int, float)) or isinstance(value, str) and value.isdecimal():
@@ -45,18 +54,19 @@ def timestamp(value):
     if not value:
         return None
     result = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    return result.replace(tzinfo=ZoneInfo('America/New_York')) if result.tzinfo is None else result
+    return result.replace(tzinfo=EASTERN) if result.tzinfo is None else result
 
 
 def label_for(host, time, benign):
     """Return benign partition labels or explicitly reported host/time groups."""
     if benign:
         return 'benign', None
-    if time is not None:
-        local = time.astimezone(ZoneInfo('America/New_York')).replace(tzinfo=None)
-        for machine, start, end, attack in ATTACK_WINDOWS:
-            if host == machine and datetime.fromisoformat(start) <= local <= datetime.fromisoformat(end):
-                return 'malicious-group', f'optc:{attack}:{host}:{start}/{end}:America_New_York'
+    windows = HOST_WINDOWS.get(host, ())
+    if time is not None and windows:
+        local = time.astimezone(EASTERN).replace(tzinfo=None)
+        for start, end, group in windows:
+            if start <= local <= end:
+                return 'malicious-group', group
     return 'unknown', None
 
 
@@ -111,12 +121,14 @@ def records(root, options):
 
     With more than one worker, each gzip file is parsed in its own process and
     batches are yielded as Arrow tables, in the same file order as one worker.
+    A command limit uses one worker to stop without spooling whole source files.
     """
     paths = select_files((root / 'ecar').rglob('*.json.gz'), options)
     if not paths:
         raise FileNotFoundError(f'No completed OpTC eCAR gzip files under {root}')
     workers = min(getattr(options, 'workers', 1), len(paths))
-    if workers > 1:
+    # Whole-file workers cannot stop when the consumer reaches a command limit.
+    if workers > 1 and getattr(options, 'limit', None) is None:
         yield from parallel_tables(root, paths, options, workers)
         return
     for path in paths:
@@ -135,7 +147,7 @@ def parallel_tables(root, paths, options, workers):
     context = multiprocessing.get_context('spawn')
     with tempfile.TemporaryDirectory(prefix='optc-', dir=scratch) as tmp, \
             context.Pool(workers) as pool:
-        pending = deque()
+        pending: deque[AsyncResult] = deque()
         for index, path in enumerate(paths):
             output = Path(tmp) / f'{index}.arrow'
             task = (root, path, options.max_records, options.batch_size, output)
