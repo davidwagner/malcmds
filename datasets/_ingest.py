@@ -10,6 +10,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 
 import duckdb
 import pyarrow as pa
@@ -241,6 +242,10 @@ def arguments(dataset_dir):
         help="commands per durable transaction (default: 100000)",
     )
     parser.add_argument(
+        "--tc-workers", type=_positive, default=min(8, os.cpu_count() or 1),
+        help="parallel TC Avro decoders (default: up to 8; --limit uses one)",
+    )
+    parser.add_argument(
         "--memory-limit", default="2GB", help="DuckDB memory budget (default: 2GB)"
     )
     parser.add_argument(
@@ -288,7 +293,7 @@ def command_table(commands, dataset):
     Commands share a record_id, the first one is kept. Raises ValueError for a
     Command with an empty pgm or record_id.
     """
-    columns = {name: [] for name in COLUMNS}
+    columns: dict[str, list] = {name: [] for name in COLUMNS}
     seen = set()
     for command in commands:
         if not command.pgm or not command.record_id:
@@ -329,17 +334,25 @@ def _connect(options, scratch):
     })
 
 
-def _commit(con, batch, options, spill, dataset, count):
+def _commit(con, batch, options, spill, dataset, count, started, write_seconds):
+    batch_started = monotonic()
     _insert(con, batch)
     # ART index buffers cannot spill. Reopening releases them and
     # loads only the index pages needed by the next batch.
     con.close()
+    con = _connect(options, spill)
+    batch_seconds = monotonic() - batch_started
+    write_seconds += batch_seconds
+    elapsed = monotonic() - started
     print(
-        f"{dataset}: {count:,} commands processed (batches committed)",
+        f"{dataset}: {count:,} commands processed (batches committed); "
+        f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
+        f"batch write/reopen {batch_seconds:.2f}s, "
+        f"total write/reopen {write_seconds:.2f}s",
         file=sys.stderr,
         flush=True,
     )
-    return _connect(options, spill)
+    return con, write_seconds
 
 
 def run(dataset_dir, records_callable):
@@ -357,8 +370,10 @@ def run(dataset_dir, records_callable):
     scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="duckdb-", dir=scratch) as spill:
         con = _connect(options, spill)
+        started = monotonic()
+        write_seconds = 0.0
         count = 0
-        commands = []
+        commands: list[Command] = []
         try:
             _initialize(con)
             records = iter(records_callable(root, options))
@@ -369,18 +384,24 @@ def run(dataset_dir, records_callable):
                         # command_table() results; earlier Commands go first.
                         if commands:
                             batch = command_table(commands, root.name)
-                            con = _commit(con, batch, options, spill, root.name, count)
+                            con, write_seconds = _commit(
+                                con, batch, options, spill, root.name, count, started, write_seconds
+                            )
                             commands.clear()
                         if options.limit is not None:
                             item = item.slice(0, options.limit - count)
                         count += item.num_rows
-                        con = _commit(con, item, options, spill, root.name, count)
+                        con, write_seconds = _commit(
+                            con, item, options, spill, root.name, count, started, write_seconds
+                        )
                     else:
                         commands.append(item)
                         count += 1
                         if len(commands) >= options.batch_size:
                             batch = command_table(commands, root.name)
-                            con = _commit(con, batch, options, spill, root.name, count)
+                            con, write_seconds = _commit(
+                                con, batch, options, spill, root.name, count, started, write_seconds
+                            )
                             commands.clear()
                     if options.limit is not None and count >= options.limit:
                         break
@@ -392,7 +413,17 @@ def run(dataset_dir, records_callable):
                 f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
             )
             if commands:
-                _insert(con, command_table(commands, root.name))
+                batch = command_table(commands, root.name)
+                batch_started = monotonic()
+                _insert(con, batch)
+                write_seconds += monotonic() - batch_started
+            elapsed = monotonic() - started
+            print(
+                f"{root.name}: finished in {elapsed:.1f}s; "
+                f"read/normalize {elapsed - write_seconds:.2f}s, "
+                f"write/reopen {write_seconds:.2f}s",
+                file=sys.stderr, flush=True,
+            )
             total = con.execute(
                 "SELECT count(*) FROM COMMANDS WHERE dataset=?", [root.name]
             ).fetchall()[0][0]

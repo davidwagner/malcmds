@@ -2,7 +2,10 @@
 
 import gzip
 import hashlib
+import io
 import json
+import multiprocessing
+import pickle
 import re
 import shlex
 import sqlite3
@@ -10,8 +13,11 @@ import sys
 import tarfile
 import tempfile
 import uuid
+from collections import deque
 from datetime import datetime, timezone
+from multiprocessing.pool import AsyncResult
 from pathlib import Path
+from time import monotonic
 from zoneinfo import ZoneInfo
 
 import fastavro
@@ -49,10 +55,28 @@ def identifier(value):
     return str(value) if value else ''
 
 
+class _AvroStream:
+    """Track forward reads without gzip's expensive seek-based tell calls."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.position = 0
+
+    def read(self, size=-1):
+        """Read bytes and account for their uncompressed position."""
+        data = self.stream.read(size)
+        self.position += len(data)
+        return data
+
+    def tell(self):
+        """Return the position used by fastavro's block metadata."""
+        return self.position
+
+
 def avro_blocks(stream, source):
     """Recover after malformed records using the container's block boundaries."""
     for number, block in enumerate(fastavro.block_reader(
-        stream, return_record_name=True, handle_unicode_errors='replace'
+        _AvroStream(stream), return_record_name=True, handle_unicode_errors='replace'
     )):
         try:
             yield from block
@@ -68,13 +92,100 @@ def avro_records(path):
             for member in archive:
                 if member.isfile() and '.bin' in member.name:
                     stream = archive.extractfile(member)
-                    assert stream is not None  # Regular tar members always have a stream.
-                    with stream:
-                        yield from avro_blocks(stream, f'{path.name}:{member.name}')
+                    assert isinstance(stream, io.BufferedIOBase)  # Regular members are ExFileObjects.
+                    with io.BufferedReader(stream) as buffered:
+                        yield from avro_blocks(buffered, f'{path.name}:{member.name}')
     else:
         opener = gzip.open if path.suffix == '.gz' else open
-        with opener(path, 'rb') as stream:
-            yield from avro_blocks(stream, path.name)
+        with opener(path, 'rb') as stream, io.BufferedReader(stream) as buffered:
+            yield from avro_blocks(buffered, path.name)
+
+
+def _candidates(path, max_records, windows):
+    """Scan all source records, retaining subjects and command-bearing events."""
+    started = reported = monotonic()
+    count = retained = 0
+    print(f'{path.name}: scanning', file=sys.stderr, flush=True)
+    source = avro_records(path)
+    try:
+        for outer in source:
+            count += 1
+            branch, record = outer['datum']
+            kind = branch.rsplit('.', 1)[-1]
+            keep = kind == 'Subject'
+            if kind == 'Event':
+                event_type = record.get('type')
+                props = record.get('properties') or {}
+                keep = (event_type == 'EVENT_EXECUTE' or
+                        (windows and event_type in {'EVENT_FORK', 'EVENT_EXIT'})) and bool(
+                            props.get('cmdLine') or props.get('CommandLine'))
+            if keep:
+                retained += 1
+                yield outer
+            if count % 100000 == 0 and monotonic() - reported >= 10:
+                reported = monotonic()
+                elapsed = reported - started
+                print(f'{path.name}: {count:,} scanned, {retained:,} retained; '
+                      f'{count / elapsed:,.0f} records/s, {elapsed:.1f}s elapsed',
+                      file=sys.stderr, flush=True)
+            if max_records and count >= max_records:
+                break
+    finally:
+        source.close()
+        print(f'{path.name}: finished scanning {count:,} records, '
+              f'{retained:,} retained in {monotonic() - started:.1f}s',
+              file=sys.stderr, flush=True)
+
+
+def _spool(path, destination, max_records, windows):
+    """Decode one file to a private spool; database state stays in the parent."""
+    with destination.open('wb') as stream:
+        for outer in _candidates(path, max_records, windows):
+            pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def _ordered_files(paths, options, temporary, windows):
+    """Prefetch at most one file per worker and consume in original order."""
+    workers = min(getattr(options, 'tc_workers', 8), len(paths))
+    if workers <= 1 or getattr(options, 'limit', None) is not None:
+        for path in paths:
+            yield path, _candidates(path, options.max_records, windows)
+        return
+    # Spawn avoids inheriting the live DuckDB connection and SQLite state.
+    pool = multiprocessing.get_context('spawn').Pool(workers)
+    pending: deque[tuple[Path, Path, AsyncResult]] = deque()
+    remaining = iter(enumerate(paths))
+    try:
+        for index, path in remaining:
+            destination = Path(temporary) / f'{index}.pickle'
+            pending.append((path, destination, pool.apply_async(
+                _spool, (path, destination, options.max_records, windows))))
+            if len(pending) == workers:
+                break
+        while pending:
+            path, destination, job = pending.popleft()
+            job.get()
+            with destination.open('rb') as stream:
+                yield path, _unspool(stream)
+            destination.unlink()
+            item = next(remaining, None)
+            if item is not None:
+                index, path = item
+                destination = Path(temporary) / f'{index}.pickle'
+                pending.append((path, destination, pool.apply_async(
+                    _spool, (path, destination, options.max_records, windows))))
+        pool.close()
+        pool.join()
+    finally:
+        # Also stop prefetch promptly when the reader fails or is closed early.
+        pool.terminate()
+        pool.join()
+
+
+def _unspool(stream):
+    """Read only the trusted pickle stream produced by this invocation."""
+    while stream.peek(1):
+        yield pickle.load(stream)
 
 
 def command_line(text, collector, pgm=None, require_arguments=True):
@@ -144,22 +255,24 @@ def records(root, options):
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='tc-ingest-', dir=scratch) as temporary:
         db = sqlite3.connect(str(Path(temporary) / 'subjects.sqlite'))
+        files = None
+        source = None
         try:
             db.execute('PRAGMA journal_mode=OFF')
             db.execute('PRAGMA synchronous=OFF')
             db.execute('CREATE TABLE subjects (host TEXT, id TEXT, parent TEXT, PRIMARY KEY(host,id)) WITHOUT ROWID')
             db.execute('CREATE TABLE seen (id TEXT PRIMARY KEY) WITHOUT ROWID')
-            for path in select_files(paths, options):
+            paths = select_files(paths, options)
+            files = _ordered_files(paths, options, temporary, os_name == 'windows')
+            for file_number, (path, source) in enumerate(files, 1):
+                print(f'{root.name}: consuming file {file_number}/{len(paths)}: {path.name}',
+                      file=sys.stderr, flush=True)
                 match = re.search(r'ta1-([a-z]+-\d+)-e5', path.name)
                 instance = match[1] if match else collector
                 stream_id = path.name.split('.bin')[0]
-                for count, outer in enumerate(avro_records(path), 1):
-                    if options.max_records and count > options.max_records:
-                        break
+                for outer in source:
                     branch, record = outer['datum']
                     kind = branch.rsplit('.', 1)[-1]
-                    if kind not in {'Subject', 'Event'}:
-                        continue
                     host = identifier(outer.get('hostId') or record.get('hostId')) or stream_id
                     restart = outer.get('sessionNumber', 0)
                     scope = f'{host}:{restart}'
@@ -176,11 +289,6 @@ def records(root, options):
                         timestamp = record.get('startTimestampNanos')
                     else:
                         event_type = record.get('type')
-                        if event_type not in {'EVENT_EXECUTE', 'EVENT_FORK', 'EVENT_EXIT'}:
-                            continue
-                        # fork copies argv on Unix; it is not a new execution.
-                        if event_type in {'EVENT_FORK', 'EVENT_EXIT'} and os_name != 'windows':
-                            continue
                         text = props.get('cmdLine') or props.get('CommandLine')
                         subject = identifier(record.get('predicateObject') if event_type == 'EVENT_FORK' else record.get('subject'))
                         found = db.execute('SELECT parent FROM subjects WHERE host=? AND id=?', (scope, subject)).fetchone()
@@ -213,4 +321,8 @@ def records(root, options):
                                       label='malicious-group' if group else 'unknown',
                                       group_id=group, session_id=session, os=os_name)
         finally:
+            if source is not None:
+                source.close()
+            if files is not None:
+                files.close()
             db.close()
