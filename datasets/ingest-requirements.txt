@@ -6,3 +6,4 @@ fastavro==1.12.2
 ijson==3.5.1
 openpyxl==3.1.5
 PyYAML==6.0.3
+isal==1.8.0
