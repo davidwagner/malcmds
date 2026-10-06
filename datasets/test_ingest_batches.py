@@ -89,3 +89,38 @@ def test_empty_iterable_and_invalid_commands(tmp_path):
         assert 'cannot rollback' not in result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (0,)
+
+
+def test_mixed_command_and_arrow_batches_report_timing(tmp_path):
+    """Both reader formats preserve order and report shared writer timings."""
+    source = """
+from _ingest import command_table
+
+def records(root, options):
+    yield Command('echo', ['first'], 'duplicate')
+    yield command_table([
+        Command('echo', ['later'], 'duplicate'),
+        Command('echo', ['arrow'], 'arrow'),
+    ], root.name)
+    yield Command('echo', ['full-1'], 'full-1')
+    yield Command('echo', ['full-2'], 'full-2')
+    yield Command('echo', ['tail'], 'tail')
+"""
+    database = tmp_path / 'commands.duckdb'
+    result = invoke(tmp_path, database, source, '--batch-size', '2')
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['processed'] == 6
+    assert json.loads(result.stdout)['stored'] == 5
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT record_id, args FROM COMMANDS ORDER BY record_id').fetchall() == [
+            ('arrow', ['arrow']), ('duplicate', ['first']),
+            ('full-1', ['full-1']), ('full-2', ['full-2']), ('tail', ['tail']),
+        ]
+    progress = [line for line in result.stderr.splitlines() if 'batches committed' in line]
+    assert len(progress) == 3
+    for line in progress:
+        assert 'commands/s' in line
+        assert 'batch write/reopen' in line
+        assert 'total write/reopen' in line
+    assert 'read/normalize' in result.stderr
+    assert 'finished in' in result.stderr

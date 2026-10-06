@@ -248,6 +248,11 @@ def arguments(dataset_dir):
     parser.add_argument(
         "--memory-limit", default="2GB", help="DuckDB memory budget (default: 2GB)"
     )
+    parser.add_argument(
+        "--workers", type=_positive, default=os.cpu_count() or 1,
+        help="processes reading input files in parallel; only OpTC uses this "
+        "(default: number of CPUs)",
+    )
     return parser.parse_args()
 
 
@@ -265,28 +270,53 @@ def _initialize(con):
         CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
 
 
-def _insert(con, rows):
-    schema = pa.schema(
-        [
-            (name, pa.list_(pa.string()) if name == "args" else pa.string())
-            for name in (
-                "pgm",
-                "pgm_base",
-                "args",
-                "dataset",
-                "record_id",
-                "label",
-                "group_id",
-                "session_id",
-                "os",
-            )
-        ]
-    )
-    # Keep the first observation deterministically even with unordered execution.
-    unique: dict[tuple[str, str], dict] = {}
-    for row in rows:
-        unique.setdefault((row["dataset"], row["record_id"]), row)
-    batch = pa.Table.from_pylist(list(unique.values()), schema=schema)
+COLUMNS = (
+    "pgm",
+    "pgm_base",
+    "args",
+    "dataset",
+    "record_id",
+    "label",
+    "group_id",
+    "session_id",
+    "os",
+)
+SCHEMA = pa.schema(
+    [(name, pa.list_(pa.string()) if name == "args" else pa.string()) for name in COLUMNS]
+)
+
+
+def command_table(commands, dataset):
+    """Convert Commands into an Arrow table holding one batch of COMMANDS rows.
+
+    Adds `dataset`, `pgm_base` and a per-record default `session_id`. When several
+    Commands share a record_id, the first one is kept. Raises ValueError for a
+    Command with an empty pgm or record_id.
+    """
+    columns: dict[str, list] = {name: [] for name in COLUMNS}
+    seen = set()
+    for command in commands:
+        if not command.pgm or not command.record_id:
+            raise ValueError("Command requires nonempty pgm and record_id")
+        if command.record_id in seen:
+            continue
+        seen.add(command.record_id)
+        separators = r"[/\\]" if command.os == "windows" else "/"
+        columns["pgm"].append(command.pgm)
+        columns["pgm_base"].append(re.split(separators, command.pgm)[-1])
+        columns["args"].append(command.args)
+        columns["dataset"].append(dataset)
+        columns["record_id"].append(command.record_id)
+        columns["label"].append(command.label)
+        columns["group_id"].append(command.group_id)
+        columns["session_id"].append(
+            command.session_id or f"{dataset}:record:{command.record_id}"
+        )
+        columns["os"].append(command.os)
+    return pa.table(columns, schema=SCHEMA)
+
+
+def _insert(con, batch):
     con.register("ingest_batch", batch)
     try:
         # Autocommit makes each batch atomic, including constraint/commit failures.
@@ -304,9 +334,32 @@ def _connect(options, scratch):
     })
 
 
+def _commit(con, batch, options, spill, dataset, count, started, write_seconds):
+    batch_started = monotonic()
+    _insert(con, batch)
+    # ART index buffers cannot spill. Reopening releases them and
+    # loads only the index pages needed by the next batch.
+    con.close()
+    con = _connect(options, spill)
+    batch_seconds = monotonic() - batch_started
+    write_seconds += batch_seconds
+    elapsed = monotonic() - started
+    print(
+        f"{dataset}: {count:,} commands processed (batches committed); "
+        f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
+        f"batch write/reopen {batch_seconds:.2f}s, "
+        f"total write/reopen {write_seconds:.2f}s",
+        file=sys.stderr,
+        flush=True,
+    )
+    return con, write_seconds
+
+
 def run(dataset_dir, records_callable):
     """Commit bounded batches; repeats preserve one row per source command.
 
+    records_callable(root, options) yields Commands, or pyarrow Tables built
+    by command_table(); each Table is committed as one batch, in order.
     Completed batches survive reader/write failures. Rerunning the source safely
     fills missing records using the existing (dataset, record_id) primary key.
     """
@@ -320,49 +373,36 @@ def run(dataset_dir, records_callable):
         started = monotonic()
         write_seconds = 0.0
         count = 0
-        rows = []
+        commands: list[Command] = []
         try:
             _initialize(con)
             records = iter(records_callable(root, options))
             try:
-                for command in records:
-                    if not command.pgm or not command.record_id:
-                        raise ValueError("Command requires nonempty pgm and record_id")
-                    separators = r"[/\\]" if command.os == "windows" else "/"
-                    rows.append(
-                        {
-                            "pgm": command.pgm,
-                            "pgm_base": re.split(separators, command.pgm)[-1],
-                            "args": command.args,
-                            "dataset": root.name,
-                            "record_id": command.record_id,
-                            "label": command.label,
-                            "group_id": command.group_id,
-                            "session_id": command.session_id
-                            or f"{root.name}:record:{command.record_id}",
-                            "os": command.os,
-                        }
-                    )
-                    count += 1
-                    if len(rows) >= options.batch_size:
-                        batch_started = monotonic()
-                        _insert(con, rows)
-                        rows.clear()
-                        # ART index buffers cannot spill. Reopening releases them and
-                        # loads only the index pages needed by the next batch.
-                        con.close()
-                        con = _connect(options, spill)
-                        batch_seconds = monotonic() - batch_started
-                        write_seconds += batch_seconds
-                        elapsed = monotonic() - started
-                        print(
-                            f"{root.name}: {count:,} commands processed (batches committed); "
-                            f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
-                            f"batch write/reopen {batch_seconds:.2f}s, "
-                            f"total write/reopen {write_seconds:.2f}s",
-                            file=sys.stderr,
-                            flush=True,
+                for item in records:
+                    if isinstance(item, pa.Table):
+                        # Readers that build batches in worker processes yield
+                        # command_table() results; earlier Commands go first.
+                        if commands:
+                            batch = command_table(commands, root.name)
+                            con, write_seconds = _commit(
+                                con, batch, options, spill, root.name, count, started, write_seconds
+                            )
+                            commands.clear()
+                        if options.limit is not None:
+                            item = item.slice(0, options.limit - count)
+                        count += item.num_rows
+                        con, write_seconds = _commit(
+                            con, item, options, spill, root.name, count, started, write_seconds
                         )
+                    else:
+                        commands.append(item)
+                        count += 1
+                        if len(commands) >= options.batch_size:
+                            batch = command_table(commands, root.name)
+                            con, write_seconds = _commit(
+                                con, batch, options, spill, root.name, count, started, write_seconds
+                            )
+                            commands.clear()
                     if options.limit is not None and count >= options.limit:
                         break
             finally:
@@ -372,9 +412,10 @@ def run(dataset_dir, records_callable):
             print(
                 f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
             )
-            if rows:
+            if commands:
+                batch = command_table(commands, root.name)
                 batch_started = monotonic()
-                _insert(con, rows)
+                _insert(con, batch)
                 write_seconds += monotonic() - batch_started
             elapsed = monotonic() - started
             print(

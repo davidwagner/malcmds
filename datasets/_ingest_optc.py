@@ -1,13 +1,18 @@
 """Stream OpTC eCAR command observations and apply report host/time groups."""
 import gzip
 import json
+import multiprocessing
 import re
+import tempfile
+from collections import deque
 from datetime import datetime, timezone
 from functools import lru_cache
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from zoneinfo import ZoneInfo
 
-from _ingest import Command, normalize, select_files
+import pyarrow as pa
+
+from _ingest import SCHEMA, Command, command_table, normalize, select_files
 
 # The report omits a zone. Interpret its clocks in the observed eCAR -04:00
 # offset; America/New_York has that offset on all three exercise dates.
@@ -102,46 +107,108 @@ _cached_command = lru_cache(maxsize=4096)(_parse_command)
 
 
 def records(root, options):
-    """Read completed gzip streams, using event UUIDs for repeatable source IDs."""
+    """Read completed gzip streams, using event UUIDs for repeatable source IDs.
+
+    With more than one worker, each gzip file is parsed in its own process and
+    batches are yielded as Arrow tables, in the same file order as one worker.
+    """
     paths = select_files((root / 'ecar').rglob('*.json.gz'), options)
     if not paths:
         raise FileNotFoundError(f'No completed OpTC eCAR gzip files under {root}')
+    workers = min(getattr(options, 'workers', 1), len(paths))
+    if workers > 1:
+        yield from parallel_tables(root, paths, options, workers)
+        return
     for path in paths:
-        relative = path.relative_to(root)
-        benign = 'benign' in relative.parts
-        with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as stream:
-            for number, line in enumerate(stream, 1):
-                if options.max_records is not None and number > options.max_records:
-                    break
-                if not line.strip():
+        yield from file_commands(root, path, options.max_records)
+
+
+def parallel_tables(root, paths, options, workers):
+    """Yield every file's command batches, parsing up to `workers` files at once.
+
+    Each worker writes its file's batches to a temporary Arrow IPC file. At most
+    `workers` files are pending, which bounds temporary disk use.
+    """
+    scratch = root.parent.parent / 'tmp' / 'ingest'
+    scratch.mkdir(parents=True, exist_ok=True)
+    # spawn: forking a parent that holds DuckDB and Arrow threads is unsafe.
+    context = multiprocessing.get_context('spawn')
+    with tempfile.TemporaryDirectory(prefix='optc-', dir=scratch) as tmp, \
+            context.Pool(workers) as pool:
+        pending = deque()
+        for index, path in enumerate(paths):
+            output = Path(tmp) / f'{index}.arrow'
+            task = (root, path, options.max_records, options.batch_size, output)
+            pending.append(pool.apply_async(write_file_tables, task))
+            if len(pending) >= workers:
+                yield from read_tables(pending.popleft().get())
+        while pending:
+            yield from read_tables(pending.popleft().get())
+
+
+def write_file_tables(root, path, max_records, batch_size, output):
+    """Write one gzip file's commands to `output` as Arrow batches; return `output`."""
+    options = pa.ipc.IpcWriteOptions(compression='lz4')
+    with pa.OSFile(str(output), 'wb') as sink, pa.ipc.new_stream(sink, SCHEMA, options=options) as writer:
+        batch = []
+        for command in file_commands(root, path, max_records):
+            batch.append(command)
+            if len(batch) >= batch_size:
+                writer.write_table(command_table(batch, root.name))
+                batch.clear()
+        if batch:
+            writer.write_table(command_table(batch, root.name))
+    return output
+
+
+def read_tables(path):
+    """Yield the batches written by write_file_tables, then delete the file."""
+    with pa.OSFile(str(path), 'rb') as source:
+        for batch in pa.ipc.open_stream(source):
+            yield pa.Table.from_batches([batch])
+    path.unlink()
+
+
+def file_commands(root, path, max_records):
+    """Yield the commands in one eCAR gzip file, reading at most max_records lines."""
+    relative = path.relative_to(root)
+    benign = 'benign' in relative.parts
+    with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as stream:
+        for number, line in enumerate(stream, 1):
+            if max_records is not None and number > max_records:
+                break
+            # Most eCAR events (85-95% in samples) are not PROCESS events. Skip
+            # them without JSON decoding. A JSON string can spell PROCESS with
+            # \u00XX escapes, so lines containing one are decoded as well.
+            if '"PROCESS"' not in line and '\\u00' not in line:
+                continue
+            event = json.loads(line)
+            if event.get('object') != 'PROCESS':
+                continue
+            pairs = observed_command(event)
+            if not pairs:
+                continue
+            host = str(event.get('hostname') or relative.parent.name).lower()
+            machine = host.split('.')[0]
+            time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
+            label, group = label_for(machine, time, benign)
+            props = event.get('properties') or {}
+            login = usable_id(props.get('logon_id') or props.get('logon_guid') or props.get('session_id'))
+            target = usable_id(event.get('objectID'))
+            actor = usable_id(event.get('actorID'))
+            principal = props.get('user') or event.get('principal') or props.get('sid') or 'unknown-user'
+            if login:
+                session = f'optc:{host}:login:{login}'
+            elif event.get('action') == 'CREATE' and actor and actor != target:
+                session = f'optc:{host}:{principal}:parent:{actor}'
+            elif target:
+                session = f'optc:{host}:process:{target}'
+            else:
+                day = time.date().isoformat() if time else str(relative.parent)
+                session = f'optc:{host}:{principal}:{day}:ppid:{event.get("ppid", "unknown")}'
+            record = usable_id(event.get('id')) or f'{relative}:{number}'
+            for index, (pgm, args) in enumerate(pairs):
+                # Ignore control-only/truncated process titles, preserving actual arguments.
+                if not pgm.strip() or re.fullmatch(r'[\x00-\x20]+', pgm):
                     continue
-                event = json.loads(line)
-                if event.get('object') != 'PROCESS':
-                    continue
-                pairs = observed_command(event)
-                if not pairs:
-                    continue
-                host = str(event.get('hostname') or relative.parent.name).lower()
-                machine = host.split('.')[0]
-                time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
-                label, group = label_for(machine, time, benign)
-                props = event.get('properties') or {}
-                login = usable_id(props.get('logon_id') or props.get('logon_guid') or props.get('session_id'))
-                target = usable_id(event.get('objectID'))
-                actor = usable_id(event.get('actorID'))
-                principal = props.get('user') or event.get('principal') or props.get('sid') or 'unknown-user'
-                if login:
-                    session = f'optc:{host}:login:{login}'
-                elif event.get('action') == 'CREATE' and actor and actor != target:
-                    session = f'optc:{host}:{principal}:parent:{actor}'
-                elif target:
-                    session = f'optc:{host}:process:{target}'
-                else:
-                    day = time.date().isoformat() if time else str(relative.parent)
-                    session = f'optc:{host}:{principal}:{day}:ppid:{event.get("ppid", "unknown")}'
-                record = usable_id(event.get('id')) or f'{relative}:{number}'
-                for index, (pgm, args) in enumerate(pairs):
-                    # Ignore control-only/truncated process titles, preserving actual arguments.
-                    if not pgm.strip() or re.fullmatch(r'[\x00-\x20]+', pgm):
-                        continue
-                    yield Command(pgm, args, f'{record}:{index}', label, group, session, 'windows')
+                yield Command(pgm, args, f'{record}:{index}', label, group, session, 'windows')

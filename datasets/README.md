@@ -43,6 +43,13 @@ Connections reopen between batches to release DuckDB's primary-key index memory.
 Both `ingest` and `ingestall` accept `--batch-size` and `--memory-limit` (default
 `2GB`). For example, use `--batch-size 10000 --memory-limit 1GB` on a smaller machine.
 
+OpTC ingestion parses several gzip files at once, one per worker process
+(`--workers`, default: the number of CPUs). Each worker writes its batches to a
+temporary Arrow file under `../tmp/ingest/`; the main process inserts them into
+DuckDB in the same file order as a single-process run, so the stored rows are
+identical. Temporary files are deleted as they are inserted. Use `--workers 1`
+to parse in the main process.
+
 The published Cyberlab file `cyberlab_2020-01-29.json.gz` is truncated. After
 verifying its known publisher checksum, ingestion retains complete JSON objects,
 discards the incomplete final object, warns, and continues with the next file.
