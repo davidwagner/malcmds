@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def test_command_ingestion(tmp_path):
-    """Exercise shell parsing, native argv, Windows quoting, enums and deduplication."""
+    """Exercise shell parsing, native argv, Windows quoting, enums and completed-dataset skipping."""
     driver = tmp_path / "ingest.py"
     driver.write_text(
         """
@@ -44,9 +44,8 @@ run(Path(__file__).parent, records)
     cmd = [sys.executable, str(driver), "--db", str(db)]
     first = subprocess.run(cmd, check=True, text=True, capture_output=True)
     second = subprocess.run(cmd, check=True, text=True, capture_output=True)
-    assert (
-        json.loads(first.stdout)["stored"] == json.loads(second.stdout)["stored"] == 12
-    )
+    assert json.loads(first.stdout)["stored"] == 12
+    assert json.loads(second.stdout)["skipped"] is True
     con = duckdb.connect(str(db), read_only=True)
     rows = con.execute("SELECT pgm,args FROM COMMANDS ORDER BY record_id").fetchall()
     assert ("ls", ["docs a"]) in rows
@@ -73,7 +72,7 @@ run(Path(__file__).parent, records)
 
 
 def test_reader_failure_retains_completed_batches(tmp_path):
-    """A parser failure retains committed batches; retry completes missing rows."""
+    """A parser failure retains committed batches; retry replaces partial rows."""
     driver = tmp_path / "ingest.py"
     driver.write_text(
         """
@@ -102,13 +101,6 @@ run(Path(__file__).parent, records)
     assert con.execute("SELECT count(*) FROM COMMANDS").fetchall()[0][0] == 100000
     assert con.execute("SELECT count(*) FROM COMMANDS WHERE record_id='100000'").fetchone() == (0,)
     con.close()
-    result = subprocess.run(
-        [sys.executable, str(driver), "--db", str(db), "--limit", "3"],
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    assert json.loads(result.stdout)["stored"] == 100000
     (tmp_path / 'repaired').touch()
     result = subprocess.run(
         [sys.executable, str(driver), '--db', str(db)],

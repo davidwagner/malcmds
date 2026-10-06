@@ -51,7 +51,7 @@ def ingest(root, database, *options):
 def rows(database):
     """Return every stored row in a stable order."""
     with duckdb.connect(str(database), read_only=True) as con:
-        return con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
+        return con.execute('SELECT * FROM COMMANDS ORDER BY record_id, args').fetchall()
 
 
 def build_dataset(root):
@@ -90,14 +90,15 @@ def test_parallel_rows_match_serial_rows(tmp_path):
     expected = rows(serial)
     assert rows(parallel) == expected
     by_id = {row[4]: row for row in expected}
-    # Files are inserted in sorted path order, so the benign copy is kept.
-    assert by_id['shared:0'][2] == ['/c', 'benign-copy']
-    assert by_id['shared:0'][5] == 'benign'
+    # Duplicate source records are retained, including their original labels.
+    assert [(row[2], row[5]) for row in expected if row[4] == 'shared:0'] == [
+        (['/c', 'benign-copy'], 'benign'), (['/c', 'evaluation-copy'], 'malicious-group'),
+    ]
     # The prefilter must not drop a PROCESS event spelled with \u escapes.
     assert by_id['escaped:0'][2] == ['/all']
     assert by_id['unicode:0'][2] == ['/c', 'echo', 'caf\u00e9']
     assert 'file-event:0' not in by_id
-    assert len(expected) == 11
+    assert len(expected) == 12
     # Temporary Arrow files are removed after a successful run.
     assert not list((tmp_path / 'tmp' / 'ingest').glob('optc-*'))
     rerun = ingest(root, parallel, '--workers', '3')
@@ -166,7 +167,7 @@ def test_arrow_and_duckdb_assumptions(tmp_path):
     """
     assert pa.Codec.is_available('lz4'), 'pyarrow build lacks lz4, used by _ingest_optc.write_file_tables'
     table = command_table([Command('C:\\Windows\\cmd.exe', ['/c', 'x'], 'r', 'malicious-group', 'g', '', 'windows'),
-                           Command('cmd.exe', ['ignored duplicate'], 'r', os='windows')], 'optc')
+                           Command('cmd.exe', ['retained duplicate'], 'r', os='windows')], 'optc')
     path = tmp_path / 'batch.arrow'
     options = pa.ipc.IpcWriteOptions(compression='lz4')
     with pa.OSFile(str(path), 'wb') as sink, pa.ipc.new_stream(sink, SCHEMA, options=options) as writer:
@@ -183,4 +184,6 @@ def test_arrow_and_duckdb_assumptions(tmp_path):
         con.execute('INSERT INTO t SELECT * FROM batch')
         assert con.execute('SELECT * FROM t').fetchall() == [
             ('C:\\Windows\\cmd.exe', 'cmd.exe', ['/c', 'x'], 'optc', 'r', 'malicious-group', 'g',
+             'optc:record:r', 'windows'),
+            ('cmd.exe', 'cmd.exe', ['retained duplicate'], 'optc', 'r', 'unknown', None,
              'optc:record:r', 'windows')], 'DuckDB no longer casts Arrow strings into the COMMANDS columns'
