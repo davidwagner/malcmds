@@ -41,6 +41,40 @@ class Budget:
         return self.remaining is not None and self.remaining <= 0
 
 
+def raw_xml_events(stream):
+    """Frame events in linear time, retaining chunks of an unfinished event."""
+    buffer = ""
+    parts: list[str] | None = None
+    while True:
+        chunk = stream.read(65536)
+        buffer += chunk
+        offset = 0
+        while True:
+            if parts is None:
+                start = EVENT_START.search(buffer, offset)
+                if not start:
+                    buffer = buffer[max(offset, len(buffer) - 16):]
+                    break
+                offset = start.start()
+                parts = []
+            end = buffer.find("</Event>", offset)
+            if end < 0:
+                # Only a split closing delimiter can cross into the next chunk.
+                tail = max(offset, len(buffer) - 7)
+                parts.append(buffer[offset:tail])
+                buffer = buffer[tail:]
+                break
+            end += 8
+            parts.append(buffer[offset:end])
+            yield "".join(parts)
+            parts = None
+            offset = end
+        if not chunk:
+            if parts is not None:
+                raise ValueError("Truncated XML Event at end of file")
+            break
+
+
 def xml_events(stream, commands_only=False):
     """Yield numbered events, optionally leaving command-free events unparsed.
 
@@ -48,77 +82,55 @@ def xml_events(stream, commands_only=False):
     markers cover all command fields accepted by event_commands; escaped Name
     attributes fall back to XML parsing so encoded field names are preserved.
     """
-    buffer = ""
-    number = 0
-    while True:
-        chunk = stream.read(65536)
-        buffer += chunk
-        offset = 0
-        while True:
-            start = EVENT_START.search(buffer, offset)
-            if not start:
-                buffer = buffer[max(offset, len(buffer) - 16) :]
-                break
-            end = buffer.find("</Event>", start.start())
-            if end < 0:
-                buffer = buffer[start.start() :]
-                break
-            end += len("</Event>")
-            raw = buffer[start.start() : end]
-            offset = end
-            number += 1
-            if (
-                commands_only
-                and not any(
-                    marker in raw
-                    for marker in ("Command", "command", "cmdline", "HostApplication")
-                )
-                and not re.search(r"Name\s*=\s*[^<>]*&", raw)
-            ):
-                yield number, {}
-                continue
-            try:
-                event = ET.fromstring(raw)
-            except ET.ParseError:
-                # Some publisher exports leave &, <, and > unescaped inside Data,
-                # or contain a typo in an unrelated System closing tag. Named
-                # field delimiters still preserve the complete recorded value.
-                fields = {}
-                for data_match in re.finditer(
-                    r"<Data\s+Name=['\"]([^'\"]+)['\"][^>]*>(.*?)</Data>",
-                    raw,
-                    re.DOTALL,
-                ):
-                    fields[data_match[1]] = html.unescape(data_match[2])
-                for tag in ["Computer", "Channel", "EventID", "EventRecordID"]:
-                    match = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", raw, re.DOTALL)
-                    if match:
-                        fields[tag] = html.unescape(match[1])
-                for tag, attr, field in [
-                    ("Provider", "Name", "Provider"),
-                    ("TimeCreated", "SystemTime", "TimeCreated"),
-                ]:
-                    match = re.search(rf"<{tag}\b[^>]*\b{attr}=['\"]([^'\"]*)", raw)
-                    if match:
-                        fields[field] = html.unescape(match[1])
-                yield number, fields
-                continue
+    for number, raw in enumerate(raw_xml_events(stream), 1):
+        if (
+            commands_only
+            and not any(
+                marker in raw
+                for marker in ("Command", "command", "cmdline", "HostApplication")
+            )
+            and not re.search(r"Name\s*=\s*[^<>]*&", raw)
+        ):
+            yield number, {}
+            continue
+        try:
+            event = ET.fromstring(raw)
+        except ET.ParseError:
+            # Some publisher exports leave &, <, and > unescaped inside Data,
+            # or contain a typo in an unrelated System closing tag. Named
+            # field delimiters still preserve the complete recorded value.
             fields = {}
-            for element in event.iter():
-                tag = element.tag.rsplit("}", 1)[-1]
-                if tag == "Data" and "Name" in element.attrib:
-                    fields[element.attrib["Name"]] = element.text or ""
-                elif tag in {"Computer", "Channel", "EventID", "EventRecordID"}:
-                    fields[tag] = element.text or ""
-                elif tag == "Provider":
-                    fields["Provider"] = element.get("Name", "")
-                elif tag == "TimeCreated":
-                    fields["TimeCreated"] = element.get("SystemTime", "")
+            for data_match in re.finditer(
+                r"<Data\s+Name=['\"]([^'\"]+)['\"][^>]*>(.*?)</Data>",
+                raw,
+                re.DOTALL,
+            ):
+                fields[data_match[1]] = html.unescape(data_match[2])
+            for tag in ["Computer", "Channel", "EventID", "EventRecordID"]:
+                match = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", raw, re.DOTALL)
+                if match:
+                    fields[tag] = html.unescape(match[1])
+            for tag, attr, field in [
+                ("Provider", "Name", "Provider"),
+                ("TimeCreated", "SystemTime", "TimeCreated"),
+            ]:
+                match = re.search(rf"<{tag}\b[^>]*\b{attr}=['\"]([^'\"]*)", raw)
+                if match:
+                    fields[field] = html.unescape(match[1])
             yield number, fields
-        if not chunk:
-            if EVENT_START.search(buffer):
-                raise ValueError("Truncated XML Event at end of file")
-            break
+            continue
+        fields = {}
+        for element in event.iter():
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag == "Data" and "Name" in element.attrib:
+                fields[element.attrib["Name"]] = element.text or ""
+            elif tag in {"Computer", "Channel", "EventID", "EventRecordID"}:
+                fields[tag] = element.text or ""
+            elif tag == "Provider":
+                fields["Provider"] = element.get("Name", "")
+            elif tag == "TimeCreated":
+                fields["TimeCreated"] = element.get("SystemTime", "")
+        yield number, fields
 
 
 def value(fields, *names):
@@ -331,12 +343,27 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
                 os="linux",
             )
     elif sample.lstrip().startswith("{"):
+        import simdjson
+
+        parser = simdjson.Parser()
         for number, line in enumerate(stream, 1):
             if not budget.take():
                 return
             if not line.strip():
                 continue
             try:
+                # Every supported command alias contains one of these markers.
+                # Keep wrapped raw events and escaped keys conservatively too.
+                if not ("ommand" in line or "cmdline" in line
+                        or "HostApplication" in line or "_raw" in line or "\\u" in line):
+                    try:
+                        # Validate syntax without allocating Python dictionaries.
+                        # Discard the proxy before this parser is reused.
+                        parser.parse(line)
+                    except (ValueError, RuntimeError):
+                        # Preserve stdlib handling of NaN, huge integers, and errors.
+                        json.loads(line)
+                    continue
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 # Some exports are pretty-printed JSON objects; stream these separately.
@@ -473,45 +500,10 @@ def aviator_priority(name):
 
 
 def aviator(root, options):
-    """Read exported AVIATOR events, avoiding duplicate raw EVTX copies."""
-    budget = Budget(options)
-    path = root / "10.35097-8s5b0u5yqgfs2y0d.tar"
-    with tarfile.open(path, "r:") as archive:
-        members = [
-            m
-            for m in archive
-            if Path(m.name).name.startswith("ex_") and m.name.endswith(".zip")
-        ]
-        selected = select_files([Path(m.name) for m in members], options)
-        names = {str(p) for p in selected}
-        for member in members:
-            if member.name not in names:
-                continue
-            zipped = archive.extractfile(member)
-            assert zipped is not None
-            with zipped, zipfile.ZipFile(zipped) as inner:
-                filenames = [
-                    n
-                    for n in inner.namelist()
-                    if n.endswith(".xml") or ("auditd" in n and n.endswith(".log"))
-                ]
-                filenames.sort(key=aviator_priority)
-                # Each XML export is the canonical representation of its raw EVTX.
-                for name in filenames:
-                    benign = "normal_operation" in name
-                    label = "benign" if benign else "malicious-group"
-                    group = None if benign else f"aviator:{Path(member.name).stem[3:]}"
-                    with inner.open(name) as stream:
-                        yield from parse_log(
-                            stream,
-                            f"{path.name}/{member.name}/{name}",
-                            root.name,
-                            budget,
-                            label,
-                            group,
-                        )
-                    if budget.done:
-                        return
+    """Read AVIATOR exports with bounded, ordered parallelism for full runs."""
+    from _ingest_aviator import records
+
+    yield from records(root, options)
 
 
 def splunkad(root, options):
