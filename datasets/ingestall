@@ -10,11 +10,40 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Static smallest-first estimate from dataset directory disk usage on 2026-10-05.
+# Used as a runtime heuristic; no disk usage measurements are made when running.
+DATASET_ORDER = (
+    "kypo",
+    "microsoft-iot",
+    "linux-apt-2024",
+    "windows-apt-2025",
+    "splunk-bots",
+    "publicarena",
+    "tc-e3-cadets",
+    "tc-e3-theia",
+    "ait",
+    "tc-e5-marple",
+    "tc-e3-fivedirections",
+    "cyberlab",
+    "splunkad",
+    "atlasv2",
+    "tc-e3-trace",
+    "tc-e5-theia",
+    "tc-e5-cadets",
+    "comiset",
+    "tc-e5-fivedirections",
+    "aviator",
+    "tc-e5-trace",
+    "optc",
+)
+
 
 def main():
     """Forward sample/database options and report every unsuccessful dataset."""
     root = Path(__file__).resolve().parent
     scripts = {p.parent.name: p for p in sorted(root.glob("*/ingest"))}
+    default_names = [name for name in DATASET_ORDER if name in scripts]
+    default_names.extend(name for name in scripts if name not in DATASET_ORDER)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("datasets", nargs="*", choices=None)
     parser.add_argument("--db")
@@ -26,7 +55,7 @@ def main():
     parser.add_argument("--memory-limit")
     parser.add_argument("--workers", type=int)
     options = parser.parse_args()
-    names = list(dict.fromkeys(options.datasets or scripts))
+    names = list(dict.fromkeys(options.datasets or default_names))
     unknown = sorted(set(names) - scripts.keys())
     if unknown:
         parser.error("Unknown datasets: " + ", ".join(unknown))

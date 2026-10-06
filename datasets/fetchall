@@ -6,11 +6,40 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Static smallest-first estimate from dataset directory disk usage on 2026-10-05.
+# Used as a runtime heuristic; no disk usage measurements are made when running.
+DATASET_ORDER = (
+    "kypo",
+    "microsoft-iot",
+    "linux-apt-2024",
+    "windows-apt-2025",
+    "splunk-bots",
+    "publicarena",
+    "tc-e3-cadets",
+    "tc-e3-theia",
+    "ait",
+    "tc-e5-marple",
+    "tc-e3-fivedirections",
+    "cyberlab",
+    "splunkad",
+    "atlasv2",
+    "tc-e3-trace",
+    "tc-e5-theia",
+    "tc-e5-cadets",
+    "comiset",
+    "tc-e5-fivedirections",
+    "aviator",
+    "tc-e5-trace",
+    "optc",
+)
+
 
 def main():
     """Fetch every dataset, continuing past errors so other downloads can finish."""
     root = Path(__file__).resolve().parent
     scripts = {script.parent.name: script for script in sorted(root.glob("*/fetch"))}
+    default_names = [name for name in DATASET_ORDER if name in scripts]
+    default_names.extend(name for name in scripts if name not in DATASET_ORDER)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "datasets", nargs="*", help="dataset directory names (default: all)"
@@ -20,7 +49,7 @@ def main():
     if unknown:
         parser.error("Unknown datasets: " + ", ".join(unknown))
     failed = []
-    for name in dict.fromkeys(args.datasets or scripts):
+    for name in dict.fromkeys(args.datasets or default_names):
         script = scripts[name]
         print(f"\n=== {script.parent.name} ===", flush=True)
         result = subprocess.run([str(script)], cwd=script.parent, check=False)
