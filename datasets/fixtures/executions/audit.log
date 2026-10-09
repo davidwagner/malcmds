@@ -1,0 +1,3 @@
+type=EXECVE msg=audit(02/20/2025 13:06:23.771:103922) : argc=3 a0=sudo a1=LD_PRELOAD=./myfopen.so a2=./prog 
+type=EXECVE msg=audit(02/20/2025 13:06:23.771:103922) : argc=3 a0=sudo a1=LD_PRELOAD=./myfopen.so a2=./prog 
+type=EXECVE msg=audit(02/20/2025 10:00:26.770:45054) : argc=3 a0=sudo a1=LD_PRELOAD=./myfopen.so a2=./prog 

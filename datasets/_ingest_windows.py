@@ -454,7 +454,9 @@ def atlasv2(root, options):
                 if row.get("label", "").strip() == "attack":
                     budget.process_labels.add(row["process_uuid"].strip())
     path = root / "atlasv2.tar.gz"
-    with tarfile.open(path, "r:gz") as archive:
+    from _ingest_processes import ProcessCommands
+
+    with ProcessCommands() as processes, tarfile.open(path, "r:gz") as archive:
         selected = None
         if options.sample_files:
             eligible = [
@@ -483,16 +485,48 @@ def atlasv2(root, options):
             stream = archive.extractfile(member)
             assert stream is not None
             with stream:
-                yield from parse_log(
-                    stream,
-                    f"{path.name}/{member.name}",
-                    root.name,
-                    budget,
-                    label,
-                    group,
-                )
+                if "/cbc-" in member.name:
+                    for number, line in enumerate(stream, 1):
+                        if not budget.take():
+                            break
+                        if not line.strip():
+                            continue
+                        fields = json_fields(json.loads(line))
+                        for identity, command, creation in carbon_black_commands(
+                            fields, f"{path.name}/{member.name}", number, budget, label, group
+                        ):
+                            processes.add(identity, command, creation)
+                else:
+                    yield from parse_log(
+                        stream, f"{path.name}/{member.name}", root.name, budget, label, group,
+                    )
             if budget.done:
-                return
+                break
+        yield from processes.commands()
+
+
+def carbon_black_commands(fields, source, number, budget, label, group):
+    """Assign actor and child observations to their own scoped process GUIDs."""
+    scope = source.split("/cbc-", 1)[0]
+    scenario = Path(source).stem.rsplit("-", 1)[-1]
+    host = value(fields, "device_name", "host_name", "hostname", "host")
+    kind = value(fields, "type", "event_type")
+    candidates = [(dict(fields), False, str(number))]
+    target = value(fields, "target_cmdline")
+    if target:
+        child = dict(fields)
+        child["process_cmdline"] = target
+        child["process_path"] = value(fields, "childproc_name", "crossproc_name")
+        child["process_guid"] = value(fields, "childproc_guid", "crossproc_guid")
+        child["parent_guid"] = value(fields, "process_guid")
+        candidates.append((child, "procstart" in kind.lower(), f"{number}:target"))
+    for candidate, creation, occurrence in candidates:
+        guid = value(candidate, "process_guid")
+        if not guid or not guid.strip("{}0-"):
+            continue
+        candidate["_reapr_attack"] = guid in budget.process_labels
+        for command in event_commands(candidate, "atlasv2", source, occurrence, label, group):
+            yield (scope, scenario, host, guid), command, creation
 
 
 def aviator_priority(name):

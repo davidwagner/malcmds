@@ -10,6 +10,8 @@ import io
 import json
 import re
 import subprocess
+import sqlite3
+import tempfile
 import sys
 import zipfile
 import zlib
@@ -96,6 +98,8 @@ def audit_value(value):
 def complete_audit_event(event, entry):
     """Choose the most complete command representation in a joined event."""
     fields, arguments, title, command, line, attack = entry
+    if not fields.get("_execution"):
+        return None
     argv = []
     if arguments:
         argc = int(fields.get("argc", max(arguments) + 1))
@@ -113,54 +117,72 @@ def complete_audit_event(event, entry):
             argv = [parsed[0][0], *parsed[0][1]]
             fields.pop("exe", None)
     if argv:
+        if fields.get("success") in {"no", "0"}:
+            fields["exe"] = fields.get("_attempted_path", "")
         return event, fields, argv, line, attack
     return None
 
 
 def audit_events(lines, labels=None):
-    """Join audit records by event ID; yield ID, fields, argv, line, attack flag."""
-    pending: OrderedDict[str, list[Any]] = OrderedDict()
-    labels = labels or set()
-    for number, raw in enumerate(lines, 1):
-        text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
-        match = re.search(r"msg=audit\(([^)]+)\)", text)
-        if not match:
-            continue
-        event = match[1]
-        fields = dict(re.findall(r'(?<![\w-])([\w]+)=("[^"]*"|[^\s\']+)', text))
-        entry = pending.setdefault(event, [{}, {}, "", "", number, False])
-        entry[0].update(fields)
-        entry[5] |= number in labels
-        kind = fields.get("type")
-        if kind == "EXECVE":
-            if "/" in event:
-                # ausearch -i emits unquoted, already-decoded arguments.
-                arguments = re.findall(
-                    r"(?<!\S)a(\d+)=(.*?)(?=\s+a\d+=|$)", text.rstrip()
+    """Join execution companions, including repeated alerts, in a temporary index.
+
+    Titles from unrelated system calls are process observations and never create
+    executions. Audit event IDs are scoped by recorded host and boot segment.
+    """
+    labels = set() if labels is None else labels
+    scratch = Path(__file__).resolve().parent.parent / "tmp"
+    scratch.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="audit-events-", dir=scratch) as temporary:
+        with sqlite3.connect(str(Path(temporary) / "events.sqlite")) as db:
+            db.execute("CREATE TABLE events (identity TEXT PRIMARY KEY, event TEXT, raw TEXT, first_line INTEGER, attack INTEGER, boot TEXT)")
+            boots = {}
+            for number, raw in enumerate(lines, 1):
+                text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
+                match = re.search(r"msg=audit\(([^)]+)\)", text)
+                if not match:
+                    continue
+                event = match[1]
+                host_match = re.search(r"(?:^|\s)node=(\S+)", text)
+                host = host_match[1] if host_match else ""
+                if re.search(r"\btype=SYSTEM_BOOT\b", text):
+                    boots[host] = event
+                boot = boots.get(host, "initial")
+                identity = json.dumps([host, boot, event])
+                db.execute(
+                    "INSERT INTO events VALUES (?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET raw=raw || char(10) || excluded.raw, attack=max(attack,excluded.attack)",
+                    (identity, event, text.rstrip(), number, int(number in labels), boot),
                 )
-                for key, value in arguments:
-                    entry[1][int(key)] = value
-            else:
-                for key, value in fields.items():
-                    if re.fullmatch(r"a\d+", key):
-                        entry[1][int(key[1:])] = audit_value(value)
-        if kind == "PROCTITLE":
-            entry[2] = audit_value(fields.get("proctitle", ""))
-        if kind == "USER_CMD":
-            entry[3] = audit_value(fields.get("cmd", ""))
-        if kind == "EOE":
-            result = complete_audit_event(event, pending.pop(event))
-            if result:
-                yield result
-        while len(pending) > 1024:
-            key, value = pending.popitem(last=False)
-            result = complete_audit_event(key, value)
-            if result:
-                yield result
-    for key, value in pending.items():
-        result = complete_audit_event(key, value)
-        if result:
-            yield result
+            for event, raw, number, attack, boot in db.execute("SELECT event,raw,first_line,attack,boot FROM events ORDER BY first_line"):
+                entry = [{"_boot": boot}, {}, "", "", number, bool(attack)]
+                for text in raw.splitlines():
+                    fields = dict(re.findall(r'(?<![\w-])([\w]+)=("[^"]*"|[^\s\']+)', text))
+                    entry[0].update(fields)
+                    kind = fields.get("type")
+                    if kind in {"EXECVE", "USER_CMD"}:
+                        entry[0]["_execution"] = True
+                    if kind == "SYSCALL":
+                        syscall = fields.get("syscall", "").lower()
+                        arch = fields.get("arch", "").lower()
+                        numbers = {"c000003e": {"59", "322"}, "40000003": {"11", "358"}, "c00000b7": {"221", "281"}, "40000028": {"11", "387"}}
+                        if syscall in {"execve", "execveat"} or syscall in numbers.get(arch, set()):
+                            entry[0]["_execution"] = True
+                    if kind == "PATH" and fields.get("nametype") in {"NORMAL", "CREATE"}:
+                        entry[0]["_attempted_path"] = fields.get("name", "")
+                    if kind == "EXECVE":
+                        if "/" in event:
+                            for key, value in re.findall(r"(?<!\S)a(\d+)=(.*?)(?=\s+a\d+=|$)", text.rstrip()):
+                                entry[1][int(key)] = value
+                        else:
+                            for key, value in fields.items():
+                                if re.fullmatch(r"a\d+", key):
+                                    entry[1][int(key[1:])] = audit_value(value)
+                    if kind == "PROCTITLE":
+                        entry[2] = audit_value(fields.get("proctitle", ""))
+                    if kind == "USER_CMD":
+                        entry[3] = audit_value(fields.get("cmd", ""))
+                result = complete_audit_event(event, entry)
+                if result:
+                    yield result
 
 
 def ait(root, options):
@@ -440,25 +462,37 @@ def linux_apt(root, options):
             )
             rid = row.get("_index", "") + ":" + row.get("_id", "")
             rid = rid if rid != ":" else f"source/combine.csv:{index}"
-            if "type=PROCTITLE" in log or "type=EXECVE" in log:
-                fragments = re.split(r" (?=type=[A-Z_]+ msg=audit)", log)
-                for eid, fields, argv, _, _ in audit_events(fragments):
-                    ses = fields.get("ses", "")
-                    if ses in ("", "4294967295", "-1"):
-                        ses = "parent:" + fields.get("ppid", fields.get("pid", eid))
-                    audit_session = f"linux-apt-2024:{row.get('_source.agent.name', '')}:{day}:{ses}"
-                    yield Command(
-                        audit_value(fields.get("exe", "")) or argv[0],
-                        argv[1:],
-                        rid + ":" + eid,
-                        label,
-                        None,
-                        audit_session,
-                    )
-            else:
-                argv = sudo_command_argv(command)
-                if argv:
-                    yield Command(argv[0], argv[1:], rid + ":0", label, session_id=session)
+            if re.search(r"\btype=[A-Z_]+ msg=audit", log):
+                continue
+            argv = sudo_command_argv(command)
+            if argv:
+                yield Command(argv[0], argv[1:], rid + ":0", label, session_id=session)
+    attacks = set()
+    for eid, fields, argv, _, attack in audit_events(linux_apt_audit_lines(root, options, labels, attacks), attacks):
+        host = fields.get("node", "unknown-host")
+        ses = fields.get("ses") or "process:" + fields.get("pid", eid)
+        label = "malicious" if attack else fields.get("dataset_label", "unknown")
+        yield Command(
+            audit_value(fields.get("exe", "")) or argv[0], argv[1:],
+            f"source/combine.csv:{host}:{fields['_boot']}:{eid}", label,
+            session_id=f"linux-apt-2024:{host}:{fields['_boot']}:{ses}",
+        )
+
+
+def linux_apt_audit_lines(root, options, labels, attacks):
+    """Stream all Wazuh copies into the shared audit-event join by host and ID."""
+    number = 0
+    with (root / "source/combine.csv").open(encoding="utf-8-sig", newline="") as stream:
+        for row in limited(concatenated_csv(stream), options):
+            log = row.get("_source.full_log", "")
+            if not re.search(r"\btype=[A-Z_]+ msg=audit", log):
+                continue
+            label = labels.get(label_key(row.get("_source.timestamp"), row.get("_source.agent.name"), log, row.get("_source.rule.description")), "unknown")
+            for fragment in re.split(r" (?=type=[A-Z_]+ msg=audit)", log):
+                number += 1
+                if label == "malicious":
+                    attacks.add(number)
+                yield f"node={row.get('_source.agent.name', 'unknown-host')} dataset_label={label} " + fragment
 
 
 def windows_apt(root, options):

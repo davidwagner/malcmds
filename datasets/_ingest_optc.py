@@ -124,13 +124,15 @@ def records(root, options):
         raise FileNotFoundError(f'No completed OpTC eCAR gzip files under {root}')
     lookup = load_labels(root)
     bound_intervals(paths, lookup, options.max_records)
-    workers = min(getattr(options, 'workers', 1), len(paths))
-    # Whole-file workers cannot stop when the consumer reaches a command limit.
-    if workers > 1 and getattr(options, 'limit', None) is None:
-        yield from parallel_tables(root, paths, options, workers, lookup)
-        return
-    for path in paths:
-        yield from file_commands(root, path, options.max_records, lookup)
+    from _ingest_processes import ProcessCommands
+
+    # Process UUIDs recur across files. Select globally before yielding any row;
+    # independent file workers cannot finalize a process representative safely.
+    with ProcessCommands() as processes:
+        for path in paths:
+            for identity, command, creation in file_observations(root, path, options.max_records, lookup):
+                processes.add(identity, command, creation)
+        yield from processes.commands()
 
 
 def parallel_tables(root, paths, options, workers, lookup):
@@ -180,6 +182,16 @@ def read_tables(path):
 
 
 def file_commands(root, path, max_records, lookup):
+    """Select process representatives within a single eCAR file."""
+    from _ingest_processes import ProcessCommands
+
+    with ProcessCommands() as processes:
+        for identity, command, creation in file_observations(root, path, max_records, lookup):
+            processes.add(identity, command, creation)
+        yield from processes.commands()
+
+
+def file_observations(root, path, max_records, lookup):
     """Yield the commands in one eCAR gzip file, reading at most max_records lines."""
     relative = path.relative_to(root)
     benign = 'benign' in relative.parts
@@ -225,4 +237,8 @@ def file_commands(root, path, max_records, lookup):
                 # Ignore control-only/truncated process titles, preserving actual arguments.
                 if not pgm.strip() or re.fullmatch(r'[\x00-\x20]+', pgm):
                     continue
-                yield Command(pgm, args, f'{record}:{index}', label, group, session, 'windows')
+                creation = event.get('action') == 'CREATE'
+                if not target and not creation:
+                    continue
+                identity = (str(relative.parts[0]), host, target or record, index)
+                yield identity, Command(pgm, args, f'{record}:{index}', label, group, session, 'windows'), creation

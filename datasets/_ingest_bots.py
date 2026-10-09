@@ -164,6 +164,15 @@ def osquery_commands(obj, host, record, index):
 
 
 def records(root, options):
+    """Select each identified process once across BOTS exported buckets."""
+    from _ingest_processes import ProcessCommands
+
+    with ProcessCommands() as processes:
+        yield from observations(root, options, processes)
+        yield from processes.commands()
+
+
+def observations(root, options, processes):
     """Read all BOTS sourcetypes that contain observed command arguments."""
     csv.field_size_limit(100_000_000)
     audits = defaultdict(list)
@@ -193,7 +202,9 @@ def records(root, options):
                                 pgm, args, f"{record}:apt:{i}", session_id=session
                             )
                 elif kind == "ps":
-                    yield from ps_commands(raw, record, session)
+                    # These snapshots lack a recorded process start identity. Native
+                    # osquery/WinHostMon records provide recoverable lifetimes.
+                    continue
                 elif kind == "linux_audit":
                     audits[(host, source)].append((record, raw))
                 elif kind.startswith("xmlwineventlog"):
@@ -220,7 +231,18 @@ def records(root, options):
                             break
                         obj, position = decoder.raw_decode(raw, position)
                         index += 1
-                        yield from osquery_commands(obj, host, record, index)
+                        columns = obj.get("columns", {})
+                        name = obj.get("name", "")
+                        explicit = name == "pack_process-monitoring_proc_events" or "process_events" in name
+                        start = columns.get("start_time") or columns.get("starttime")
+                        if explicit:
+                            start = columns.get("time") or obj.get("unixTime")
+                        pid = columns.get("pid")
+                        for command in osquery_commands(obj, host, record, index):
+                            if pid and start:
+                                processes.add((host, "osquery", pid, start), command, explicit)
+                            elif explicit:
+                                yield command
                 elif kind == "winhostmon":
                     fields = text_fields(raw)
                     for key in fields:
@@ -249,7 +271,7 @@ def records(root, options):
                                 f"splunk-bots:{host}:process:{fields['ProcessId']}:"
                                 f"start:{fields['StartTime']}"
                             )
-                        yield command
+                            processes.add((host, "winhostmon", fields['ProcessId'], fields['StartTime']), command)
                 elif "COMMAND=" in raw and kind in ("syslog", "linux_secure"):
                     argv = sudo_command_argv(raw.split("COMMAND=", 1)[1])
                     if argv:
