@@ -43,6 +43,8 @@ def test_native_comiset_environments_and_process_annotations(tmp_path):
     assert any(r[3]=='benign' and r[1].lower().endswith('onedrive.exe') for r in rows)
     assert any(r[3]=='benign' and r[1].lower().endswith('vmtoolsd.exe') for r in rows)
     assert any(r[3]=='malicious' for r in rows if 'REAL.zip' in r[0])
+    assert any(r[3]=='malicious' and r[2]==['-embedding'] for r in rows if r[1].lower().endswith('wmiprvse.exe'))
+    assert any(r[3]=='benign' and r[2]==['-secured','-embedding'] for r in rows if r[1].lower().endswith('wmiprvse.exe'))
     again=invoke(tmp_path,database,'from _ingest_comiset import records\n')
     assert again.returncode==0,again.stderr
     with duckdb.connect(str(database)) as con:

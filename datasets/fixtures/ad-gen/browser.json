@@ -1,0 +1,27 @@
+{
+  "sample_id": "ADGEN_0000823",
+  "environment": "LAB",
+  "narrative": "Entity <HOSTS_1>_GUID:b8ba258a_PID:5432_(Session_Isolated) initiated the following behavior sequence. [Timeline: T0]\n  [T0 + 0.000s] -> Event 1 (User: <USERS_5>): [hint:T1204] Process Create: | ProcessGuid: <GUID> | ProcessId: 5432 | Image: C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe | FileVersion: 106.0.4 | Description: Firefox | Product: Firefox | Company: Mozilla Corporation | OriginalFileName: firefox.exe | CommandLine: \"C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe\" | CurrentDirectory: C:\\Program Files (x86)\\Mozilla Firefox\\ | User: <USERS_3> | LogonId: 0x22CBC4 | IntegrityLevel: Medium | Hashes: SHA1=93B676A66999DACFAF7BFBD11037B99C5E6CB721,MD5=F0D0DD330F75843A1B5F6E5FBD02943A,SHA256=4CE03D381D0A4BAFFB32357629711A2D7E157AFAED895ACF2CCD2A5DA367B22F,IMPHASH=5BE4E20E1B7612FA326ADE876E44D8C3 | ParentProcessGuid: <GUID> | ParentProcessId: 568 | ParentImage: C:\\Windows\\explorer.exe | ParentCommandLine: C:\\Windows\\Explorer.EXE | ParentUser: <USERS_3>\n  [T0 + 0.141s] -> Event 10 (User: <USERS_1>): Process accessed: | SourceProcessGUID: <GUID> | SourceProcessId: 5432 | SourceThreadId: 2608 | SourceImage: C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe | TargetProcessGUID: <GUID> | TargetProcessId: 568 | TargetImage: C:\\Windows\\Explorer.EXE | GrantedAccess: 0x1000 | CallTrace: C:\\Windows\\SYSTEM32\\ntdll.dll+93a8a | C:\\Windows\\system32\\wow64.dll+4234 | C:\\Windows\\system32\\wow64.dll+7d15 | C:\\Windows\\system32\\wow64cpu.dll+1927 | C:\\Windows\\system32\\wow64.dll+df82 | C:\\Windows\\system32\\wow64.dll+dea7 | C:\\Windows\\SYSTEM32\\ntdll.dll+c07d7 | C:\\Windows\\SYSTEM32\\ntdll.dll+b3a01 | C:\\Windows\\SYSTEM32\\ntdll.dll+6be6e | C:\\Windows\\SYSTEM32\\ntdll.dll+68d6c(wow64) | C:\\Windows\\SYSTEM32\\KERNELBASE.dll+aa418(wow64) | C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe+192b4 | C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe+16e87 | C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe+245ac | C:\\Windows\\SYSTEM32\\KERNEL32.DLL+13744(wow64) | C:\\Windows\\SYSTEM32\\ntdll.dll+59e54(wow64) | C:\\Windows\\SYSTEM32\\ntdll.dll+59e1f(wow64) | SourceUser: <USERS_3> | TargetUser: <USERS_3>\n\n## Sysmon Pre-Flagged Techniques (rule-based hints, may contain false positives):\n  - T1204 User Execution: 1 event(s)",
+  "sysmon_hints": [
+    "T1204"
+  ],
+  "label": {
+    "risk_level": "Low",
+    "mitre_tactics": [
+      "None"
+    ],
+    "mitre_techniques": [
+      "None"
+    ],
+    "recommended_actions": [
+      {
+        "tool_name": "no_action",
+        "parameters": {}
+      }
+    ],
+    "summary": "Firefox executed normally and performed a benign read-only process access to explorer.exe.",
+    "analyst_rationale": "The sequence shows Firefox launching (Event 1), which is standard user activity. Event 10 records a process access attempt from firefox.exe (PID 5432) to explorer.exe (PID 568). The granted access level is 0x1000, which is explicitly listed as BENIGN (read-only). Furthermore, the target process (explorer.exe) and source process (firefox.exe) are both standard, legitimate applications performing routine interaction. This activity does not meet any criteria for elevated risk or malicious techniques like credential dumping (T1003) or injection (T1055), as the access is read-only and involves core OS components interacting normally. The hint T1204 is accepted as it describes the initial execution, but the subsequent process access is benign.\n\nConclusion: Benign activity with no immediate threat indicators.",
+    "verdict": "suspicious",
+    "label_source": "llm_validated"
+  }
+}

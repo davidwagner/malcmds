@@ -55,3 +55,17 @@ def test_adgen_verdicts_and_native_fields(tmp_path):
     assert all(args==['/c','echo','hello'] for _,args,_ in rows), 'Narrative field parsing must not include ParentCommandLine or drop native arguments'
     assert [label for _,_,label in rows]==['benign','malicious','unknown','benign','malicious']*2
     assert rows[0][0]=='LAB:0:0'
+
+
+def test_native_normal_browser_judgment(tmp_path):
+    """A publisher's contradictory suspicious verdict gets only the narrow normal-start correction."""
+    row=json.loads((Path(__file__).parent/'fixtures/ad-gen/browser.json').read_text())
+    assert row['label']['verdict']=='suspicious'
+    for environment in ['LAB','REAL']:
+        (tmp_path/environment).mkdir()
+        (tmp_path/environment/f'{environment}.jsonl').write_text(json.dumps(row)+'\n')
+    database=tmp_path/'commands.duckdb'
+    result=invoke(tmp_path,database,'from _ingest_adgen import records\n')
+    assert result.returncode==0,result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT args,label FROM COMMANDS').fetchall()==[([], 'benign'),([], 'benign')]
