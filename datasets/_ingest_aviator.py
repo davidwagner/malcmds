@@ -1,6 +1,8 @@
 """Read independent AVIATOR exports concurrently, preserving source order."""
 
 import multiprocessing
+import codecs
+import re
 import tarfile
 import tempfile
 import zipfile
@@ -14,6 +16,34 @@ from _ingest import SCHEMA, command_table, select_files
 from _ingest_windows import Budget, aviator_priority, parse_log
 
 ARCHIVE = "10.35097-8s5b0u5yqgfs2y0d.tar"
+
+
+def export_encoding(stream):
+    """Select AVIATOR's declared codec or validated UTF-8/Windows export codec."""
+    prefix = stream.read(4096)
+    stream.seek(0)
+    if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+    if prefix.startswith(codecs.BOM_UTF8):
+        return "utf-8-sig"
+    declaration = re.match(br'''\s*<\?xml\b[^>]*encoding=["']([^"']+)["']''', prefix)
+    if declaration:
+        encoding = codecs.lookup(declaration[1].decode("ascii")).name
+        if encoding not in {"utf-8", "utf-16", "utf-16-le", "utf-16-be", "cp1252", "iso8859-1", "ascii"}:
+            raise ValueError(f"Unsupported AVIATOR XML encoding: {encoding}")
+        return encoding
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    try:
+        while chunk := stream.read(1024 * 1024):
+            decoder.decode(chunk)
+        decoder.decode(b"", final=True)
+    except UnicodeDecodeError:
+        # Publisher Windows exports contain E4 (ä) and F1 (ñ); preserve the
+        # exported text, including mojibake already present in raw EVTX.
+        return "cp1252"
+    finally:
+        stream.seek(0)
+    return "utf-8"
 
 
 def export_names(zipped):
@@ -35,6 +65,7 @@ def export_commands(root, member, name, stream, budget):
         budget,
         "benign" if benign else "malicious-group",
         None if benign else f"aviator:{Path(member.name).stem[3:]}",
+        encoding=export_encoding(stream) if name.endswith(".xml") else None,
     )
 
 
