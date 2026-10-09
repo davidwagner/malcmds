@@ -132,6 +132,9 @@ def records(root, options):
         for path in paths:
             for identity, command, creation in file_observations(root, path, options.max_records, lookup):
                 processes.add(identity, command, creation)
+                if getattr(options, 'limit', None) is not None and processes.db.execute('SELECT count(*) FROM commands').fetchone()[0] >= options.limit:
+                    yield from processes.commands()
+                    return
         yield from processes.commands()
 
 
@@ -240,5 +243,5 @@ def file_observations(root, path, max_records, lookup):
                 creation = event.get('action') == 'CREATE'
                 if not target and not creation:
                     continue
-                identity = (str(relative.parts[0]), host, target or record, index)
+                identity = (str(relative.parts[1]) if len(relative.parts) > 2 else 'capture', host, target or record, index)
                 yield identity, Command(pgm, args, f'{record}:{index}', label, group, session, 'windows'), creation

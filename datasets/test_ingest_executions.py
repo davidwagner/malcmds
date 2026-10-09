@@ -87,3 +87,18 @@ def test_native_optc_process_observations(tmp_path):
     expected = {(e['hostname'].lower(), e['objectID']) for e in events}
     assert len(commands) == len(expected)
     assert len(store(commands, tmp_path)) == len(expected)
+
+
+def test_creation_without_guid_and_later_attack_annotation(tmp_path):
+    """Explicit launches survive missing IDs and selected argv retains attack evidence."""
+    budget = Budget(SimpleNamespace(max_records=None))
+    fields = {'type': 'endpoint.event.procstart', 'target_cmdline': 'cmd.exe /c whoami', 'childproc_name': 'cmd.exe'}
+    candidates = list(carbon_black_commands(fields, 'attack/h1/cbc-edr/edr-h1-s4.jsonl', 1, budget, 'unknown', None))
+    assert len(candidates) == 1 and candidates[0][2]
+    with ProcessCommands() as processes:
+        processes.add('same', Command('cmd.exe', ['/c', 'whoami'], 'creation'), True)
+        processes.add('same', Command('cmd.exe', [], 'later', 'malicious'))
+        commands = list(processes.commands())
+    assert commands[0].args == ['/c', 'whoami']
+    assert commands[0].label == 'malicious' and commands[0].group_id is None
+    assert len(store(commands, tmp_path)) == 1

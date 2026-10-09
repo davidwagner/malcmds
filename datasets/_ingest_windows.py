@@ -523,7 +523,9 @@ def carbon_black_commands(fields, source, number, budget, label, group):
     for candidate, creation, occurrence in candidates:
         guid = value(candidate, "process_guid")
         if not guid or not guid.strip("{}0-"):
-            continue
+            if not creation:
+                continue
+            guid = f"record:{source}:{occurrence}"
         candidate["_reapr_attack"] = guid in budget.process_labels
         for command in event_commands(candidate, "atlasv2", source, occurrence, label, group):
             yield (scope, scenario, host, guid), command, creation

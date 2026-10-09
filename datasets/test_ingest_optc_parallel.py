@@ -122,8 +122,8 @@ def test_parallel_limits_match_serial_limits(tmp_path):
     assert not list((tmp_path / 'tmp' / 'ingest').glob('optc-*'))
 
 
-def test_worker_failure_keeps_earlier_files(tmp_path):
-    """A corrupt file fails the run after earlier files' batches are committed."""
+def test_failed_scan_does_not_publish_unselected_processes(tmp_path):
+    """A corrupt file fails before process selection can publish complete results."""
     root = tmp_path / 'optc'
     write_stream(root / 'ecar' / 'benign' / 'h' / 'a.json.gz',
                  [json.dumps(event('a', 'cmd /c fine'))])
@@ -133,7 +133,7 @@ def test_worker_failure_keeps_earlier_files(tmp_path):
     result = ingest(root, database, '--workers', '2')
     assert result.returncode != 0
     assert 'BadGzipFile' in result.stderr
-    assert [row[4] for row in rows(database)] == ['a:0']
+    assert rows(database) == []
     assert not list((tmp_path / 'tmp' / 'ingest').glob('optc-*'))
 
 

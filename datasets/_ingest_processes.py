@@ -16,7 +16,7 @@ class ProcessCommands:
         scratch.mkdir(exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix='processes-', dir=scratch)
         self.db = sqlite3.connect(str(Path(self.temporary.name) / 'commands.sqlite'))
-        self.db.execute('CREATE TABLE commands (identity TEXT PRIMARY KEY, priority INTEGER, command TEXT)')
+        self.db.execute('CREATE TABLE commands (identity TEXT PRIMARY KEY, priority INTEGER, command TEXT, attack INTEGER)')
 
     def __enter__(self):
         """Return the bounded-memory process selector."""
@@ -31,11 +31,14 @@ class ProcessCommands:
         """Prefer a creation record, then the most complete command observation."""
         priority = int(creation) * 100000000 + len(command.pgm) + sum(map(len, command.args))
         self.db.execute(
-            'INSERT INTO commands VALUES (?,?,?) ON CONFLICT(identity) DO UPDATE SET priority=excluded.priority, command=excluded.command WHERE excluded.priority > priority',
-            (json.dumps(identity), priority, json.dumps(asdict(command))),
+            'INSERT INTO commands VALUES (?,?,?,?) ON CONFLICT(identity) DO UPDATE SET attack=max(attack,excluded.attack), command=CASE WHEN excluded.priority > priority THEN excluded.command ELSE command END, priority=max(priority,excluded.priority)',
+            (json.dumps(identity), priority, json.dumps(asdict(command)), int(command.label == "malicious")),
         )
 
     def commands(self):
         """Yield the selected commands in deterministic process-identity order."""
-        for (text,) in self.db.execute('SELECT command FROM commands ORDER BY identity'):
-            yield Command(**json.loads(text))
+        for text, attack in self.db.execute('SELECT command,attack FROM commands ORDER BY identity'):
+            command = Command(**json.loads(text))
+            if attack:
+                command.label, command.group_id = 'malicious', None
+            yield command
