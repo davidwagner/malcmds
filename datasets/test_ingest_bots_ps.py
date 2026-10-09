@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import duckdb
-
 from _ingest import _initialize, _insert, command_table
 from _ingest_bots import ps_commands
 
