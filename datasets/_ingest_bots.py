@@ -163,6 +163,41 @@ def osquery_commands(obj, host, record, index):
         yield command
 
 
+
+def bots_label(fields, pgm, args):
+    """Label the observed Frothly inventory exploit invocations in BOTS v3.
+
+    Source: https://github.com/splunk/botsv3 and native FYODOR-L process events
+    on 2018-08-20, including GUID {EBF7A186-D28A-5B58-0000-00105D862402}.
+    The same tool sends reconnaissance and the /tmp/colonel exploit source to
+    the vulnerable showcase endpoint. Inspection of a file is not this launch.
+    """
+    host = str(fields.get("Computer") or fields.get("ComputerName") or fields.get("host") or "").lower().split(".")[0]
+    event = str(fields.get("EventID") or fields.get("EventCode") or "")
+    try:
+        time = float(fields.get("_bots_time", ""))
+    except (ValueError, TypeError):
+        return "unknown", None
+    if (
+        host == "fyodor-l"
+        and event in {"1", "4688"}
+        and 1534763100 <= time <= 1534764900
+        and pgm.replace("/", "\\").lower() == r"c:\windows\temp\unziped\lsof-master\iexeplorer.exe"
+        and len(args) >= 2
+        and args[0].lower() == "http://192.168.9.30:8080/frothlyinventory/showcase.action"
+        and args[1].strip()
+    ):
+        return "malicious", None
+    return "unknown", None
+
+
+def bots_event_commands(fields, record, number):
+    """Apply source-context labels while native event fields are available."""
+    for command in event_commands(fields, "splunk-bots", record, number):
+        command.label, command.group_id = bots_label(fields, command.pgm, command.args)
+        yield command
+
+
 def records(root, options):
     """Select each identified process once across BOTS exported buckets."""
     from _ingest_processes import ProcessCommands
@@ -210,7 +245,8 @@ def observations(root, options, processes):
                 elif kind.startswith("xmlwineventlog"):
                     for i, fields in xml_events(io.StringIO(raw)):
                         fields.setdefault("Computer", host)
-                        yield from event_commands(fields, "splunk-bots", record, i)
+                        fields["_bots_time"] = row.get("_time")
+                        yield from bots_event_commands(fields, record, i)
                 elif kind.startswith("wineventlog"):
                     fields = text_fields(raw)
                     fields.setdefault("Computer", host)
@@ -219,7 +255,8 @@ def observations(root, options, processes):
                     valid = [v for v in logons if v.lower() not in ("0x0", "0", "-")]
                     if valid:
                         fields["SubjectLogonId"] = valid[-1]
-                    yield from event_commands(fields, "splunk-bots", record, 1)
+                    fields["_bots_time"] = row.get("_time")
+                    yield from bots_event_commands(fields, record, 1)
                 elif kind == "osquery:results":
                     decoder = json.JSONDecoder()
                     position = 0
