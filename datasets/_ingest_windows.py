@@ -323,7 +323,7 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
                 )
             if fields:
                 yield from event_commands(fields, dataset, source, number, label, group)
-    elif re.search(r"\btype=(?:SYSCALL|EXECVE|PROCTITLE|PATH|USER_CMD)\b", sample):
+    elif re.search(r"\btype=(?:SYSCALL|EXECVE|PROCTITLE|PATH|USER_CMD|SYSTEM_BOOT)\b", sample):
         from _ingest_misc import audit_events, audit_value
 
         for event_id, fields, argv, number, _ in audit_events(
