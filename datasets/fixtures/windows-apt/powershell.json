@@ -1,0 +1,8 @@
+{
+  "_index": "wazuh-alerts-4.x-2024.12.01",
+  "_id": "xaGygZMBrrvr6pEbHntA",
+  "_source.data.win.eventdata.logonGuid": "{15959494-0014-674C-2299-030000000000}",
+  "_source.data.win.system.computer": "DESKTOP-QGB4EQH",
+  "_source.data.win.eventdata.image": "C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe",
+  "_source.data.win.eventdata.commandLine": "powershell.exe -ExecutionPolicy Bypass -C \\\"Write-Host 1.Downloading KeyScrambler from official website to temp directory; Invoke-WebRequest -Uri \\\\\\\"https://download.qfxsoftware.com/download/latest/KeyScrambler_Setup.exe\\\\\\\" -OutFile $env:Temp\\\\KeyScrambler_Setup.exe; Write-Host 2.Installing KeyScrambler with KeyScrambler_Setup.exe from temp directory; Start-Process -FilePath $env:Temp\\\\KeyScrambler_Setup.exe -ArgumentList /S -Wait; Write-Host 3.Copying KeyScrambler.exe to temp folder,to avoid permission issues, which calls KeyScramblerIE.dll in CWD i.e. temp; Copy-Item \\\\\\\"C:\\\\Program Files (x86)\\\\KeyScrambler\\\\KeyScrambler.exe\\\\\\\" -Destination $env:TEMP\\\\KeyScrambler.exe; Write-Host 4.Executing KeyScrambler.exe, you should see a popup of missing KeyScramblerIE.dll, you can close this popup; Start-Process -FilePath $env:Temp\\\\KeyScrambler.exe; Write-Host 5.A modified KeyScramblerIE.dll can be copied to temp, which can be misused by Attacker\\\""
+}

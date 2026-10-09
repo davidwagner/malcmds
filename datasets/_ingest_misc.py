@@ -543,6 +543,16 @@ def linux_apt_audit_lines(root, options, labels, attacks):
                 yield f"node={row.get('_source.agent.name', 'unknown-host')} dataset_label={label} " + fragment
 
 
+def decode_windows_apt_field(raw: str, *, json_contents: bool, html_entities: bool) -> str:
+    """Decode the CSV field's known export layers once, preserving malformed JSON."""
+    if json_contents:
+        try:
+            raw = json.loads('"' + raw + '"')
+        except json.JSONDecodeError:
+            pass
+    return html.unescape(raw) if html_entities else raw
+
+
 def windows_apt(root, options):
     """Read native process launch command lines and process inventory arguments."""
     with (root / "source/combined.csv").open(
@@ -553,17 +563,17 @@ def windows_apt(root, options):
             command = row.get(prefix + "commandLine", "").strip()
             os = "windows"
             image = row.get(prefix + "image", "").strip()
-            if not command:
+            if command:
+                command = decode_windows_apt_field(command, json_contents=True, html_entities=True)
+                image = decode_windows_apt_field(image, json_contents=True, html_entities=True)
+            else:
+                # Inventory fields are ordinary CSV text, without the Sysmon JSON layer.
                 image = row.get("_source.data.process.cmd", "").strip()
                 arguments = row.get("_source.data.process.args", "").strip()
                 if not image or not arguments:
                     continue
                 os = "linux" if image.startswith("/") else "windows"
                 command = f'"{image}" {arguments}'
-            # Wazuh CSV fields retain doubled JSON backslashes.
-            if os == "windows":
-                command = command.replace("\\\\", "\\")
-                image = image.replace("\\\\", "\\")
             host = (
                 row.get("_source.data.win.system.computer", "").strip()
                 or row.get("_source.agent.name", "").strip()
