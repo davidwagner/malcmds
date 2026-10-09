@@ -8,8 +8,8 @@ from pathlib import Path
 
 import duckdb
 import fastavro
-from test_ingest_performance import ingest
 from _tc_labels import nanoseconds
+from test_ingest_performance import ingest
 
 HERE = Path(__file__).parent
 

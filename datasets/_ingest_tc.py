@@ -263,7 +263,7 @@ def image_files(files, db, temporary, limited=False):
                     with destination.open('rb') as stream:
                         yield path, _unspool(stream)
                     destination.unlink()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - re-raised after replaying valid records
             failure = error
         for path, destination in saved:
             with destination.open('rb') as stream:
@@ -402,9 +402,7 @@ def records(root, options):
                         parent = found[0] if found else ''
                         native_pid = props.get('ProcessID') or (found[1] if found else '')
                         timestamp = record.get('timestampNanos')
-                        if collector == 'cadets':
-                            executable = record.get('predicateObjectPath')
-                        elif event_type == 'EVENT_EXECUTE' and not text:
+                        if collector == 'cadets' or event_type == 'EVENT_EXECUTE' and not text:
                             executable = record.get('predicateObjectPath')
                     if collector == 'fivedirections':
                         executable = usable_image(props.get('ImageFileName'))
