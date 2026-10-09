@@ -13,4 +13,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r datasets/ingest-requirements.txt pytest
+      - name: Preserve bounded reads and committed prefixes on malformed input
+        run: >-
+          python -m pytest -q
+          datasets/test_ingest_tc_parallel.py::test_limit_closes_reader_before_unread_corrupt_file
+          datasets/test_ingest_tc_parallel.py::test_failed_scan_cleans_workers_and_preserves_committed_batch
       - run: python -m pytest -q datasets/test_tc_fixtures.py

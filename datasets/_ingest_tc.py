@@ -249,32 +249,50 @@ def fivedirections_command(text, image):
     return [(program, windows_split(text[end:]))] if program else []
 
 
-def image_files(files, db, temporary):
-    """Index process images before replaying candidates, including early Subjects."""
+def image_files(files, db, temporary, limited=False):
+    """Index available images and replay a valid prefix before reporting failure.
+
+    A limited preview indexes one file at a time so it can stop before opening
+    later input. A complete ingest can recover images across all selected files.
+    """
     db.execute('CREATE TABLE images (scope TEXT, subject TEXT, time INTEGER, image TEXT)')
-    saved = []
-    for index, (path, source) in enumerate(files):
-        destination = Path(temporary) / f'images-{index}.pickle'
-        saved.append((path, destination))
-        with destination.open('wb') as stream:
-            for outer in source:
-                pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
-                kind, record = outer['datum']
-                image = usable_image((record.get('properties') or {}).get('ImageFileName'))
-                if not image:
-                    continue
-                host = identifier(outer.get('hostId') or record.get('hostId')) or path.name.split('.bin')[0]
-                scope = f"{host}:{outer.get('sessionNumber', 0)}"
-                subject = identifier(record.get('uuid') if kind.endswith('.Subject') else
-                                     record.get('predicateObject') if record.get('type') == 'EVENT_FORK' else record.get('subject'))
-                if subject:
-                    timestamp = record.get('timestampNanos') or record.get('startTimestampNanos') or 0
-                    db.execute('INSERT INTO images VALUES (?,?,?,?)', (scope, subject, timestamp, image))
     db.execute('CREATE INDEX process_images ON images (scope,subject,time)')
-    for path, destination in saved:
-        with destination.open('rb') as stream:
-            yield path, _unspool(stream)
-        destination.unlink()
+    saved = deque()
+    failure = None
+    try:
+        try:
+            for index, (path, source) in enumerate(files):
+                destination = Path(temporary) / f'images-{index}.pickle'
+                saved.append((path, destination))
+                with destination.open('wb') as stream:
+                    for outer in source:
+                        pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
+                        kind, record = outer['datum']
+                        image = usable_image((record.get('properties') or {}).get('ImageFileName'))
+                        if not image:
+                            continue
+                        host = identifier(outer.get('hostId') or record.get('hostId')) or path.name.split('.bin')[0]
+                        scope = f"{host}:{outer.get('sessionNumber', 0)}"
+                        subject = identifier(record.get('uuid') if kind.endswith('.Subject') else
+                                             record.get('predicateObject') if record.get('type') == 'EVENT_FORK' else record.get('subject'))
+                        if subject:
+                            timestamp = record.get('timestampNanos') or record.get('startTimestampNanos') or 0
+                            db.execute('INSERT INTO images VALUES (?,?,?,?)', (scope, subject, timestamp, image))
+                if limited:
+                    path, destination = saved.popleft()
+                    with destination.open('rb') as stream:
+                        yield path, _unspool(stream)
+                    destination.unlink()
+        except Exception as error:
+            failure = error
+        for path, destination in saved:
+            with destination.open('rb') as stream:
+                yield path, _unspool(stream)
+            destination.unlink()
+        if failure is not None:
+            raise failure
+    finally:
+        files.close()
 
 
 def command_line(text, collector, pgm=None):
@@ -348,7 +366,7 @@ def records(root, options):
             paths = select_files(paths, options)
             files = _ordered_files(paths, options, temporary, os_name == 'windows')
             if collector == 'fivedirections':
-                files = image_files(files, db, temporary)
+                files = image_files(files, db, temporary, options.limit is not None)
             for file_number, (path, source) in enumerate(files, 1):
                 print(f'{root.name}: consuming file {file_number}/{len(paths)}: {path.name}',
                       file=sys.stderr, flush=True)
