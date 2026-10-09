@@ -104,24 +104,33 @@ def exports(root, options):
 
 
 def ps_commands(raw, record, session):
-    """Read COMMAND and the collector's underscore-separated argument field."""
+    """Keep only snapshots whose recorded argument boundaries are recoverable.
+
+    The collector substitutes underscores for spaces without escaping literal
+    underscores. Quoted or scripted text is therefore ambiguous and is omitted.
+    """
     lines = raw.splitlines()
     if not lines or "ARGS" not in lines[0]:
         return
     for number, line in enumerate(lines[1:], 1):
         fields = line.split(None, 12)
-        if len(fields) != 13 or fields[12] == "<noArgs>":
+        if len(fields) != 13:
             continue
-        if fields[11].endswith(":") or fields[11].startswith("["):
+        program, text = fields[11:]
+        if program.endswith(":") or program.startswith("["):
             continue
-        text = fields[11] + " " + fields[12].replace("_", " ")
-        for index, (pgm, args) in enumerate(normalize(text)):
-            yield Command(
-                pgm,
-                args,
-                f"{record}:ps:{number}:{index}",
-                session_id=f"{session}:user:{fields[0]}:tty:{fields[8]}",
-            )
+        if not fields[1].isdigit():
+            continue
+        if text == "<noArgs>":
+            args = []
+        elif re.search(r"[_\\\"'`;$|&(){}<>\s]", text):
+            continue
+        else:
+            args = [text]
+        yield Command(
+            program, args, f"{record}:ps:{number}:0",
+            session_id=f"{session}:process:{fields[1]}",
+        )
 
 
 def records(root, options):
