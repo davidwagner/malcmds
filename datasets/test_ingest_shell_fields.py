@@ -83,4 +83,4 @@ def records(root, options):
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY record_id').fetchall() == [('exec', []), ('bash', []), ('foo', []), ('/bin/bash', ['-i'])], 'The Bash parser must not turn a redirection descriptor into a program'
+        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY record_id').fetchall() == [('bash', []), ('foo', []), ('/bin/bash', ['-i'])], 'Descriptor-only exec changes the shell; it does not launch a program'

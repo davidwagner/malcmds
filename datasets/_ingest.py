@@ -116,7 +116,18 @@ def _word(node):
             text[2:-1],
         )
     if kind in ("string", "concatenation", "command_name"):
-        return "".join(_word(child) for child in node.named_children)
+        # Tree-sitter omits literal newlines between string_content children.
+        # Keep those source gaps while removing only the surrounding quotes.
+        offset = 1 if kind == "string" else 0
+        end = len(node.text) - (1 if kind == "string" else 0)
+        pieces = []
+        for child in node.named_children:
+            start = child.start_byte - node.start_byte
+            pieces.append(node.text[offset:start].decode("utf-8", "replace"))
+            pieces.append(_word(child))
+            offset = child.end_byte - node.start_byte
+        pieces.append(node.text[offset:end].decode("utf-8", "replace"))
+        return "".join(pieces)
     if kind == "string_content":
         return re.sub(r'\\([$`"\\\n])', _unescape, text)
     if kind == "word":
@@ -125,6 +136,8 @@ def _word(node):
 
 
 def _shell_commands(text, include_tokens):
+    from _shell_input import heredoc_spans, syntax_result
+
     data = text.encode("utf-8", "replace")
     tree = SHELL.parse(data)
     if b"\\\n" in data:
@@ -145,6 +158,20 @@ def _shell_commands(text, include_tokens):
         pieces.append(data[start:].replace(b"\\\n", b""))
         data = b"".join(pieces)
         tree = SHELL.parse(data)
+    source_text = data.decode("utf-8")
+    spans, complete = heredoc_spans(source_text)
+    if not complete:
+        return []
+    if (tree.root_node.has_error or spans or re.search(r"[\w)]\s*\(", source_text)) and not syntax_result(text)[0]:
+        return []
+    extra_tokens = []
+    if spans:
+        masked = bytearray(data)
+        for start, end in spans:
+            left, right = len(source_text[:start].encode()), len(source_text[:end].encode())
+            extra_tokens.append((left, source_text[start:end]))
+            masked[left:right] = bytes(10 if byte == 10 else 32 for byte in data[left:right])
+        tree = SHELL.parse(bytes(masked))
     result = []
     pending = [tree.root_node]
     while pending:
@@ -171,7 +198,23 @@ def _shell_commands(text, include_tokens):
                             continue
                         words.append(_word(child))
                         consumed.append(child)
-                if words[0]:
+                if words[0] == "exec":
+                    # Options belong to the shell operation, not the invoked argv.
+                    words, consumed = words[1:], consumed[1:]
+                    while words and words[0] in {"-a", "-c", "-l", "--"}:
+                        option = words[0]
+                        count = 2 if option == "-a" else 1
+                        words, consumed = words[count:], consumed[count:]
+                        if option == "--":
+                            break
+                dynamic = consumed[:1]
+                unresolved = False
+                while dynamic:
+                    part = dynamic.pop()
+                    if part.type in {"command_substitution", "simple_expansion", "expansion", "process_substitution"}:
+                        unresolved = True
+                    dynamic.extend(part.named_children)
+                if words and words[0] and not unresolved:
                     result.append((words, consumed))
         elif node.type in ("declaration_command", "unset_command"):
             keyword = node.children[0].text
@@ -185,7 +228,7 @@ def _shell_commands(text, include_tokens):
     output = []
     for words, consumed in result:
         spans = [(n.start_byte, n.end_byte) for n in consumed]
-        tokens = []
+        tokens = list(extra_tokens)
         pending = [tree.root_node]
         while pending:
             node = pending.pop()
@@ -198,16 +241,25 @@ def _shell_commands(text, include_tokens):
             )):
                 value = node.text.decode("utf-8", "replace")
                 if value.strip():
-                    tokens.append(value)
+                    tokens.append((node.start_byte, value))
             else:
                 pending.extend(reversed(node.children))
-        output.append((words[0], words[1:], tokens))
+        output.append((words[0], words[1:], [value for _, value in sorted(tokens)]))
     return output
 
 
 def shell_commands(text):
     """Return program, arguments, and unused source tokens for each Bash command."""
     return _shell_commands(text, True)
+
+
+def shell_command_fragments(parts):
+    """Yield fragment index, complete input, program, argv and unused tokens."""
+    from _shell_input import complete_inputs
+
+    for index, text in complete_inputs(parts):
+        for program, args, other in shell_commands(text):
+            yield index, text, program, args, other
 
 
 def shell_split(text):

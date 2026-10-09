@@ -22,7 +22,7 @@ from pathlib import Path
 
 import ijson
 import openpyxl
-from _ingest import Command, normalize, select_files, shell_commands
+from _ingest import Command, normalize, select_files, shell_commands, shell_command_fragments
 
 
 def emitted(
@@ -340,15 +340,12 @@ def microsoft_iot(root, options):
         for index, row in enumerate(limited(ijson.items(stream, "item"), options)):
             sequence = str(row.get("ID", index))
             group = "microsoft-iot:" + sequence
-            for i, text in enumerate(row["Commands"]):
-                yield from emitted(
-                    text,
-                    f"{sequence}:{i}",
-                    group,
-                    "malicious",
-                    None,
-                    shell=True,
-                )
+            occurrences = {}
+            for i, text, program, args, other in shell_command_fragments(row["Commands"]):
+                occurrence = occurrences.get(i, 0)
+                occurrences[i] = occurrence + 1
+                yield Command(program, args, f"{sequence}:{i}:{occurrence}", "malicious",
+                              session_id=group, shell_input=text, other_tokens=other)
 
 
 def gzip_json_items(path, *, allow_truncated=False):
@@ -412,6 +409,19 @@ def cyberlab(root, options):
                 has_input = any(
                     e.get("eventid") == "cowrie.command.input" for e in events
                 )
+                if has_input:
+                    inputs = [(n, event, event.get("input") or event.get("message", "").removeprefix("CMD: "))
+                              for n, event in enumerate(events) if event.get("eventid") == "cowrie.command.input"]
+                    occurrences = {}
+                    for part, text, program, args, other in shell_command_fragments([item[2] for item in inputs]):
+                        n, event, _ = inputs[part]
+                        host = event.get("dst_host_identifier") or event.get("sensor") or ""
+                        occurrence = occurrences.get(n, 0)
+                        occurrences[n] = occurrence + 1
+                        yield Command(program, args, f"{path.name}:{index}:{sid}:{n}:{occurrence}",
+                                      "malicious", session_id=f"cyberlab:{path.name}:{host}:{sid}",
+                                      shell_input=text, other_tokens=other)
+                    continue
                 for n, event in enumerate(events):
                     kind = event.get("eventid", "")
                     prefixes = {
