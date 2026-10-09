@@ -15,7 +15,6 @@ from pathlib import Path
 
 import duckdb
 import pytest
-
 from _ingest import COLUMNS
 from test_ingest_optc_parallel import ingest, rows, write_stream
 
