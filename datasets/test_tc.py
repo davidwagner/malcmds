@@ -41,7 +41,7 @@ class TCIntegrationTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.datasets = self.base / "datasets"
         self.datasets.mkdir()
-        for name in ("_fetch.py", "_tc.py", "_tc_manifest.tsv", "_tc_annotation_sources.tsv", "fetchall"):
+        for name in ("_fetch.py", "_google.py", "_tc.py", "_tc_manifest.tsv", "_tc_annotation_sources.tsv", "fetchall"):
             shutil.copy2(ROOT / name, self.datasets / name)
         for name in COUNTS:
             (self.datasets / name).mkdir()
@@ -173,8 +173,9 @@ class TCIntegrationTests(unittest.TestCase):
         partial = self.base / "sample.bin.gz.part"
         prefix = subprocess.run(
             [
+                sys.executable,
+                str(ROOT / "_google.py"),
                 "curl",
-                "--disable",
                 "--fail",
                 "--silent",
                 "--show-error",
