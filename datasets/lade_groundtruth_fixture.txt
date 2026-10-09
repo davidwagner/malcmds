@@ -1,0 +1,24 @@
+[ Code-snippet ]:
+Test-Connection -ComputerName '192.168.1.1' -Count 3 -Quiet
+
+[ Resolved Code ]:
+N/A
+
+[ GROUND-TRUTH & ALL INFORMATION ]:
+- GROUND-TRUTH: BENIGN-POWERSHELL-COMMAND
+- PLATFORM: Windows PowerShell
+---------------------------------------------------
+
+[ Code-snippet ]:
+"adfind.exe" -f (objectcategory=person) > ad_users.txt
+
+[ Resolved Code ]:
+N/A
+
+[ GROUND-TRUTH & ALL INFORMATION ]:
+- GROUND-TRUTH: T1087.002: Account Discovery: Domain Account
+- PLATFORM: platform.windows.cmd.command
+- ABILITY-UID: e44a39ce-0651-3ddd-8f05-f83aa2ffd657
+- ABILITY-NAME: Enumerate AD person objects
+- ABILITY-DESCRIPTION: Find all person objects and output the results to a text file.
+---------------------------------------------------

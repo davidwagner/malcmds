@@ -1,0 +1,102 @@
+[
+  {
+    "pid_hash": "EB1E89DAFF411CFD1B2767893F418A62",
+    "process_path": "c:\\windows\\system32\\svchost.exe",
+    "filename": "c:\\windows\\system32\\svchost.exe",
+    "process_name": "svchost.exe",
+    "args": "-k unistacksvcgroup -s cdpusersvc",
+    "hostname": "ACME-HH-SRE",
+    "user_name": "ACME\\user9",
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "A3565FDEDCFEF2FCC0100819D277C458",
+    "process_path": "c:\\windows\\system32\\svchost.exe",
+    "filename": "c:\\windows\\system32\\svchost.exe",
+    "process_name": "svchost.exe",
+    "args": "-k unistacksvcgroup -s wpnuserservice",
+    "hostname": "ACME-HH-AKA",
+    "user_name": "ACME\\user10",
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "42058952BB17F06634D8514A44A4C4DC",
+    "process_path": "c:\\windows\\system32\\cmd.exe",
+    "filename": "c:\\windows\\system32\\cmd.exe",
+    "process_name": "cmd.exe",
+    "args": "/c c:\\windows\\system32\\regimporter.cmd",
+    "hostname": "ACME-HH-AKA",
+    "user_name": null,
+    "label_num_hits": 3
+  },
+  {
+    "pid_hash": "8519134A1CBF818989FE5124C285D4A8",
+    "process_path": "c:\\windows\\system32\\wbem\\wmiprvse.exe",
+    "filename": "c:\\windows\\system32\\wbem\\wmiprvse.exe",
+    "process_name": "wmiprvse.exe",
+    "args": "-secured -embedding",
+    "hostname": "ACME-HH-AKA",
+    "user_name": "NT AUTHORITY\\NETWORK SERVICE",
+    "label_num_hits": 3
+  },
+  {
+    "pid_hash": "1F9BC9E88B4AA99CDAFC320E67C7B9FF",
+    "process_path": "c:\\program files\\google\\chrome\\application\\chrome.exe",
+    "filename": "c:\\program files\\google\\chrome\\application\\chrome.exe",
+    "process_name": "chrome.exe",
+    "args": "--type=utility --utility-sub-type=unzip.mojom.unzipper --lang=en-us --service-sandbox-type=service --mojo-platform-channel-handle=6412 --field-trial-handle=1864,i,203653721458236015,7024090909464920555,262144 /prefetch:8",
+    "hostname": "ACME-WS-PLU",
+    "user_name": null,
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "5FEA997C7360B0D2A21715D31C92A518",
+    "process_path": "c:\\program files\\google\\chrome\\application\\chrome.exe",
+    "filename": "c:\\program files\\google\\chrome\\application\\chrome.exe",
+    "process_name": "chrome.exe",
+    "args": "--type=utility --utility-sub-type=unzip.mojom.unzipper --lang=en-us --service-sandbox-type=service --mojo-platform-channel-handle=8064 --field-trial-handle=1928,i,4348911623305624972,10539487892418390436,262144 /prefetch:8",
+    "hostname": "ACME-WS-PLU",
+    "user_name": null,
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "D4CC5D4B1CA06738D5C5DF04D80BC0C4",
+    "process_path": "c:\\windows\\explorer.exe",
+    "filename": "c:\\windows\\explorer.exe",
+    "process_name": "explorer.exe",
+    "args": null,
+    "hostname": "ACME-HH-NBC",
+    "user_name": "ACME\\davidf",
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "5BB18F2B8F7A481965EAB077A0A8004F",
+    "process_path": "c:\\windows\\system32\\atbroker.exe",
+    "filename": "c:\\windows\\system32\\atbroker.exe",
+    "process_name": "atbroker.exe",
+    "args": null,
+    "hostname": "ACME-WS-PLU",
+    "user_name": null,
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "A495368BBA53DD6A82C721702B9A51DC",
+    "process_path": "c:\\windows\\system32\\conhost.exe",
+    "filename": "c:\\windows\\system32\\conhost.exe",
+    "process_name": "conhost.exe",
+    "args": "0xffffffff -forcev1",
+    "hostname": "ACME-HH-AKA",
+    "user_name": "NT AUTHORITY\\SYSTEM",
+    "label_num_hits": null
+  },
+  {
+    "pid_hash": "743787373B727DFFB6FF4D3908276DCF",
+    "process_path": "c:\\windows\\system32\\conhost.exe",
+    "filename": "c:\\windows\\system32\\conhost.exe",
+    "process_name": "conhost.exe",
+    "args": "0xffffffff -forcev1",
+    "hostname": "ACME-HH-AKA",
+    "user_name": null,
+    "label_num_hits": null
+  }
+]

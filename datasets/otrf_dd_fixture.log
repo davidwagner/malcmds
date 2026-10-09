@@ -1,0 +1,6 @@
+type=SYSCALL msg=audit(1604996384.965:93777): arch=c000003e syscall=59 success=yes exit=0 a0=558e25052c70 a1=558e251641a0 a2=558e25160800 a3=1b6 items=2 ppid=29002 pid=2168 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=104 comm="dd" exe="/bin/dd" key=(null)
+type=EXECVE msg=audit(1604996384.965:93777): argc=4 a0="dd" a1="if=/dev/zero" a2="bs=1" a3="count=1"
+type=CWD msg=audit(1604996384.965:93777): cwd="/home/wardog"
+type=PATH msg=audit(1604996384.965:93777): item=0 name="/bin/dd" inode=20 dev=08:01 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PATH msg=audit(1604996384.965:93777): item=1 name="/lib64/ld-linux-x86-64.so.2" inode=29514 dev=08:01 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PROCTITLE msg=audit(1604996384.965:93777): proctitle=64640069663D2F6465762F7A65726F0062733D3100636F756E743D31

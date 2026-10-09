@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""Download both periods, complete raw captures, cleaned groups, and annotations."""
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from _fetch import download
+
+os.chdir(HERE)
+download("https://codeload.github.com/zyw-286/shell-attack-evolution-dataset/tar.gz/d5f7fe120ebd921e04026b6348c3ec5d399c5df6", "release.tar.gz")

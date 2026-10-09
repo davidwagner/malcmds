@@ -59,3 +59,9 @@ For datasets containing shell input, `ingest` uses a Bash syntax
 parser to split compound commands, remove redirections and assignments
 preceding commands, and remove shell quoting.  Substitution commands
 are extracted too. 
+
+
+New databases use all columns in `schema.md`, including `shell_input` and
+`other_tokens`. An older database must be rebuilt with `--db` pointing to a new
+file; existing completed imports cannot recover omitted source input. Limited
+and sampled imports remain incomplete, so a later full import replaces them.

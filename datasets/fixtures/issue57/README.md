@@ -1,0 +1,7 @@
+# Released process fixtures
+
+- `acme3.json` and `acme4.json`: unchanged selected command and label fields from LLNL’s complete process summaries downloaded October 9, 2026. They include the argument-only service options, reviewed attacks, ordinary browser helpers, and ACME4 bad-user-only attribution.
+- `autolabel-sysdig.jsonl`: unchanged exec/clone observations from the published CVE-2018-17246 run with event times beginning January 18, 2025 at 14:52:31. The original three Sysdig logs contain 364 exec attempts (362 benign and two malicious). Unrelated read/write/network observations are omitted; container/event identifiers are retained.
+- `carbanak-subjects.dump`: thirteen unchanged subject rows from the full PIDSMaker CARBANAK v2 dump, exported using PostgreSQL 18.6 custom archive format. PostgreSQL 17.9 pg_restore reads this fixture successfully. `carbanak-ground-truth.csv` retains all matching released annotation rows, including repeated UUIDs. The fixture covers argument-only `/silentConfig`, executable-prefixed service arguments, absent cmd, Linux and Windows processes, a quoted script path, and an unquoted image containing spaces.
+
+The tests write these fixtures to fresh local dataset directories and invoke the real importer and DuckDB writer. No source commands or dump SQL are executed by the importers. The CARBANAK integration test requires PostgreSQL 17+ client tools; set `PG_RESTORE` if they are not on PATH.

@@ -22,11 +22,12 @@ def test_retry_replaces_dataset_and_preserves_other_datasets(tmp_path, markers):
         con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
         con.execute("""CREATE TABLE COMMANDS (
             pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
+            shell_input VARCHAR, other_tokens VARCHAR[] NOT NULL,
             dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
             group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
             CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
         for dataset in (root.name, 'other'):
-            con.execute("INSERT INTO COMMANDS VALUES ('old', 'old', [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
+            con.execute("INSERT INTO COMMANDS VALUES ('old', 'old', [], NULL, [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
         if markers is not None:
             con.execute('CREATE TABLE INGESTED (dataset VARCHAR, ingested BOOLEAN)')
             con.executemany('INSERT INTO INGESTED VALUES (?, ?)', [(root.name, value) for value in markers])

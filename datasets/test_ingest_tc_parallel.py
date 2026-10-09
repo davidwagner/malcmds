@@ -98,7 +98,7 @@ def ingest(root, workers, *options):
         capture_output=True, text=True, check=True, timeout=60,
     )
     with duckdb.connect(str(database), read_only=True) as connection:
-        rows = connection.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = connection.execute('SELECT pgm,pgm_base,args,dataset,record_id,label,group_id,session_id,os,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
     assert json.loads(result.stdout)['stored'] == len(rows)
     assert not list((root.parents[1] / 'tmp').glob('tc-ingest-*'))
     return rows, result.stderr

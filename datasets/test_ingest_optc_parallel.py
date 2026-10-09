@@ -51,7 +51,7 @@ def ingest(root, database, *options):
 def rows(database):
     """Return every stored row in a stable order."""
     with duckdb.connect(str(database), read_only=True) as con:
-        return con.execute('SELECT * FROM COMMANDS ORDER BY record_id, args').fetchall()
+        return con.execute('SELECT pgm,pgm_base,args,dataset,record_id,label,group_id,session_id,os,shell_input,other_tokens FROM COMMANDS ORDER BY record_id, args').fetchall()
 
 
 def build_dataset(root):
@@ -178,12 +178,12 @@ def test_arrow_and_duckdb_assumptions(tmp_path):
     with duckdb.connect() as con:
         con.execute("CREATE TYPE command_label AS ENUM ('malicious', 'benign', 'unknown', 'malicious-group')")
         con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
-        con.execute('CREATE TABLE t (pgm VARCHAR, pgm_base VARCHAR, args VARCHAR[], dataset VARCHAR, '
+        con.execute('CREATE TABLE t (pgm VARCHAR, pgm_base VARCHAR, args VARCHAR[], shell_input VARCHAR, other_tokens VARCHAR[], dataset VARCHAR, '
                     'record_id VARCHAR, label command_label, group_id VARCHAR, session_id VARCHAR, os command_os)')
         con.register('batch', decoded)
         con.execute('INSERT INTO t SELECT * FROM batch')
         assert con.execute('SELECT * FROM t').fetchall() == [
-            ('C:\\Windows\\cmd.exe', 'cmd.exe', ['/c', 'x'], 'optc', 'r', 'malicious-group', 'g',
+            ('C:\\Windows\\cmd.exe', 'cmd.exe', ['/c', 'x'], None, [], 'optc', 'r', 'malicious-group', 'g',
              'optc:record:r', 'windows'),
-            ('cmd.exe', 'cmd.exe', ['retained duplicate'], 'optc', 'r', 'unknown', None,
+            ('cmd.exe', 'cmd.exe', ['retained duplicate'], None, [], 'optc', 'r', 'unknown', None,
              'optc:record:r', 'windows')], 'DuckDB no longer casts Arrow strings into the COMMANDS columns'

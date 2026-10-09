@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""Download every QuasarNix array at the inspected release revision."""
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from _fetch import download
+
+REVISION = "76269c612ef971a195de90cf80e57fd0973f828e"
+FILES = [('X_test_malicious_cmd_adv.json', 48806678, '2fd2e6a3699a19688003114ae345de7eebc9e1f6f66f97dfbb72e010e561e239'), ('X_test_malicious_cmd_orig.json', 29944325, 'cf1932e12e24e2864d97383e4575a58cfccf5ebaf0248f15f802f668119cf272'), ('X_train_malicious_cmd_adv.json', 57210642, 'be8ee1f7d187985cd377f3bf130cdde9323238ce948288296bb9913524f33a27'), ('X_train_malicious_cmd_orig.json', 35493023, '97b9f8d8b6032c75966639b58632ab3536dea67fc414ac71d94c8e70177c6b6b'), ('nl2bash.json', 677084, '6c65225b8d1863cd6507bb3be2cbb578085304b7437586759726d73f3b77e33b')]
+
+os.chdir(HERE)
+for name, size, sha256 in FILES:
+    download(f"https://huggingface.co/datasets/dtrizna/QuasarNix/resolve/{REVISION}/{name}",
+             name, size=size, checksum="sha256:" + sha256)

@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""Fetch the complete CARBANAK v2 process dump and pinned attack UUIDs."""
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import download
+
+download("https://raw.githubusercontent.com/ubc-provenance/PIDSMaker/438a05a7c55256f639e5b5945cf4828fe3ee078e/Ground_Truth/orthrus/carbanakv2_edr/carbanakv2_edr.csv", "ground_truth.csv")
+download("https://drive.google.com/uc?id=1rJN9F8JkmqMAV9zUjralcFB5wykAgLnd", "carbanakv2_edr.dump", 1178382514)
