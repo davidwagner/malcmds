@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import multiprocessing
+import ntpath
 import pickle
 import re
 import shlex
@@ -20,7 +21,7 @@ from time import monotonic
 from zoneinfo import ZoneInfo
 
 import fastavro
-from _ingest import Command, normalize, select_files
+from _ingest import Command, normalize, select_files, windows_split
 from isal import igzip as gzip
 
 # Successful attacks described in TC_Ground_Truth_Report_E3_Update.pdf,
@@ -119,7 +120,8 @@ def _candidates(path, max_records, windows):
                 props = record.get('properties') or {}
                 keep = (event_type == 'EVENT_EXECUTE' or
                         (windows and event_type in {'EVENT_FORK', 'EVENT_EXIT'})) and bool(
-                            props.get('cmdLine') or props.get('CommandLine'))
+                            props.get('cmdLine') or props.get('CommandLine') or
+                            (windows and props.get('ImageFileName')))
             if keep:
                 retained += 1
                 yield outer
@@ -189,12 +191,97 @@ def _unspool(stream):
         yield pickle.load(stream)
 
 
+def usable_image(image):
+    """Return an executable image string only when the recorded value is usable."""
+    image = (image or '').strip().strip('"')
+    if (not image or image in {'N/A', '(null)', 'null', '<unknown>'}
+            or image.startswith(('/', '-')) or '\ufffd' in image
+            or any(ord(char) < 32 for char in image)):
+        return None
+    return image
+
+
+def fivedirections_command(text, image):
+    """Recover FiveDirections argv without consuming an argument as its program."""
+    image = usable_image(image)
+    text = (text or '').strip()
+    if text in {'N/A', '(null)', 'null', '<unknown>'}:
+        text = ''
+    if not text:
+        return [(image, [])] if image else []
+    tokens = windows_split(text)
+    if text.startswith(('/', '-')):
+        return [(image, tokens)] if image else []
+    # A matching unquoted image suffix makes Program Files part of argv[0].
+    end = None
+    if image and not text.startswith('"'):
+        basename = re.escape(ntpath.basename(image).removesuffix('.exe'))
+        if image.lower().endswith('.exe'):
+            basename = re.escape(ntpath.basename(image)[:-4])
+        # Stop at the first complete executable suffix, before any arguments.
+        match = re.match(r'(?:[^"\r\n]*?[\\/])?' + basename + r'(?:\.exe)?(?=\s|$)', text, re.IGNORECASE)
+        if match:
+            end = match.end()
+    if end is None:
+        quoted = False
+        slashes = 0
+        end = len(text)
+        for index, char in enumerate(text):
+            if char == '"' and slashes % 2 == 0:
+                quoted = not quoted
+            if char.isspace() and not quoted:
+                end = index
+                break
+            slashes = slashes + 1 if char == '\\' else 0
+        prefix = windows_split(text[:end])[0] if tokens else ''
+    else:
+        prefix = text[:end]
+    program = prefix
+    if image:
+        prefix_name = ntpath.basename(prefix).lower().removesuffix('.exe')
+        image_name = ntpath.basename(image).lower().removesuffix('.exe')
+        program = image
+        if prefix_name == image_name and not ntpath.dirname(image):
+            program = prefix
+            if image.lower().endswith('.exe') and not prefix.lower().endswith('.exe'):
+                program = ntpath.join(ntpath.dirname(prefix), image)
+    program = usable_image(program)
+    return [(program, windows_split(text[end:]))] if program else []
+
+
+def image_files(files, db, temporary):
+    """Index process images before replaying candidates, including early Subjects."""
+    db.execute('CREATE TABLE images (scope TEXT, subject TEXT, time INTEGER, image TEXT)')
+    saved = []
+    for index, (path, source) in enumerate(files):
+        destination = Path(temporary) / f'images-{index}.pickle'
+        saved.append((path, destination))
+        with destination.open('wb') as stream:
+            for outer in source:
+                pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
+                kind, record = outer['datum']
+                image = usable_image((record.get('properties') or {}).get('ImageFileName'))
+                if not image:
+                    continue
+                host = identifier(outer.get('hostId') or record.get('hostId')) or path.name.split('.bin')[0]
+                scope = f"{host}:{outer.get('sessionNumber', 0)}"
+                subject = identifier(record.get('uuid') if kind.endswith('.Subject') else
+                                     record.get('predicateObject') if record.get('type') == 'EVENT_FORK' else record.get('subject'))
+                if subject:
+                    timestamp = record.get('timestampNanos') or record.get('startTimestampNanos') or 0
+                    db.execute('INSERT INTO images VALUES (?,?,?,?)', (scope, subject, timestamp, image))
+    db.execute('CREATE INDEX process_images ON images (scope,subject,time)')
+    for path, destination in saved:
+        with destination.open('rb') as stream:
+            yield path, _unspool(stream)
+        destination.unlink()
+
+
 def command_line(text, collector, pgm=None):
     """Normalize captured argv text without interpreting it as typed shell input."""
+    if collector == 'fivedirections':
+        return fivedirections_command(text, pgm)
     if not text or text.strip() in {'N/A', '(null)', 'null', '<unknown>'}:
-        return []
-    if collector == 'fivedirections' and text.lstrip().startswith(('/', '-')):
-        # Argument-only Windows observations need image metadata (#54).
         return []
     text = text.removesuffix('\0') if '\0' in text else text.strip()
     # Titles such as "sshd: admin [priv]" are not an executed argv vector.
@@ -260,6 +347,8 @@ def records(root, options):
             db.execute('CREATE TABLE seen (id TEXT PRIMARY KEY) WITHOUT ROWID')
             paths = select_files(paths, options)
             files = _ordered_files(paths, options, temporary, os_name == 'windows')
+            if collector == 'fivedirections':
+                files = image_files(files, db, temporary)
             for file_number, (path, source) in enumerate(files, 1):
                 print(f'{root.name}: consuming file {file_number}/{len(paths)}: {path.name}',
                       file=sys.stderr, flush=True)
@@ -292,7 +381,13 @@ def records(root, options):
                         timestamp = record.get('timestampNanos')
                         if collector == 'cadets':
                             executable = record.get('predicateObjectPath')
-                    if not text:
+                    if collector == 'fivedirections':
+                        executable = usable_image(props.get('ImageFileName'))
+                        if not executable and subject:
+                            found = db.execute('SELECT image FROM images WHERE scope=? AND subject=? ORDER BY abs(time-?),time LIMIT 1',
+                                               (scope, subject, timestamp or 0)).fetchone()
+                            executable = found[0] if found else None
+                    if not text and not executable:
                         continue
                     try:
                         commands = command_line(text, collector, executable)

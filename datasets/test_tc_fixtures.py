@@ -86,3 +86,91 @@ def test_raw_audit_hex_argument_still_decodes(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT pgm,args FROM COMMANDS').fetchall() == [('/usr/sbin/arp', ['a b'])]
+
+
+def test_fivedirections_native_images(tmp_path):
+    """Original option-only observations retain the first option and semicolons."""
+    from test_ingest_performance import ingest
+
+    root = tmp_path / 'tc-e3-fivedirections'
+    (root / 'data').mkdir(parents=True)
+    shutil.copyfile(HERE / 'fixtures/fivedirections-images.bin.gz', root / 'data/sample.bin.gz')
+    database = tmp_path / 'images.duckdb'
+    result = ingest(root, database, 'from _ingest_tc import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = con.execute('SELECT pgm,args FROM COMMANDS').fetchall()
+        assert ('TabTip32.exe', ['/loadhooks', '/Parent:0000000000001e98']) in rows, 'FiveDirections CommandLine can contain only arguments; ImageFileName supplies the executable'
+        assert ('TabTip.exe', ['/QuitInfo:00000000000001C4;00000000000001B4;']) in rows
+        assert (r'C:\WINDOWS\system32\DllHost.exe', ['/Processid:{7966B4D8-4FDC-4126-A10B-39A3209AD251}']) in rows
+        assert (r'C:\Program Files\Windows Defender\MSASCuiL.exe', []) in rows
+        assert con.execute("SELECT count(*) FROM COMMANDS WHERE (label='malicious-group') <> (group_id IS NOT NULL) OR shell_input IS NOT NULL OR len(other_tokens)>0").fetchone()[0] == 0
+    result = ingest(root, database, 'from _ingest_tc import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+
+
+def test_fivedirections_process_images_and_prefixes(tmp_path):
+    """Actual native ingestion resolves earlier Subjects only within their process."""
+    import copy
+    import gzip
+    import uuid
+    import fastavro
+    from test_ingest_performance import ingest
+
+    root = tmp_path / 'tc-e3-fivedirections'
+    (root / 'data').mkdir(parents=True)
+    with gzip.open(HERE / 'fixtures/fivedirections-images.bin.gz', 'rb') as stream:
+        reader = fastavro.reader(stream, return_record_name=True)
+        native = list(reader)
+        schema = reader.writer_schema
+    with gzip.open(HERE / 'fixtures/trace-no-args.bin.gz', 'rb') as stream:
+        subject = next(fastavro.reader(stream, return_record_name=True))
+    # Add CDM's collector-session qualification to this constructed container.
+    schema['fields'].append({'name': 'sessionNumber', 'type': 'int', 'default': 0})
+    rows = []
+    expected = []
+    cases = [
+        ('rdpclip', 'rdpclip.exe', 'rdpclip.exe', []),
+        ('alias -x', 'actual.exe', 'actual.exe', ['-x']),
+        (r'C:\Program Files\App\app.exe /q', 'app.exe', r'C:\Program Files\App\app.exe', ['/q']),
+        (r'"C:\Program Files\App\app.exe" /q', 'app.exe', r'C:\Program Files\App\app.exe', ['/q']),
+        (r'C:\Windows\rdpclip', 'rdpclip.exe', r'C:\Windows\rdpclip.exe', []),
+        ('', 'empty.exe', 'empty.exe', []),
+        ('noimage.exe /x', None, 'noimage.exe', ['/x']),
+        ('/unresolved', None, None, []),
+        ('-unresolved', 'N/A', None, []),
+        ('short.exe /x', r'C:\actual\short.exe', r'C:\actual\short.exe', ['/x']),
+    ]
+    for index, (text, image, program, args) in enumerate(cases):
+        row = copy.deepcopy(native[0])
+        event = row['datum'][1]
+        event['uuid'] = uuid.UUID(int=100+index).bytes
+        event['predicateObject'] = ('com.bbn.tc.schema.avro.cdm18.UUID', uuid.UUID(int=200+index).bytes)
+        event['properties'] = {'CommandLine': text}
+        if image is not None:
+            event['properties']['ImageFileName'] = image
+        rows.append(row)
+        if program:
+            expected.append((program, args))
+    early = copy.deepcopy(subject)
+    early['datum'][1]['uuid'] = native[0]['datum'][1]['predicateObject'][1]
+    early['datum'][1]['hostId'] = native[0]['datum'][1]['hostId']
+    early['datum'][1]['cmdLine'] = '/early'
+    early['datum'][1]['startTimestampNanos'] = native[0]['datum'][1]['timestampNanos'] - 1
+    rows += [early, native[0]]
+    expected += [('dllhost.exe', ['/early']), (r'C:\WINDOWS\system32\DllHost.exe', ['/Processid:{7966B4D8-4FDC-4126-A10B-39A3209AD251}'])]
+    other_host = copy.deepcopy(early)
+    other_host['datum'][1]['hostId'] = uuid.UUID(int=999).bytes
+    other_restart = copy.deepcopy(early)
+    other_restart['sessionNumber'] = 9
+    rows += [other_host, other_restart]
+    with (root / 'data/constructed.bin').open('wb') as stream:
+        fastavro.writer(stream, schema, rows)
+    database = tmp_path / 'images.duckdb'
+    result = ingest(root, database, 'from _ingest_tc import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall() == expected, 'Process UUIDs must remain qualified by host and collector restart; FORK images belong to the child'
