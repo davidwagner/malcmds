@@ -43,33 +43,44 @@ def test_real_partition_ingestion_is_idempotent(partition, tmp_path):
         expected_label = 'benign' if partition == 'benign' else 'unknown'
         assert connection.execute('SELECT DISTINCT label FROM COMMANDS').fetchall() == [(expected_label,)]
         assert connection.execute('SELECT count(DISTINCT record_id) FROM COMMANDS').fetchall()[0][0] == len(before)
-        # Derive expected examples from unchanged source records. OPEN images
-        # can name a different executable; argv[0] must still identify the target.
-        checked_open = checked_create = False
-        with gzip.open(selected, 'rt') as stream:
-            for number, line in enumerate(stream, 1):
-                if number > 100000:
-                    break
-                event = json.loads(line)
-                if event.get('object') != 'PROCESS':
-                    continue
-                props = event.get('properties') or {}
-                text = props.get('command_line') or ''
-                if event.get('action') == 'OPEN' and text.startswith('C:\\Windows\\System32\\svchost.exe ') and 'MsMpEng.exe' in props.get('image_path', ''):
-                    rows = connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?', [event['id'] + ':0']).fetchall()
-                    assert rows == [('C:\\Windows\\System32\\svchost.exe', text.split()[1:])]
-                    checked_open = True
-                if event.get('action') == 'CREATE' and text == 'sc  config OneSyncSvc start=disabled':
-                    rows = connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?', [event['id'] + ':0']).fetchall()
-                    assert rows == [('sc.exe', ['config', 'OneSyncSvc', 'start=disabled'])]
-                    checked_create = True
-                if checked_open and checked_create:
-                    break
-        if partition == 'short':
-            assert checked_open and checked_create
     subprocess.run(command, capture_output=True, text=True, check=True)
     with duckdb.connect(str(database), read_only=True) as connection:
         assert connection.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+
+
+def test_authentic_short_partition_process_commands(tmp_path):
+    """Fixed source excerpts preserve both assertions as downloaded inventories grow.
+
+    These unchanged events come from short/17-18Sep19/AIA-26-50/
+    AIA-26-50.ecar-last.json.gz. A random short-partition file need not contain
+    either example; adding downloaded files must not change this regression.
+    """
+    root = tmp_path / 'optc'
+    source = root / 'ecar' / 'short' / 'events.json.gz'
+    source.parent.mkdir(parents=True)
+    events = [json.loads(line) for line in (DATASETS / 'optc_short_fixture.jsonl').read_text().splitlines()]
+    with gzip.open(source, 'wt') as stream:
+        stream.write(''.join(json.dumps(event) + '\n' for event in events))
+    database = tmp_path / 'commands.duckdb'
+    driver = ('import sys; from pathlib import Path; '
+              f'sys.path.insert(0, {str(DATASETS)!r}); '
+              'from _ingest import run; from _ingest_optc import records; '
+              f'run(Path({str(root)!r}), records)')
+    subprocess.run([sys.executable, '-c', driver, '--db', str(database)],
+                   capture_output=True, text=True, check=True)
+    with duckdb.connect(str(database), read_only=True) as connection:
+        opening, creation = events
+        assert opening['action'] == 'OPEN' and 'MsMpEng.exe' in opening['properties']['image_path']
+        assert connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?',
+                                  [opening['id'] + ':0']).fetchall() == [
+            ('C:\\Windows\\System32\\svchost.exe', opening['properties']['command_line'].split()[1:]),
+        ], 'An OPEN accessor image must not replace the target executable'
+        assert creation['action'] == 'CREATE'
+        assert connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?',
+                                  [creation['id'] + ':0']).fetchall() == [
+            ('sc.exe', ['config', 'OneSyncSvc', 'start=disabled']),
+        ], 'Real sc.exe arguments must survive repeated command-line whitespace'
+        assert connection.execute('SELECT count(*) FROM COMMANDS').fetchone() == (2,)
 
 
 def test_repeated_commands_preserve_images_labels_sessions_and_limits(tmp_path):

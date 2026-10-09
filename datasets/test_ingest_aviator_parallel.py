@@ -53,7 +53,7 @@ def ingest(root, database, workers, *extra, check=True):
 def rows(database):
     """Read persisted commands in insertion order to catch reordered exports."""
     with duckdb.connect(str(database), read_only=True) as connection:
-        return connection.execute("SELECT * FROM COMMANDS ORDER BY rowid").fetchall()
+        return connection.execute("SELECT pgm,pgm_base,args,dataset,record_id,label,group_id,session_id,os,shell_input,other_tokens FROM COMMANDS ORDER BY rowid").fetchall()
 
 
 def assert_clean(root):

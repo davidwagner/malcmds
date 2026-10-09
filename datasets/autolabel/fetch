@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Fetch every scenario in the three pinned AutoLabel releases."""
+import json
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import download
+
+
+def fetch_file(item):
+    """Download one immutable Zenodo artifact and verify its published MD5."""
+    download(item["url"], item["name"], item["size"], item["checksum"])
+
+with ThreadPoolExecutor(max_workers=3) as pool:
+    list(pool.map(fetch_file, json.loads(Path("release.json").read_text())))

@@ -8,7 +8,7 @@ import re
 import shlex
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic
 
@@ -31,6 +31,8 @@ class Command:
     group_id: str | None = None
     session_id: str = ""
     os: str = "linux"
+    shell_input: str | None = None
+    other_tokens: list[str] = field(default_factory=list)
 
 
 def windows_split(text):
@@ -122,8 +124,7 @@ def _word(node):
     return text
 
 
-def shell_split(text):
-    """Parse Bash syntax into commands without executing or expanding input."""
+def _shell_commands(text, include_tokens):
     data = text.encode("utf-8", "replace")
     tree = SHELL.parse(data)
     if b"\\\n" in data:
@@ -142,7 +143,8 @@ def shell_split(text):
             pieces.extend((data[start:left].replace(b"\\\n", b""), data[left:right]))
             start = right
         pieces.append(data[start:].replace(b"\\\n", b""))
-        tree = SHELL.parse(b"".join(pieces))
+        data = b"".join(pieces)
+        tree = SHELL.parse(data)
     result = []
     pending = [tree.root_node]
     while pending:
@@ -150,20 +152,67 @@ def shell_split(text):
         if node.type == "command":
             name = node.child_by_field_name("name")
             if name is not None:
-                words = [_word(name)]
+                # tree-sitter-bash 0.25 treats a leading 0 in 0<&3 as a
+                # command name. It is a descriptor, not a program invocation.
+                leading = []
+                if name.text.isdigit() and data[name.end_byte:name.end_byte + 1] in (b"<", b">"):
+                    redirects = [n for n in node.parent.named_children if n.type == "file_redirect"]
+                    destinations = [n for i, n in enumerate(redirects[0].children)
+                                    if redirects[0].field_name_for_child(i) == "destination"] if redirects else []
+                    if len(destinations) < 2:
+                        pending.extend(reversed(node.named_children))
+                        continue
+                    name, leading = destinations[1], destinations[2:]
+                consumed = [name, *leading]
+                words = [_word(name), *[_word(n) for n in leading]]
                 for i, child in enumerate(node.children):
                     if node.field_name_for_child(i) == "argument":
+                        if child.type == "number" and data[child.end_byte:child.end_byte + 1] in (b"<", b">"):
+                            continue
                         words.append(_word(child))
+                        consumed.append(child)
                 if words[0]:
-                    result.append(words)
+                    result.append((words, consumed))
         elif node.type in ("declaration_command", "unset_command"):
             keyword = node.children[0].text
             assert keyword is not None
             words = [keyword.decode()]
             words.extend(_word(c) for c in node.named_children)
-            result.append(words)
+            result.append((words, list(node.children)))
         pending.extend(reversed(node.named_children))
-    return result
+    if not include_tokens:
+        return [words for words, _ in result]
+    output = []
+    for words, consumed in result:
+        spans = [(n.start_byte, n.end_byte) for n in consumed]
+        tokens = []
+        pending = [tree.root_node]
+        while pending:
+            node = pending.pop()
+            if any(left <= node.start_byte and node.end_byte <= right for left, right in spans):
+                continue
+            overlaps = any(left < node.end_byte and node.start_byte < right for left, right in spans)
+            if not overlaps and (not node.children or node.type in (
+                "word", "string", "raw_string", "ansi_c_string", "concatenation",
+                "variable_assignment", "heredoc_body", "simple_expansion", "expansion",
+            )):
+                value = node.text.decode("utf-8", "replace")
+                if value.strip():
+                    tokens.append(value)
+            else:
+                pending.extend(reversed(node.children))
+        output.append((words[0], words[1:], tokens))
+    return output
+
+
+def shell_commands(text):
+    """Return program, arguments, and unused source tokens for each Bash command."""
+    return _shell_commands(text, True)
+
+
+def shell_split(text):
+    """Parse Bash syntax into argv lists without executing or expanding input."""
+    return _shell_commands(text, False)
 
 
 def normalize(text, os="linux", shell=False, pgm=None):
@@ -264,6 +313,7 @@ def _initialize(con):
         con.execute(f"CREATE TYPE IF NOT EXISTS {name} AS ENUM ({values})")
     con.execute("""CREATE TABLE IF NOT EXISTS COMMANDS (
         pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
+        shell_input VARCHAR, other_tokens VARCHAR[] NOT NULL,
         dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
         CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
@@ -273,6 +323,8 @@ COLUMNS = (
     "pgm",
     "pgm_base",
     "args",
+    "shell_input",
+    "other_tokens",
     "dataset",
     "record_id",
     "label",
@@ -281,7 +333,7 @@ COLUMNS = (
     "os",
 )
 SCHEMA = pa.schema(
-    [(name, pa.list_(pa.string()) if name == "args" else pa.string()) for name in COLUMNS]
+    [(name, pa.list_(pa.string()) if name in ("args", "other_tokens") else pa.string()) for name in COLUMNS]
 )
 
 
@@ -300,6 +352,8 @@ def command_table(commands, dataset):
         columns["pgm"].append(command.pgm)
         columns["pgm_base"].append(re.split(separators, command.pgm)[-1])
         columns["args"].append(command.args)
+        columns["shell_input"].append(command.shell_input)
+        columns["other_tokens"].append(command.other_tokens)
         columns["dataset"].append(dataset)
         columns["record_id"].append(command.record_id)
         columns["label"].append(command.label)
@@ -315,7 +369,8 @@ def _insert(con, batch):
     con.register("ingest_batch", batch)
     try:
         # Autocommit makes each batch atomic, including constraint/commit failures.
-        con.execute("INSERT INTO COMMANDS SELECT * FROM ingest_batch")
+        con.execute("INSERT INTO COMMANDS (" + ", ".join(COLUMNS) + ") SELECT "
+                    + ", ".join(COLUMNS) + " FROM ingest_batch")
     finally:
         con.unregister("ingest_batch")
 
@@ -353,7 +408,7 @@ def run(dataset_dir, records_callable):
     by command_table(); each Table is committed as one batch, in order.
     Completed datasets are skipped. Otherwise, discard the previous attempt
     before reading. Failures leave ingested=false; a retry starts over. A
-    successful run, including one with sampling/limit options, sets it true.
+    successful complete run sets it true; bounded inspections remain retryable.
     """
     root = Path(dataset_dir).resolve()
     options = arguments(root)
@@ -368,6 +423,14 @@ def run(dataset_dir, records_callable):
         commands: list[Command] = []
         try:
             con.execute("CREATE TABLE IF NOT EXISTS INGESTED (dataset VARCHAR, ingested BOOLEAN)")
+            existing = con.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='COMMANDS' ORDER BY ordinal_position"
+            ).fetchall()
+            if existing and [row[0] for row in existing] != list(COLUMNS):
+                raise ValueError(
+                    "COMMANDS uses an older schema. Use --db with a new database "
+                    "and reingest the datasets to populate shell_input and other_tokens."
+                )
             if con.execute(
                 "SELECT 1 FROM INGESTED WHERE dataset=? AND ingested=true LIMIT 1", [root.name]
             ).fetchone():
@@ -427,7 +490,8 @@ def run(dataset_dir, records_callable):
                 batch_started = monotonic()
                 _insert(con, batch)
                 write_seconds += monotonic() - batch_started
-            con.execute("UPDATE INGESTED SET ingested=true WHERE dataset=?", [root.name])
+            complete = all(getattr(options, key) is None for key in ("limit", "max_records", "sample_files"))
+            con.execute("UPDATE INGESTED SET ingested=? WHERE dataset=?", [complete, root.name])
             elapsed = monotonic() - started
             print(
                 f"{root.name}: finished in {elapsed:.1f}s; "

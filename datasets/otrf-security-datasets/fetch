@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""Download the complete pinned source release."""
+
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent))
+from _fetch import download
+
+download(
+    'https://codeload.github.com/OTRF/Security-Datasets/tar.gz/d9d40ef123d2c87d5d3df28c96bcab4f0faccc87',
+    'security-datasets.tar.gz', 558337085,
+    "sha256:b0555d6fbf57b81bd0dff706180615db218d3e8c67f1e407aac2011aa027400b",
+)

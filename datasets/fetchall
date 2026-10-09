@@ -6,16 +6,23 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Static smallest-first estimate from dataset directory disk usage on 2026-10-05.
+# Static smallest-first estimate from downloaded release sizes on 2026-10-09.
 # Used as a runtime heuristic; no disk usage measurements are made when running.
 DATASET_ORDER = (
     "kypo",
     "microsoft-iot",
+    "lade",
+    "shell-honeypot",
+    "quasarnix",
     "linux-apt-2024",
     "windows-apt-2025",
+    "acme4",
     "splunk-bots",
+    "otrf-security-datasets",
     "publicarena",
+    "carbanakv2",
     "tc-e3-cadets",
+    "acme3",
     "tc-e3-theia",
     "ait",
     "tc-e5-marple",
@@ -29,6 +36,7 @@ DATASET_ORDER = (
     "comiset",
     "tc-e5-fivedirections",
     "aviator",
+    "autolabel",
     "tc-e5-trace",
     "optc",
 )

@@ -1,0 +1,176 @@
+[
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2017-12629-RCE.tar/content",
+    "name": "CVE-2017-12629-RCE.tar",
+    "size": 929802240,
+    "checksum": "md5:6e4e5bfb145da16694b373758a329b02"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2017-8917.tar/content",
+    "name": "CVE-2017-8917.tar",
+    "size": 2195353600,
+    "checksum": "md5:28886e967f4bbad18f470553cd654461"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2018-17246.tar/content",
+    "name": "CVE-2018-17246.tar",
+    "size": 222238720,
+    "checksum": "md5:33ad3b15e4344b67db5ecca9eb13b475"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2021-26120-lab.tar/content",
+    "name": "CVE-2021-26120-lab.tar",
+    "size": 2983516160,
+    "checksum": "md5:4a83f6e9714376db1cf4caf35997b5b4"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2017-12629-XXE.tar/content",
+    "name": "CVE-2017-12629-XXE.tar",
+    "size": 936550400,
+    "checksum": "md5:c2d7f628ef8a9dd329b258e8ebbd0913"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2023-51467.tar/content",
+    "name": "CVE-2023-51467.tar",
+    "size": 10854000640,
+    "checksum": "md5:b6a8cb53dc40aaefaf20e45edee092cc"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2019-9053.tar/content",
+    "name": "CVE-2019-9053.tar",
+    "size": 2946314240,
+    "checksum": "md5:0a2bcf7c936e558ceec594b9b869526a"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2023-49070.tar/content",
+    "name": "CVE-2023-49070.tar",
+    "size": 11163166720,
+    "checksum": "md5:b8c89d229a345ee321075153d1f96219"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2023-25157.tar/content",
+    "name": "CVE-2023-25157.tar",
+    "size": 1054822400,
+    "checksum": "md5:e833c1dbdbb02e69fa921b9592edd2ab"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2024-38856.tar/content",
+    "name": "CVE-2024-38856.tar",
+    "size": 12491325440,
+    "checksum": "md5:85b144122bf7e071cebbd02ea4f33a99"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2023-38646.tar/content",
+    "name": "CVE-2023-38646.tar",
+    "size": 699607040,
+    "checksum": "md5:e72757bbd0add32099723292203c0141"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15528780/files/CVE-2024-36401.tar/content",
+    "name": "CVE-2024-36401.tar",
+    "size": 892487680,
+    "checksum": "md5:45161db0633d72cad4f1d3a8f94bb489"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/multi-jump.tar/content",
+    "name": "multi-jump.tar",
+    "size": 12109506560,
+    "checksum": "md5:b45f2556cbc5a7d334ff9374f9179206"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/sandworm.tar/content",
+    "name": "sandworm.tar",
+    "size": 3948840960,
+    "checksum": "md5:212b6b1ef95015479094cbed7126fac0"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2019-0193.tar/content",
+    "name": "CVE-2019-0193.tar",
+    "size": 1281413120,
+    "checksum": "md5:b02a9e4ddbac02a5fe8e7297d74a52ca"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/juice-shop.tar/content",
+    "name": "juice-shop.tar",
+    "size": 968048640,
+    "checksum": "md5:76e7427e816a348abde0973f6de25ca4"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2015-8562.tar/content",
+    "name": "CVE-2015-8562.tar",
+    "size": 5890375680,
+    "checksum": "md5:8fe8fd79f5504e00a78bf25566fb1abf"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2022-4223.tar/content",
+    "name": "CVE-2022-4223.tar",
+    "size": 2672732160,
+    "checksum": "md5:de4289d99e8804b0fd09824862084b42"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/python-demo.tar/content",
+    "name": "python-demo.tar",
+    "size": 395520000,
+    "checksum": "md5:3026b297dfb5f71c9b7a22bcff3f23d1"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2019-10758.tar/content",
+    "name": "CVE-2019-10758.tar",
+    "size": 1657323520,
+    "checksum": "md5:5cc312b6e65e90075cb5bb47f1d592a2"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2023-5002.tar/content",
+    "name": "CVE-2023-5002.tar",
+    "size": 2410792960,
+    "checksum": "md5:73d8bcde580f061b8a62386c6acc2261"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2019-17558.tar/content",
+    "name": "CVE-2019-17558.tar",
+    "size": 3718502400,
+    "checksum": "md5:d5957c07417536d23d99daccba1d8313"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2023-23752.tar/content",
+    "name": "CVE-2023-23752.tar",
+    "size": 10512209920,
+    "checksum": "md5:7593ee4d9ff3dde64994a8b01be1091f"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2021-43008.tar/content",
+    "name": "CVE-2021-43008.tar",
+    "size": 690913280,
+    "checksum": "md5:d1ff384cf19a5cf5e97557c52ae53dd5"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15532579/files/CVE-2021-41277.tar/content",
+    "name": "CVE-2021-41277.tar",
+    "size": 672010240,
+    "checksum": "md5:9aa8f171a306b4a7aa2b463b41c7bb31"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15568798/files/CVE-2024-45507.tar/content",
+    "name": "CVE-2024-45507.tar",
+    "size": 12354334720,
+    "checksum": "md5:7d83a9d1c751bf2d4332f8d4be41234c"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15568798/files/CVE-2020-9496.tar/content",
+    "name": "CVE-2020-9496.tar",
+    "size": 13043927040,
+    "checksum": "md5:f85eca519b559188eda60ff2a69ce7d8"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15568798/files/CVE-2024-45195.tar/content",
+    "name": "CVE-2024-45195.tar",
+    "size": 12398571520,
+    "checksum": "md5:0f0f45b9b7e635b301ecf94adcb079c3"
+  },
+  {
+    "url": "https://zenodo.org/api/records/15568798/files/CVE-2018-1000533.tar/content",
+    "name": "CVE-2018-1000533.tar",
+    "size": 4025231360,
+    "checksum": "md5:c3dfc7c0d6fa98349e5328e3d1e6880b"
+  }
+]
