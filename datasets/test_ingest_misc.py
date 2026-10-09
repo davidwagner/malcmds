@@ -66,7 +66,7 @@ def test_real_dataset_idempotent(dataset, tmp_path):
         if dataset in ("cyberlab", "microsoft-iot"):
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS WHERE label != 'malicious-group'"
+                    "SELECT count(*) FROM COMMANDS WHERE label != 'malicious'"
                 ).fetchall()[0][0]
                 == 0
             )

@@ -1,0 +1,15 @@
+[
+  {
+    "Protocol": "Telnet",
+    "Commands": [
+      "sh",
+      "/bin/busybox Uirusu",
+      "/bin/busybox ps; /bin/busybox Uirusu",
+      "/bin/busybox cat /proc/mounts; /bin/busybox Uirusu"
+    ],
+    "ID": "61130d46117b4caf96eec5b4a5b6e4a1141aaad3e9076d67629eaaac52f9576c",
+    "TimesSeen": 692977,
+    "FirstSeen": "2019-07-09T15:48:24.45",
+    "LastSeen": "2019-11-06T11:22:03.877"
+  }
+]

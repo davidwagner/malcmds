@@ -22,15 +22,20 @@ from pathlib import Path
 
 import ijson
 import openpyxl
-from _ingest import Command, normalize, select_files
+from _ingest import Command, normalize, select_files, shell_commands
 
 
 def emitted(
     text, rid, session, label="unknown", group=None, os="linux", shell=False, pgm=None
 ):
     """Normalize one observed command, retaining its source and session."""
-    for i, (program, args) in enumerate(normalize(text, os=os, shell=shell, pgm=pgm)):
-        yield Command(program, args, f"{rid}:{i}", label, group, session, os)
+    if shell:
+        for i, (program, args, other) in enumerate(shell_commands(text)):
+            yield Command(program, args, f"{rid}:{i}", label, group, session, os,
+                          shell_input=text, other_tokens=other)
+    else:
+        for i, (program, args) in enumerate(normalize(text, os=os, pgm=pgm)):
+            yield Command(program, args, f"{rid}:{i}", label, group, session, os)
 
 
 def limited(rows, options):
@@ -340,8 +345,8 @@ def microsoft_iot(root, options):
                     text,
                     f"{sequence}:{i}",
                     group,
-                    "malicious-group",
-                    group,
+                    "malicious",
+                    None,
                     shell=True,
                 )
 
@@ -432,9 +437,9 @@ def cyberlab(root, options):
                         text,
                         f"{path.name}:{index}:{sid}:{n}",
                         session,
-                        "malicious-group",
-                        session,
-                        shell=True,
+                        "malicious",
+                        None,
+                        shell=kind == "cowrie.command.input",
                     )
 
 
