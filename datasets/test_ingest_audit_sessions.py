@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import duckdb
-
 from _ingest import Command, _initialize, _insert, command_table
 from _ingest_misc import audit_events
 
@@ -65,6 +64,7 @@ def test_boot_only_rotated_member_updates_shared_parser_state(tmp_path):
     """A native boot record in its own rotation still separates session seven."""
     import io
     from types import SimpleNamespace
+
     from _ingest_windows import Budget, parse_log
 
     lines = (Path(__file__).parent / 'fixtures/executions/audit-boot-execs.log').read_text().splitlines(keepends=True)
