@@ -7,8 +7,7 @@ from types import SimpleNamespace
 
 import duckdb
 import openpyxl
-
-from _ingest import _initialize, _insert, command_table, Command
+from _ingest import Command, _initialize, _insert, command_table
 from _ingest_misc import linux_apt, sudo_command_argv
 
 
