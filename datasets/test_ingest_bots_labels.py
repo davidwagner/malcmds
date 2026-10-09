@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import duckdb
-
 from _ingest import _initialize, _insert, command_table
 from _ingest_bots import bots_event_commands
 from _ingest_windows import text_fields, xml_events
