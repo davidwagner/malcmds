@@ -177,8 +177,8 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None,
         )
         or None
     )
-    # COMISET and Carbon Black exports escape backslashes a second time.
-    if dataset == "comiset" or "process_cmdline" in fields:
+    # COMISET exports add escaping beyond JSON. Carbon Black uses ordinary JSON.
+    if dataset == "comiset":
         text = text.replace("\\\\", "\\")
         if pgm:
             pgm = pgm.replace("\\\\", "\\")
