@@ -28,6 +28,10 @@ def test_native_process_annotations_and_inclusive_minutes(tmp_path):
     # annotation must not change a native process's label.
     (annotations / 'reapr/E3-CADETS').mkdir(parents=True)
     (annotations / 'reapr/E3-CADETS/node_Nginx_Backdoor_06.csv').write_text('')
+    (annotations / 'threatrace/E5-CADETS').mkdir(parents=True)
+    (annotations / 'threatrace/E5-CADETS/ground_truth.txt').write_text(str(uuid.UUID(int=600)) + '\n')
+    (annotations / 'orthrus/E5-CADETS').mkdir(parents=True)
+    (annotations / 'orthrus/E5-CADETS/node_Nginx_Backdoor_06.csv').write_text(f"{uuid.UUID(int=500)},{{'subject': 'uname'}},1\n")
     with gzip.open(HERE / 'fixtures/trace-no-args.bin.gz', 'rb') as stream:
         reader = fastavro.reader(stream, return_record_name=True)
         schema = reader.writer_schema
@@ -54,6 +58,8 @@ def test_native_process_annotations_and_inclusive_minutes(tmp_path):
         ((501).to_bytes(16, 'big'), first, 'object-process', 'malicious'),
         (raw, nanoseconds('2018-04-11 15:08:00', 'US/Eastern'), 'raw-contaminated', 'malicious'),
         ((502).to_bytes(16, 'big'), last + 120_000_000_000, 'continuing-connection', 'malicious'),
+        ((600).to_bytes(16, 'big'), first - 1, 'other-release', 'unknown'),
+        ((501).to_bytes(16, 'big'), last + 120_000_000_000, 'later-file-reader', 'unknown'),
     ]
     rows = []
     for index, (process, timestamp, marker, label) in enumerate(cases):
@@ -68,6 +74,9 @@ def test_native_process_annotations_and_inclusive_minutes(tmp_path):
     relation['datum'][1].update(type='EVENT_READ', hostId=host, subject=('com.bbn.tc.schema.avro.cdm18.UUID', (501).to_bytes(16, 'big')),
                                predicateObject=('com.bbn.tc.schema.avro.cdm18.UUID', file_uuid), timestampNanos=first, properties={})
     rows.append(relation)
+    later_file = copy.deepcopy(relation)
+    later_file['datum'][1]['timestampNanos'] = last + 180_000_000_000
+    rows.append(later_file)
     observation_only = copy.deepcopy(relation)
     observation_only['datum'][1].update(uuid=(9050).to_bytes(16, 'big'),
                                       subject=('com.bbn.tc.schema.avro.cdm18.UUID', (505).to_bytes(16, 'big')),

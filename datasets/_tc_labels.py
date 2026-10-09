@@ -31,6 +31,7 @@ class TCAnnotations:
             self.episodes[rule['id']] = rule
         self.processes = defaultdict(set)
         self.objects = defaultdict(set)
+        self.network_objects = set()
         self.neighborhood = set()
         self.related = defaultdict(dict)
         self.hosts = {host for rule in self.episodes.values() for host in rule.get('hosts', ())}
@@ -49,7 +50,11 @@ class TCAnnotations:
                 details = ast.literal_eval(value)
                 lookup = self.processes if 'subject' in details else self.objects
                 lookup[identifier.strip().lower()].add(attack)
+                if 'netflow' in details:
+                    self.network_objects.add(identifier.strip().lower())
         for path in sorted(directory.glob('threatrace/*/ground_truth.txt')):
+            if path.parent.name.lower() != root.name.removeprefix('tc-'):
+                continue
             self.neighborhood.update(line.strip().lower() for line in path.read_text().splitlines() if line.strip())
         original = directory / 'original-reapr.csv'
         if original.exists():
@@ -69,8 +74,13 @@ class TCAnnotations:
         if not process or timestamp is None:
             return
         for identifier in objects:
-            for attack in self.objects.get(identifier.lower(), ()):
+            identifier = identifier.lower()
+            for attack in self.objects.get(identifier, ()):
                 rule = self.episodes[attack]
+                if identifier not in self.network_objects and not rule['first'] <= timestamp <= rule['last']:
+                    # A later read of a shared file does not establish that an
+                    # attack connection continued beyond the report window.
+                    continue
                 # Related activity must start during the documented episode.
                 # Later events on that same annotated object can establish that
                 # this process's connection continued beyond the reported end.
