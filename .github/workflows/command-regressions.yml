@@ -13,4 +13,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r datasets/ingest-requirements.txt pytest
-      - run: python -m pytest -q datasets/test_carbon_black_escaping.py datasets/test_rendered_records.py datasets/test_osquery_sessions.py datasets/test_aviator_encoding.py
+      - run: sudo apt-get update -qq && sudo apt-get install -y p7zip-full
+      - run: python -m pytest -q datasets/test_carbon_black_escaping.py datasets/test_rendered_records.py datasets/test_osquery_sessions.py datasets/test_aviator_encoding.py datasets/test_documented_attacks.py

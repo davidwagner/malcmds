@@ -3,6 +3,8 @@
 import multiprocessing
 import codecs
 import re
+import ntpath
+from functools import lru_cache
 import tarfile
 import tempfile
 import zipfile
@@ -12,7 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pyarrow as pa
-from _ingest import SCHEMA, command_table, select_files
+from _ingest import SCHEMA, command_table, select_files, windows_split
 from _ingest_windows import Budget, aviator_priority, parse_log
 
 ARCHIVE = "10.35097-8s5b0u5yqgfs2y0d.tar"
@@ -58,7 +60,8 @@ def export_names(zipped):
 def export_commands(root, member, name, stream, budget):
     """Read one export with its archive-derived source IDs and labels."""
     benign = "normal_operation" in name
-    yield from parse_log(
+    rules = _procedure_commands(str(root), Path(member.name).stem[3:]) if not benign else ()
+    for command in parse_log(
         stream,
         f"{ARCHIVE}/{member.name}/{name}",
         root.name,
@@ -66,7 +69,57 @@ def export_commands(root, member, name, stream, budget):
         "benign" if benign else "malicious-group",
         None if benign else f"aviator:{Path(member.name).stem[3:]}",
         encoding=export_encoding(stream) if name.endswith(".xml") else None,
-    )
+    ):
+        if _matches_procedure(command, rules):
+            command.label, command.group_id = "malicious", None
+        yield command
+
+
+@lru_cache(maxsize=16)
+def _procedure_commands(root, scenario):
+    # These reviewed steps identify explicit executable invocations and their
+    # host. PowerShell expressions and operator instructions are not interpreted.
+    if scenario != "APT29-1":
+        return ()
+    path = Path(root) / "aviator-ground-truth-and-tools.tar.gz"
+    if not path.exists():
+        return ()
+    rules = []
+    with tarfile.open(path, "r:gz") as archive:
+        member = next(m for m in archive if m.name.endswith("/ground_truth/apt29/scenario1.sh"))
+        with archive.extractfile(member) as stream:
+            step = 0
+            for line in stream.read().decode().splitlines():
+                match = re.match(r"# Step (\d+) -", line)
+                if match:
+                    step = int(match[1])
+                if "scenario end" in line:
+                    break
+                if step not in {4, 6, 8, 9}:
+                    continue
+                text = line.strip().removeprefix("& ")
+                argv = windows_split(text)
+                if not argv or not argv[0].lower().endswith(".exe"):
+                    continue
+                host = "DESKTOP-G3MEF77" if step == 9 else "DESKTOP-G3MEF76"
+                rules.append((host.lower(), ntpath.basename(argv[0]).lower(), argv[1:]))
+    return tuple(rules)
+
+
+def _matches_procedure(command, rules):
+    for host, program, arguments in rules:
+        hosts = [part.split(".", 1)[0] for part in command.session_id.lower().split(":")]
+        if host not in hosts or ntpath.basename(command.pgm).lower() != program:
+            continue
+        profile = re.search(r"[a-z]:\\users\\[^\\]+", " ".join([command.pgm, *command.args]), re.I)
+        expected = []
+        for argument in arguments:
+            if profile:
+                argument = argument.replace("$env:USERPROFILE", profile[0]).replace("$env:APPDATA", profile[0] + r"\AppData\Roaming")
+            expected.append(argument.replace("/", "\\").lower())
+        if [argument.replace("/", "\\").lower() for argument in command.args] == expected:
+            return True
+    return False
 
 
 def records(root, options):
