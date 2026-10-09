@@ -1,0 +1,2 @@
+attack_chain,uuid,process_name,timestamp,label
+downstream_contamination,509F9BDF-3DBB-11E8-B8CE-15D78AC88FB6,bash,2018-04-11 14:05:35,contaminated

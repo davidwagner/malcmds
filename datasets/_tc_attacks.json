@@ -1,0 +1,582 @@
+[
+  {
+    "dataset": "tc-e5-theia",
+    "id": "node_THEIA_1_Firefox_Drakon_APT_BinFmt_Elevate_Inject",
+    "start": "2019-05-15 14:47:00",
+    "end": "2019-05-15 15:08:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "theia-1"
+    ]
+  },
+  {
+    "dataset": "tc-e3-theia",
+    "id": "node_Browser_Extension_Drakon_Dropper",
+    "start": "2018-04-12 12:40:00",
+    "end": "2018-04-12 13:30:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.11",
+    "hosts": [
+      "0a00063c-5254-00f0-0d60-000000000070"
+    ]
+  },
+  {
+    "dataset": "tc-e3-theia",
+    "id": "node_Firefox_Backdoor_Drakon_In_Memory",
+    "start": "2018-04-10 14:30:00",
+    "end": "2018-04-10 15:00:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.3",
+    "hosts": [
+      "0a00063c-5254-00f0-0d60-000000000070"
+    ]
+  },
+  {
+    "dataset": "tc-e5-cadets",
+    "id": "node_Nginx_Drakon_APT",
+    "start": "2019-05-16 09:31:00",
+    "end": "2019-05-16 10:12:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "cadets-1",
+      "cadets-2"
+    ]
+  },
+  {
+    "dataset": "tc-e5-cadets",
+    "id": "node_Nginx_Drakon_APT_17",
+    "start": "2019-05-17 10:15:00",
+    "end": "2019-05-17 15:33:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "cadets-1",
+      "cadets-2"
+    ]
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "node_Nginx_Backdoor_06",
+    "start": "2018-04-06 11:20:00",
+    "end": "2018-04-06 12:09:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.1",
+    "executables": [
+      "/tmp/vUgefal"
+    ],
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ]
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "node_Nginx_Backdoor_12",
+    "start": "2018-04-12 13:59:00",
+    "end": "2018-04-12 14:39:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.13",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ]
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "node_Nginx_Backdoor_13",
+    "start": "2018-04-13 09:03:00",
+    "end": "2018-04-13 09:16:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.14",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ]
+  },
+  {
+    "dataset": "tc-e5-trace",
+    "id": "node_Trace_Firefox_Drakon",
+    "start": "2019-05-14 10:17:00",
+    "end": "2019-05-14 11:45:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "trace-2"
+    ]
+  },
+  {
+    "dataset": "tc-e3-trace",
+    "id": "node_trace_e3_firefox_0410",
+    "start": "2018-04-10 09:45:00",
+    "end": "2018-04-10 11:10:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.2",
+    "hosts": [
+      "3120b2a9-057e-e4eb-4bb9-154983d2c063",
+      "e621f964-5a66-0f89-30e0-67adb2a5ec28"
+    ]
+  },
+  {
+    "dataset": "tc-e3-trace",
+    "id": "node_trace_e3_phishing_executable_0413",
+    "start": "2018-04-13 14:14:00",
+    "end": "2018-04-13 14:29:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "4.9",
+    "hosts": [
+      "3120b2a9-057e-e4eb-4bb9-154983d2c063",
+      "e621f964-5a66-0f89-30e0-67adb2a5ec28"
+    ]
+  },
+  {
+    "dataset": "tc-e3-trace",
+    "id": "node_trace_e3_pine_0413",
+    "start": "2018-04-13 12:42:00",
+    "end": "2018-04-13 12:54:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.15",
+    "hosts": [
+      "3120b2a9-057e-e4eb-4bb9-154983d2c063",
+      "e621f964-5a66-0f89-30e0-67adb2a5ec28"
+    ]
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "node_fivedirections_e5_bits_0515",
+    "start": "2019-05-15 13:14:00",
+    "end": "2019-05-15 13:35:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "fivedirections-2"
+    ]
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "node_fivedirections_e5_copykatz_0509",
+    "start": "2019-05-09 13:25:00",
+    "end": "2019-05-09 13:57:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "fivedirections-2"
+    ]
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "node_fivedirections_e5_dns_0517",
+    "start": "2019-05-17 12:46:00",
+    "end": "2019-05-17 12:57:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "fivedirections-3"
+    ],
+    "section": "10.7",
+    "note": "Heading 12:26 denotes benign setup; attack log is 12:47\u201312:56. Existing 12:46\u201312:57 window retains minute tolerance."
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "node_fivedirections_e5_drakon_0517",
+    "start": "2019-05-17 16:10:00",
+    "end": "2019-05-17 16:16:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "instances": [
+      "fivedirections-1"
+    ]
+  },
+  {
+    "dataset": "tc-e3-fivedirections",
+    "id": "node_fivedirections_e3_firefox_0411",
+    "start": "2018-04-11 09:59:00",
+    "end": "2018-04-11 10:41:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "3.4",
+    "hosts": [
+      "47923ed7-29d4-4e65-aba2-f70a4e74dccd",
+      "d2842312-8456-4c8e-add6-e2295d0939d3",
+      "eb742520-0326-4e78-9768-0cb079cd0f93"
+    ]
+  },
+  {
+    "dataset": "tc-e3-fivedirections",
+    "id": "node_fivedirections_e3_excel_0409",
+    "start": "2018-04-09 15:06:00",
+    "end": "2018-04-09 15:43:00",
+    "timezone": "US/Eastern",
+    "source": "PIDSMaker pinned config attack_to_time_window",
+    "section": "4.4",
+    "hosts": [
+      "47923ed7-29d4-4e65-aba2-f70a4e74dccd",
+      "d2842312-8456-4c8e-add6-e2295d0939d3",
+      "eb742520-0326-4e78-9768-0cb079cd0f93"
+    ]
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "node_Nginx_Backdoor_11",
+    "start": "2018-04-11 15:07:00",
+    "end": "2018-04-11 15:16:00",
+    "timezone": "US/Eastern",
+    "section": "3.8",
+    "source": "TC_Ground_Truth_Report_E3_Update.pdf section 3.8",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ]
+  },
+  {
+    "dataset": "tc-e3-fivedirections",
+    "id": "node_fivedirections_e3_browser_0412",
+    "start": "2018-04-12 11:12:00",
+    "end": "2018-04-12 11:15:00",
+    "timezone": "US/Eastern",
+    "section": "3.10",
+    "source": "TC_Ground_Truth_Report_E3_Update.pdf section 3.10",
+    "hosts": [
+      "47923ed7-29d4-4e65-aba2-f70a4e74dccd",
+      "d2842312-8456-4c8e-add6-e2295d0939d3",
+      "eb742520-0326-4e78-9768-0cb079cd0f93"
+    ]
+  },
+  {
+    "dataset": "tc-e3-trace",
+    "id": "trace_extension_failed",
+    "start": "2018-04-12 13:36:00",
+    "end": "2018-04-12 13:36:00",
+    "timezone": "US/Eastern",
+    "section": "3.12",
+    "source": "TC_Ground_Truth_Report_E3_Update.pdf section 3.12",
+    "hosts": [
+      "3120b2a9-057e-e4eb-4bb9-154983d2c063",
+      "e621f964-5a66-0f89-30e0-67adb2a5ec28"
+    ]
+  },
+  {
+    "dataset": "tc-e3-theia",
+    "id": "theia_tcexec_failed",
+    "start": "2018-04-13 14:04:00",
+    "end": "2018-04-13 14:04:00",
+    "timezone": "US/Eastern",
+    "section": "4.8",
+    "source": "TC_Ground_Truth_Report_E3_Update.pdf section 4.8",
+    "executables": [
+      "tcexec",
+      "/home/admin/Desktop/tcexec"
+    ],
+    "hosts": [
+      "0a00063c-5254-00f0-0d60-000000000070"
+    ]
+  },
+  {
+    "dataset": "tc-e3-trace",
+    "id": "trace_tcexec_failed",
+    "start": "2018-04-13 14:02:00",
+    "end": "2018-04-13 14:02:00",
+    "timezone": "US/Eastern",
+    "section": "4.9",
+    "source": "TC_Ground_Truth_Report_E3_Update.pdf section 4.9",
+    "executables": [
+      "tcexec",
+      "/home/admin/Desktop/tcexec"
+    ],
+    "hosts": [
+      "3120b2a9-057e-e4eb-4bb9-154983d2c063",
+      "e621f964-5a66-0f89-30e0-67adb2a5ec28"
+    ]
+  },
+  {
+    "dataset": "tc-e5-marple",
+    "id": "report_marple_firefox_0509",
+    "start": "2019-05-09 13:57:00",
+    "end": "2019-05-09 14:02:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "marple-1"
+    ],
+    "section": "4.4",
+    "note": "Actual target is ta1-marple-1 at 128.55.12.66; in-memory browser PID 3332. No new command inferred from C2 API calls."
+  },
+  {
+    "dataset": "tc-e5-marple",
+    "id": "report_marple_dns_0517",
+    "start": "2019-05-17 13:00:00",
+    "end": "2019-05-17 13:29:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "marple-1"
+    ],
+    "section": "10.8",
+    "note": "Actual event-log host ta1-marple-1 at 128.55.12.66, browserPID 2768; target table incorrectly lists 128.55.12.77. Benign driver setup overlaps 13:11\u201313:25, so window only supplies group evidence."
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "report_fivedirections_verifier_0516",
+    "start": "2019-05-16 14:24:00",
+    "end": "2019-05-16 16:34:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "fivedirections-1"
+    ],
+    "section": "9.4",
+    "executables": [
+      "C:\\Users\\Admin\\tester.exe",
+      "C:\\Users\\admin\\tester.exe"
+    ],
+    "note": "11:03 is benign filemon setup. Actual attack starts 14:24; tester.exe launched 15:04. Last explicit C2 callback 16:34; persistence beyond this time is described without a precise end."
+  },
+  {
+    "dataset": "tc-e5-theia",
+    "id": "report_theia_binfmt_setup_0514",
+    "start": "2019-05-14 20:31:00",
+    "end": "2019-05-14 20:34:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "theia-3"
+    ],
+    "section": "7.6",
+    "label": "benign",
+    "note": "Report explicitly calls this after-hours setup benign: load_helper/read_scan module copies and insmod, then 20:34 elevate Jenkins install."
+  },
+  {
+    "dataset": "tc-e5-trace",
+    "id": "report_trace2_failed_azazel_0517",
+    "start": "2019-05-17 09:05:00",
+    "end": "2019-05-17 09:30:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "trace-2"
+    ],
+    "section": "10.3",
+    "note": "Report calls the failed activity benign because no C2 connection occurred. Issue #56 requires failed attack executions: retain a mixed attack window and identify only documented attack commands. End is recorded SSH exit.",
+    "actions": [
+      {
+        "programs": [
+          "mv",
+          "/bin/mv",
+          "/usr/bin/mv"
+        ],
+        "arguments": [
+          "libselinux.so",
+          "/lib/libselinux.so"
+        ]
+      }
+    ]
+  },
+  {
+    "dataset": "tc-e5-trace",
+    "id": "report_trace1_failed_azazel_0517",
+    "start": "2019-05-17 09:30:00",
+    "end": "2019-05-17 09:38:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "trace-1"
+    ],
+    "section": "10.3",
+    "note": "Report calls the failed activity benign because no C2 connection occurred. Issue #56 requires failed attack executions: retain a mixed attack window and identify only documented attack commands. End is recorded SSH exit.",
+    "actions": [
+      {
+        "programs": [
+          "mv",
+          "/bin/mv",
+          "/usr/bin/mv"
+        ],
+        "arguments": [
+          "libselinux.so",
+          "/lib/libselinux.so"
+        ]
+      }
+    ]
+  },
+  {
+    "dataset": "tc-e5-cadets",
+    "id": "report_cadets_1_ssh_scp_0510",
+    "start": "2019-05-10 10:44:00",
+    "end": "2019-05-10 15:11:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "cadets-1"
+    ],
+    "section": "5.2",
+    "actions": [
+      {
+        "programs": [
+          "scp",
+          "/usr/bin/scp",
+          "/bin/scp",
+          "scp.exe",
+          "C:\\Windows\\System32\\OpenSSH\\scp.exe"
+        ],
+        "arguments": [
+          "passwd",
+          "admin@128.55.12.149:."
+        ]
+      }
+    ],
+    "note": "Per-target SSH login through final exit; scp command is shown explicitly on target, unlike earlier attacker-side nmap. A documented failed attempt remains included."
+  },
+  {
+    "dataset": "tc-e5-theia",
+    "id": "report_theia_1_ssh_scp_0510",
+    "start": "2019-05-10 13:45:00",
+    "end": "2019-05-10 15:10:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "theia-1"
+    ],
+    "section": "5.2",
+    "actions": [
+      {
+        "programs": [
+          "scp",
+          "/usr/bin/scp",
+          "/bin/scp",
+          "scp.exe",
+          "C:\\Windows\\System32\\OpenSSH\\scp.exe"
+        ],
+        "arguments": [
+          "passwd",
+          "admin@128.55.12.149:."
+        ]
+      }
+    ],
+    "note": "Per-target SSH login through final exit; scp command is shown explicitly on target, unlike earlier attacker-side nmap. A documented failed attempt remains included."
+  },
+  {
+    "dataset": "tc-e5-trace",
+    "id": "report_trace_2_ssh_scp_0510",
+    "start": "2019-05-10 14:22:00",
+    "end": "2019-05-10 15:10:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "trace-2"
+    ],
+    "section": "5.2",
+    "actions": [
+      {
+        "programs": [
+          "scp",
+          "/usr/bin/scp",
+          "/bin/scp",
+          "scp.exe",
+          "C:\\Windows\\System32\\OpenSSH\\scp.exe"
+        ],
+        "arguments": [
+          "passwd",
+          "admin@128.55.12.149:."
+        ]
+      }
+    ],
+    "note": "Per-target SSH login through final exit; scp command is shown explicitly on target, unlike earlier attacker-side nmap. A documented failed attempt remains included."
+  },
+  {
+    "dataset": "tc-e5-fivedirections",
+    "id": "report_fivedirections_3_ssh_scp_0510",
+    "start": "2019-05-10 14:43:00",
+    "end": "2019-05-10 15:05:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E5 red-team report",
+    "instances": [
+      "fivedirections-3"
+    ],
+    "section": "5.2",
+    "actions": [
+      {
+        "programs": [
+          "scp",
+          "/usr/bin/scp",
+          "/bin/scp",
+          "scp.exe",
+          "C:\\Windows\\System32\\OpenSSH\\scp.exe"
+        ],
+        "arguments": [
+          "passwd",
+          "admin@128.55.12.149"
+        ]
+      }
+    ],
+    "note": "Per-target SSH login through final exit; scp command is shown explicitly on target, unlike earlier attacker-side nmap. A documented failed attempt remains included."
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "report_cadets_phishing_2018-04-06_14:40",
+    "start": "2018-04-06 14:40:00",
+    "end": "2018-04-06 14:40:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E3 red-team report",
+    "section": "4.1",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ],
+    "note": "Phishing SMTP delivery on shared mail server: minute-scoped group evidence only, no directly malicious executable claim."
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "report_cadets_phishing_2018-04-06_15:02",
+    "start": "2018-04-06 15:02:00",
+    "end": "2018-04-06 15:02:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E3 red-team report",
+    "section": "4.1",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ],
+    "note": "Phishing SMTP delivery on shared mail server: minute-scoped group evidence only, no directly malicious executable claim."
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "report_cadets_phishing_2018-04-09_13:19",
+    "start": "2018-04-09 13:19:00",
+    "end": "2018-04-09 13:19:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E3 red-team report",
+    "section": "4.1",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ],
+    "note": "Phishing SMTP delivery on shared mail server: minute-scoped group evidence only, no directly malicious executable claim."
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "report_cadets_phishing_2018-04-09_14:19",
+    "start": "2018-04-09 14:19:00",
+    "end": "2018-04-09 14:19:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E3 red-team report",
+    "section": "4.1",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ],
+    "note": "Phishing SMTP delivery on shared mail server: minute-scoped group evidence only, no directly malicious executable claim."
+  },
+  {
+    "dataset": "tc-e3-cadets",
+    "id": "report_cadets_phishing_2018-04-10_12:28",
+    "start": "2018-04-10 12:28:00",
+    "end": "2018-04-10 12:28:00",
+    "timezone": "US/Eastern",
+    "source": "Official DARPA TC E3 red-team report",
+    "section": "4.1",
+    "hosts": [
+      "83c8ed1f-5045-dbcd-b39f-918f0df4f851"
+    ],
+    "note": "Phishing SMTP delivery on shared mail server: minute-scoped group evidence only, no directly malicious executable claim."
+  }
+]

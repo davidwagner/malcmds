@@ -14,37 +14,14 @@ import tarfile
 import tempfile
 import uuid
 from collections import deque
-from datetime import datetime, timezone
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 from time import monotonic
-from zoneinfo import ZoneInfo
 
 import fastavro
 from _ingest import Command, normalize, select_files, windows_split
+from _tc_labels import TCAnnotations
 from isal import igzip as gzip
-
-# Successful attacks described in TC_Ground_Truth_Report_E3_Update.pdf,
-# sections 3 and 4. Dates refer to the attack host's calendar day.
-E3_DAYS = {
-    'cadets': {'2018-04-06', '2018-04-11', '2018-04-12', '2018-04-13'},
-    'fivedirections': {'2018-04-09', '2018-04-11', '2018-04-12', '2018-04-13'},
-    'theia': {'2018-04-10', '2018-04-12', '2018-04-13'},
-    'trace': {'2018-04-10', '2018-04-12', '2018-04-13'},
-}
-# TA51_Final_report_E5.pdf sections 4.3, 4.4, 5.2, 7.3, 8.4, 8.6,
-# 9.3, 9.4, 10.4, 10.6, 10.8 and 10.11. Explicit host instances only.
-E5_DAYS = {
-    'cadets-1': {'2019-05-10', '2019-05-16', '2019-05-17'},
-    'cadets-2': {'2019-05-16', '2019-05-17'},
-    'fivedirections-1': {'2019-05-16', '2019-05-17'},
-    'fivedirections-2': {'2019-05-09', '2019-05-15'},
-    'fivedirections-3': {'2019-05-10', '2019-05-17'},
-    'marple-1': {'2019-05-09', '2019-05-17'},
-    'theia-1': {'2019-05-10', '2019-05-15'},
-    'trace-2': {'2019-05-10', '2019-05-14'},
-}
-EASTERN = ZoneInfo('America/New_York')
 
 
 def identifier(value):
@@ -103,7 +80,7 @@ def avro_records(path):
             yield from avro_blocks(buffered, path.name)
 
 
-def _candidates(path, max_records, windows):
+def _candidates(path, max_records, windows, annotated_objects=()):
     """Scan all source records, retaining subjects and command-bearing events."""
     started = reported = monotonic()
     count = retained = 0
@@ -121,7 +98,10 @@ def _candidates(path, max_records, windows):
                 keep = (event_type == 'EVENT_EXECUTE' or
                         (windows and event_type in {'EVENT_FORK', 'EVENT_EXIT'})) and bool(
                             props.get('cmdLine') or props.get('CommandLine') or
-                            (windows and props.get('ImageFileName')))
+                            (windows and props.get('ImageFileName')) or
+                            (event_type == 'EVENT_EXECUTE' and record.get('predicateObjectPath')))
+                keep = keep or any(identifier(record.get(field)).lower() in annotated_objects
+                                   for field in ('predicateObject', 'predicateObject2'))
             if keep:
                 retained += 1
                 yield outer
@@ -140,19 +120,19 @@ def _candidates(path, max_records, windows):
               file=sys.stderr, flush=True)
 
 
-def _spool(path, destination, max_records, windows):
+def _spool(path, destination, max_records, windows, annotated_objects):
     """Decode one file to a private spool; database state stays in the parent."""
     with destination.open('wb') as stream:
-        for outer in _candidates(path, max_records, windows):
+        for outer in _candidates(path, max_records, windows, annotated_objects):
             pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def _ordered_files(paths, options, temporary, windows):
+def _ordered_files(paths, options, temporary, windows, annotated_objects=()):
     """Prefetch at most one file per worker and consume in original order."""
     workers = min(getattr(options, 'tc_workers', 8), len(paths))
     if workers <= 1 or getattr(options, 'limit', None) is not None:
         for path in paths:
-            yield path, _candidates(path, options.max_records, windows)
+            yield path, _candidates(path, options.max_records, windows, annotated_objects)
         return
     # Spawn avoids inheriting the live DuckDB connection and SQLite state.
     pool = multiprocessing.get_context('spawn').Pool(workers)
@@ -162,7 +142,7 @@ def _ordered_files(paths, options, temporary, windows):
         for index, path in remaining:
             destination = Path(temporary) / f'{index}.pickle'
             pending.append((path, destination, pool.apply_async(
-                _spool, (path, destination, options.max_records, windows))))
+                _spool, (path, destination, options.max_records, windows, annotated_objects))))
             if len(pending) == workers:
                 break
         while pending:
@@ -176,7 +156,7 @@ def _ordered_files(paths, options, temporary, windows):
                 index, path = item
                 destination = Path(temporary) / f'{index}.pickle'
                 pending.append((path, destination, pool.apply_async(
-                    _spool, (path, destination, options.max_records, windows))))
+                    _spool, (path, destination, options.max_records, windows, annotated_objects))))
         pool.close()
         pool.join()
     finally:
@@ -333,23 +313,37 @@ def command_line(text, collector, pgm=None):
     return [(pgm or tokens[0], tokens[1:])]
 
 
-def attack_group(dataset, instance, host, timestamp):
-    """Identify explicitly attacked host/day groups, leaving other records unknown."""
-    if not timestamp:
-        return None
-    zone = timezone.utc if '-e3-' in dataset else EASTERN
-    day = datetime.fromtimestamp(timestamp / 1_000_000_000, zone).date().isoformat()
-    collector = dataset.split('-')[-1]
-    dates = E3_DAYS.get(collector, set()) if '-e3-' in dataset else E5_DAYS.get(instance, set())
-    if day in dates:
-        return f'{dataset}:{host}:attack-day:{day}'
-    return None
+def annotation_files(files, annotations, temporary):
+    """Resolve native object/process relationships before assigning final labels."""
+    saved = []
+    try:
+        for index, (path, source) in enumerate(files):
+            destination = Path(temporary) / f'annotations-{index}.pickle'
+            saved.append((path, destination))
+            with destination.open('wb') as stream:
+                for outer in source:
+                    pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
+                    kind, record = outer['datum']
+                    if not kind.endswith('.Event'):
+                        continue
+                    host = identifier(outer.get('hostId') or record.get('hostId')) or path.name.split('.bin')[0]
+                    scope = f"{host}:{outer.get('sessionNumber', 0)}"
+                    annotations.add_relation(scope, identifier(record.get('subject')),
+                                             record.get('timestampNanos'),
+                                             [identifier(record.get(field)) for field in ('predicateObject', 'predicateObject2')])
+        for path, destination in saved:
+            with destination.open('rb') as stream:
+                yield path, _unspool(stream)
+            destination.unlink()
+    finally:
+        files.close()
 
 
 def records(root, options):
     """Yield process command snapshots and execution records with bounded RAM."""
     collector = root.name.split('-')[-1]
     os_name = 'windows' if collector in {'fivedirections', 'marple'} else 'linux'
+    annotations = TCAnnotations(root)
     paths = [p for p in (root / 'data').iterdir()
              if p.is_file() and (p.name.endswith('.gz') or re.search(r'\.bin(?:\.\d+)?$', p.name))]
     scratch = root.parents[1] / 'tmp'
@@ -361,15 +355,17 @@ def records(root, options):
         try:
             db.execute('PRAGMA journal_mode=OFF')
             db.execute('PRAGMA synchronous=OFF')
-            db.execute('CREATE TABLE subjects (host TEXT, id TEXT, parent TEXT, PRIMARY KEY(host,id)) WITHOUT ROWID')
+            db.execute('CREATE TABLE subjects (host TEXT, id TEXT, parent TEXT, pid TEXT, PRIMARY KEY(host,id)) WITHOUT ROWID')
             db.execute('CREATE TABLE seen (id TEXT PRIMARY KEY) WITHOUT ROWID')
             db.execute('CREATE TABLE creations (scope TEXT, subject TEXT, priority INTEGER, time INTEGER, pgm TEXT, args TEXT, command BLOB, PRIMARY KEY(scope,subject))')
             db.execute('CREATE TABLE executions (scope TEXT, subject TEXT, time INTEGER, pgm TEXT, args TEXT)')
             db.execute('CREATE INDEX execution_creation ON executions (scope,subject,time,pgm,args)')
             paths = select_files(paths, options)
-            files = _ordered_files(paths, options, temporary, os_name == 'windows')
+            files = _ordered_files(paths, options, temporary, os_name == 'windows', set(annotations.objects))
             if collector == 'fivedirections':
                 files = image_files(files, db, temporary, options.limit is not None)
+            if annotations.objects:
+                files = annotation_files(files, annotations, temporary)
             for file_number, (path, source) in enumerate(files, 1):
                 print(f'{root.name}: consuming file {file_number}/{len(paths)}: {path.name}',
                       file=sys.stderr, flush=True)
@@ -388,19 +384,27 @@ def records(root, options):
                     if kind == 'Subject':
                         subject = record_uuid
                         parent = identifier(record.get('parentSubject'))
-                        db.execute('INSERT OR REPLACE INTO subjects VALUES (?,?,?)', (scope, subject, parent))
+                        native_pid = str(record.get('cid', ''))
+                        db.execute('INSERT OR REPLACE INTO subjects VALUES (?,?,?,?)', (scope, subject, parent, native_pid))
                         if record.get('type') != 'SUBJECT_PROCESS':
                             continue
                         text = record.get('cmdLine')
                         timestamp = record.get('startTimestampNanos')
                     else:
                         event_type = record.get('type')
+                        # Other retained events identify annotation relationships,
+                        # not new executions or process-creation snapshots.
+                        if event_type not in {'EVENT_EXECUTE', 'EVENT_FORK', 'EVENT_EXIT'}:
+                            continue
                         text = props.get('cmdLine') or props.get('CommandLine')
                         subject = identifier(record.get('predicateObject') if event_type == 'EVENT_FORK' else record.get('subject'))
-                        found = db.execute('SELECT parent FROM subjects WHERE host=? AND id=?', (scope, subject)).fetchone()
+                        found = db.execute('SELECT parent,pid FROM subjects WHERE host=? AND id=?', (scope, subject)).fetchone()
                         parent = found[0] if found else ''
+                        native_pid = props.get('ProcessID') or (found[1] if found else '')
                         timestamp = record.get('timestampNanos')
                         if collector == 'cadets':
+                            executable = record.get('predicateObjectPath')
+                        elif event_type == 'EVENT_EXECUTE' and not text:
                             executable = record.get('predicateObjectPath')
                     if collector == 'fivedirections':
                         executable = usable_image(props.get('ImageFileName'))
@@ -411,7 +415,13 @@ def records(root, options):
                     if not text and not executable:
                         continue
                     try:
-                        commands = command_line(text, collector, executable)
+                        if not text and executable and collector != 'fivedirections':
+                            valid = (executable.strip() not in {'N/A', '(null)', 'null', '<unknown>'}
+                                     and '\ufffd' not in executable
+                                     and not any(ord(char) < 32 for char in executable))
+                            commands = [(executable, [])] if valid else []
+                        else:
+                            commands = command_line(text, collector, executable)
                     except ValueError:
                         # Unmatched quotes occur in corrupted/truncated cmdLine.
                         continue
@@ -431,10 +441,11 @@ def records(root, options):
                         digest = hashlib.sha256(identity.encode()).hexdigest()
                         if execution and db.execute('INSERT OR IGNORE INTO seen VALUES (?)', (digest,)).rowcount == 0:
                             continue
-                        group = attack_group(root.name, instance, host, timestamp)
+                        label, group = annotations.label(host, restart, subject, timestamp, pgm, args,
+                                                         {'instance': instance, 'pid': native_pid})
                         command = Command(pgm=pgm, args=args,
                                           record_id=f'{host}:{kind}:{record_uuid}:{digest[:16]}',
-                                          label='malicious-group' if group else 'unknown',
+                                          label=label,
                                           group_id=group, session_id=session, os=os_name)
                         if execution:
                             db.execute('INSERT INTO executions VALUES (?,?,?,?,?)',
