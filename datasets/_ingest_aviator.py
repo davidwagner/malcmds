@@ -53,6 +53,16 @@ def records(root, options):
         )}
         members = [member for member in members if member.name in selected]
         workers = getattr(options, "workers", 1)
+        # Audit boot/process state must survive rotated exports. Independent
+        # export workers cannot reconstruct that state across files.
+        if workers > 1:
+            for member in members:
+                binary = archive.extractfile(member)
+                assert binary is not None
+                with binary, zipfile.ZipFile(binary) as zipped:
+                    if any("auditd" in name for name in export_names(zipped)):
+                        workers = 1
+                        break
         if workers <= 1 or options.max_records is not None or options.limit is not None:
             budget = Budget(options)
             for member in members:

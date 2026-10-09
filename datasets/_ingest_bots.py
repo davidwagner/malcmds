@@ -285,13 +285,11 @@ def observations(root, options, processes):
             for line in raw.splitlines():
                 lines.append(line)
                 locations.append(record)
-        for event, fields, argv, number, _ in audit_events(lines):
-            ses = fields.get("ses", "")
-            if ses in ("", "-1", "4294967295"):
-                ses = "parent:" + fields.get("ppid", event)
+        for event, fields, argv, number, _ in audit_events(lines, scope=f"splunk-bots:{host}:{source}"):
+            ses = fields["_session"]
             yield Command(
                 audit_value(fields.get("exe", "")) or argv[0],
                 argv[1:],
                 f"{locations[number - 1]}:audit:{event}",
-                session_id=f"splunk-bots:{host}:{source}:{ses}",
+                session_id=ses,
             )
