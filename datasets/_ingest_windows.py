@@ -13,7 +13,6 @@ import re
 import sys
 import tarfile
 import xml.etree.ElementTree as ET
-import zipfile
 from pathlib import Path
 
 from _ingest import Command, normalize, select_files
@@ -501,18 +500,10 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None, *, e
 
 
 def comiset(root, options):
-    """Read COMISET JSONL directly from each large ZIP member."""
-    budget = Budget(options)
-    for path in select_files(root.glob("*.zip"), options):
-        with zipfile.ZipFile(path) as archive:
-            for name in archive.namelist():
-                if name.endswith(".json"):
-                    with archive.open(name) as stream:
-                        yield from parse_log(
-                            stream, f"{path.name}/{name}", root.name, budget
-                        )
-                    if budget.done:
-                        return
+    """Read observed COMISET launches and their process-level annotations."""
+    from _ingest_comiset import records
+
+    yield from records(root, options)
 
 
 def atlasv2(root, options):

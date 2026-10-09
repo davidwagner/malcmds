@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Download both complete AD-GEN narrative files from the publisher."""
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from _fetch import download
+
+os.chdir(Path(__file__).resolve().parent)
+REVISION = 'add37906f6a7aeeb7c66b6d1fe055c54ae5a3325'
+FILES = [
+    ('LAB/LAB.jsonl', 673616057, '4a8864aa991fcea160fd3eb7a7925abbe022660992c96c5ecb672758a6896310'),
+    ('REAL/REAL.jsonl', 1338847157, '5b8b3f5c41b70aa4120b9d00ca7f7f9eb5aa9864b7c55c2484ace43dd25a0acc'),
+]
+for path, size, checksum in FILES:
+    download(f'https://huggingface.co/datasets/namhop88/AD-GEN/resolve/{REVISION}/{path}',
+             path, size, 'sha256:' + checksum)
