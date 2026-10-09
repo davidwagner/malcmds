@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Fetch only OpTC endpoint data and its published red-team ground truth."""
+"""Fetch OpTC endpoint data, ground truth and pinned published labels."""
 
 import os
+import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 os.chdir(Path(__file__).resolve().parent)
 sys.path.insert(0, str(Path.cwd().parent))
-from _fetch import github  # noqa: E402 -- shared helpers need the parent on sys.path
+from _fetch import (  # noqa: E402 -- shared helpers need the parent on sys.path
+    cached_json,
+    download,
+    github,
+)
 from _google import run_google  # noqa: E402
 
 FOLDER = "1NwaCWRyr_coyPbF2SvScbani5O9MXp7_"
@@ -19,6 +25,33 @@ def selected(name):
 
 
 github("FiveDirections/OpTC-data", selected, ref="5b108604f11f767aa11ea79ff827595f3fad15fd")
+# Published labels describe the original eCAR files fetched below. Pin both
+# releases so a rerun cannot silently change the decisions in COMMANDS.
+LABELS_REV = "64c9f9b2e1a15bf3c2789d89d93dc0724cb0d4fa"
+INRIA_REV = "644f41fb0a955e471f34bed016fb2bfd9c74dc04"
+label_tree = cached_json(
+    f"https://api.github.com/repos/AT03380/optc-labels/git/trees/{LABELS_REV}?recursive=1",
+    f"optc-labels-{LABELS_REV}.json",
+)
+for item in label_tree["tree"]:
+    if item["path"] in {"tasks/tasks.zip", "labels/malicious.zip"}:
+        download(f"https://raw.githubusercontent.com/AT03380/optc-labels/{LABELS_REV}/{item['path']}",
+                 "labels/reviewed/" + Path(item["path"]).name,
+                 item["size"], "git:" + item["sha"])
+inria_api = "https://gitlab.inria.fr/api/v4/projects/fmajorcz%2Fa_new_hope_for_darpa_optc/repository"
+page = 1
+while True:
+    inventory = cached_json(
+        f"{inria_api}/tree?ref={INRIA_REV}&path=labelling%2Fhost%2Fground_truths&per_page=100&page={page}",
+        f"optc-inria-{INRIA_REV}-{page}.json",
+    )
+    for item in inventory:
+        if re.fullmatch(r"ground_truth_sc[123]_(?:new\.csv|evts_[^.]+\.json\.gz)", item["name"]):
+            download(f"{inria_api}/files/{quote(item['path'], safe='')}/raw?ref={INRIA_REV}",
+                     "labels/inria/original/" + item["name"], checksum="git:" + item["id"])
+    if len(inventory) < 100:
+        break
+    page += 1
 if os.environ.get("FETCH_LIST") == "1":
     print(
         f"ecar/ (recursive: benign, evaluation, short)\t?\thttps://drive.google.com/drive/folders/{FOLDER}"

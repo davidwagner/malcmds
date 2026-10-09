@@ -1,17 +1,24 @@
-"""Stream OpTC eCAR command observations and apply report host/time groups."""
+"""Stream OpTC commands and apply reviewed, published and host/time labels."""
 import json
 import multiprocessing
 import re
 import tempfile
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import lru_cache
 from multiprocessing.pool import AsyncResult
 from pathlib import Path, PureWindowsPath
-from zoneinfo import ZoneInfo
 
 import pyarrow as pa
 from _ingest import SCHEMA, Command, command_table, normalize, select_files
+from _optc_labels import (
+    EASTERN,
+    bound_intervals,
+    host_name,
+    load_labels,
+    optc_command_label,
+    timestamp,
+)
 from isal import igzip as gzip
 
 # The report omits a zone. Interpret its clocks in the observed eCAR -04:00
@@ -38,23 +45,12 @@ for _host in (10, 69, 203, 358, 618, 851):
     ATTACK_WINDOWS.append((f'sysclient{_host:04}', '2019-09-24T15:42:36', '2019-09-25T09:00:00', 'empire-overnight'))
 
 
-EASTERN = ZoneInfo('America/New_York')
 HOST_WINDOWS: dict[str, list[tuple[datetime, datetime, str]]] = defaultdict(list)
 for _machine, _start, _end, _attack in ATTACK_WINDOWS:
     HOST_WINDOWS[_machine].append((
         datetime.fromisoformat(_start), datetime.fromisoformat(_end),
         f'optc:{_attack}:{_machine}:{_start}/{_end}:America_New_York',
     ))
-
-
-def timestamp(value):
-    """Read actual ISO-8601 timestamps and the numeric schema's milliseconds."""
-    if isinstance(value, (int, float)) or isinstance(value, str) and value.isdecimal():
-        return datetime.fromtimestamp(float(value) / 1000, timezone.utc)
-    if not value:
-        return None
-    result = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    return result.replace(tzinfo=EASTERN) if result.tzinfo is None else result
 
 
 def label_for(host, time, benign):
@@ -126,16 +122,18 @@ def records(root, options):
     paths = select_files((root / 'ecar').rglob('*.json.gz'), options)
     if not paths:
         raise FileNotFoundError(f'No completed OpTC eCAR gzip files under {root}')
+    lookup = load_labels(root)
+    bound_intervals(paths, lookup, options.max_records)
     workers = min(getattr(options, 'workers', 1), len(paths))
     # Whole-file workers cannot stop when the consumer reaches a command limit.
     if workers > 1 and getattr(options, 'limit', None) is None:
-        yield from parallel_tables(root, paths, options, workers)
+        yield from parallel_tables(root, paths, options, workers, lookup)
         return
     for path in paths:
-        yield from file_commands(root, path, options.max_records)
+        yield from file_commands(root, path, options.max_records, lookup)
 
 
-def parallel_tables(root, paths, options, workers):
+def parallel_tables(root, paths, options, workers, lookup):
     """Yield every file's command batches, parsing up to `workers` files at once.
 
     Each worker writes its file's batches to a temporary Arrow IPC file. At most
@@ -150,7 +148,7 @@ def parallel_tables(root, paths, options, workers):
         pending: deque[AsyncResult] = deque()
         for index, path in enumerate(paths):
             output = Path(tmp) / f'{index}.arrow'
-            task = (root, path, options.max_records, options.batch_size, output)
+            task = (root, path, options.max_records, options.batch_size, output, lookup)
             pending.append(pool.apply_async(write_file_tables, task))
             if len(pending) >= workers:
                 yield from read_tables(pending.popleft().get())
@@ -158,12 +156,12 @@ def parallel_tables(root, paths, options, workers):
             yield from read_tables(pending.popleft().get())
 
 
-def write_file_tables(root, path, max_records, batch_size, output):
+def write_file_tables(root, path, max_records, batch_size, output, lookup):
     """Write one gzip file's commands to `output` as Arrow batches; return `output`."""
     options = pa.ipc.IpcWriteOptions(compression='lz4')
     with pa.OSFile(str(output), 'wb') as sink, pa.ipc.new_stream(sink, SCHEMA, options=options) as writer:
         batch = []
-        for command in file_commands(root, path, max_records):
+        for command in file_commands(root, path, max_records, lookup):
             batch.append(command)
             if len(batch) >= batch_size:
                 writer.write_table(command_table(batch, root.name))
@@ -181,7 +179,7 @@ def read_tables(path):
     path.unlink()
 
 
-def file_commands(root, path, max_records):
+def file_commands(root, path, max_records, lookup):
     """Yield the commands in one eCAR gzip file, reading at most max_records lines."""
     relative = path.relative_to(root)
     benign = 'benign' in relative.parts
@@ -201,13 +199,17 @@ def file_commands(root, path, max_records):
             if not pairs:
                 continue
             host = str(event.get('hostname') or relative.parent.name).lower()
-            machine = host.split('.')[0]
+            machine = host_name(host)
             time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
             label, group = label_for(machine, time, benign)
             props = event.get('properties') or {}
             login = usable_id(props.get('logon_id') or props.get('logon_guid') or props.get('session_id'))
             target = usable_id(event.get('objectID'))
             actor = usable_id(event.get('actorID'))
+            pid = event.get('pid') if event.get('action') == 'CREATE' or actor == target else None
+            label, group = optc_command_label(
+                machine, target, event.get('id'), pid, time, lookup, (label, group),
+            )
             principal = props.get('user') or event.get('principal') or props.get('sid') or 'unknown-user'
             if login:
                 session = f'optc:{host}:login:{login}'

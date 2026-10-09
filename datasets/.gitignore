@@ -4,3 +4,6 @@
 !/*/README.md
 /__pycache__/
 !/*/ingest
+
+# Small immutable source excerpts for offline ingestion regression tests.
+!/fixtures/optc/

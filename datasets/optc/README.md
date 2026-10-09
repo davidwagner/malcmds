@@ -46,16 +46,14 @@ so the command's argv[0] supplies `pgm`. Device paths are preserved when used.
 - `record_id`: event `id` UUID plus normalized-command index; if UUID is missing,
   relative gzip path plus one-based line number and command index. Duplicate
   source IDs across files collapse; different event UUIDs remain separate.
-- `label`: `benign` for the publisher's benign partition. Other records on a
-  report-named host during an explicitly listed attack interval are
-  `malicious-group`; other evaluation/short records are `unknown`. Intervals
-  span the first and last listed activities or explicit shutdowns in the
-  day 1/2/3 logs of `OpTCRedTeamGroundTruth.pdf`, including overnight agents.
-  The report omits a timezone; comparing its clocks using the observed eCAR
-  `-04:00` offset (America/New_York on these dates) is an inference. The isolated
-  day-three WMI check-in covers its reported second only. An interval's end is
-  the last supported observation, not a claim that all persistence ended then.
-  `_ingest_optc.ATTACK_WINDOWS` lists every included host and interval.
+- `label`: reviewed event decisions from Nikulshin and Talhi take precedence.
+  Reviewed benign process corrections and the ordinary benign launch of an
+  event-only process follow. Remaining valid process or exact event matches,
+  then Inria host/PID lifetime matches, produce `malicious`. Commands with no
+  individual match retain the benign partition, reported host/time
+  `malicious-group`, or `unknown` fallback. A PROCESS CREATE uses the child's
+  `objectID`, not its parent's `actorID`. OPEN observations do not borrow the
+  accessor's PID label for the target's command.
 - `group_id`: `optc:<attack>:<host>:<start>/<end>:America_New_York` for attack
   intervals, otherwise NULL. These label the host/time group, not every process
   in that interval as individually malicious.
@@ -74,3 +72,61 @@ scanning 100,000 records per file. These produced 10,152 benign, 1,396 evaluatio
 and 21,870 short-stream commands. Repeated CLI ingestion preserved identical
 rows. Real OPEN records also verified that a target `svchost.exe` command keeps
 its arguments when `image_path` names the accessor `MsMpEng.exe`.
+
+### Published process and event labels
+
+`./fetch` downloads two pinned releases before fetching eCAR data:
+
+- [Nikulshin and Talhi](https://github.com/AT03380/optc-labels), revision
+  `64c9f9b2e1a15bf3c2789d89d93dc0724cb0d4fa`: reviewed `tasks/tasks.zip`
+  and generated `labels/malicious.zip`, saved under `labels/reviewed/`.
+- [Majorczyk, Pilastre and Dijoud](https://gitlab.inria.fr/fmajorcz/a_new_hope_for_darpa_optc/-/tree/main/labelling/host/ground_truths),
+  revision `644f41fb0a955e471f34bed016fb2bfd9c74dc04`: the three
+  `ground_truth_sc*_new.csv` files and per-host event exports, saved under
+  `labels/inria/original/`. These describe the original eCAR data fetched here;
+  corrected-data labels are excluded because they refer to a different version.
+
+The reviewed release distinguishes an entire malicious process from a malicious
+individual event of an otherwise benign process. For example, its RPCSS network
+connection is malicious, while the service's ordinary startup remains benign.
+FLOW events do not produce COMMANDS rows. An actual execution event with a valid
+reviewed malicious decision still receives that decision. Invalid correlations
+are excluded from the generated malicious export; they do not veto independent
+reviewed or Inria evidence. Valid explicit benign decisions take precedence over
+inferred positive evidence. The implementation reads the tasks directly, following
+[the label definitions](https://github.com/AT03380/optc-labels/blob/main/supplementary/labels.md)
+and [errata](https://github.com/AT03380/optc-labels/blob/main/supplementary/errata.md).
+
+PID intervals use a preliminary pass over the selected source records to find
+later process creations and explicit host starts/reboots. A new creation closes
+the previous lifetime, including an `Infinity` interval, before the new process
+can inherit its label. This pass also prevents source-file order or worker count
+from changing labels. CSV starts are rounded to seconds; the first creation in
+that second belongs to the interval, and subsequent creations end it. Known
+reboots also end intervals. Missing telemetry cannot establish an unobserved
+reuse or reboot. `--max-records` bounds this preliminary pass per file;
+`--limit` limits stored commands but still requires the lifetime pass.
+
+All lookups are temporary. COMMANDS columns and database tables are unchanged,
+and `group_id` is NULL for every label except `malicious-group`. Installations
+without label artifacts retain the previous fallback labels; rerun `./fetch`
+to install the published labels. A generated malicious export without its
+reviewed tasks fails explicitly because invalid correlations cannot be removed.
+
+Offline tests contain unchanged published excerpts for encoded PowerShell,
+RPCSS startup and its FLOW task, an invalid correlation also present in the
+positive export, an explicit benign correction, and an Inria-only execution.
+They run through the real database writer and compare serial and parallel rows.
+Additional constructed timelines check PID reuse within one second, reboots,
+host normalization and the distinction between accessor and target PIDs.
+
+Validation with both complete `23Sep19-red/AIA-201-225` streams and all pinned
+label files retained 1,643,389 command observations. Before this change, 48,746
+were `malicious-group` and 1,594,643 were `unknown`. With the published labels,
+3,038 are `malicious`, 9,254 are `benign`, 38,531 remain `malicious-group`, and
+1,592,566 remain `unknown`. Of the 3,038 positive observations, 123 were previously
+unknown. These are observation counts: measuring distinct recovered executions
+requires the separate duplicate-execution correction. This validation does not
+claim full-dataset execution totals. The offline regression tests run in
+`.github/workflows/optc-labels-tests.yml`, including checks that dependency
+changes preserve compressed Arrow streams, database types, and final labels.

