@@ -32,13 +32,14 @@ def test_native_avro_ingestion_and_idempotence(name, tmp_path):
         before = connection.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
         assert len(before) == stats['stored']
         assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='' OR session_id=''").fetchall()[0][0] == 0
-        assert connection.execute("SELECT count(*) FROM COMMANDS WHERE contains(record_id, ':Subject:') AND len(args)=0").fetchall()[0][0] == 0
         assert connection.execute('SELECT count(DISTINCT record_id) FROM COMMANDS').fetchall()[0][0] == len(before)
         assert connection.execute("SELECT count(*) FROM COMMANDS WHERE (label='malicious-group') <> (group_id IS NOT NULL)").fetchall()[0][0] == 0
         assert connection.execute("SELECT count(*) FROM COMMANDS WHERE starts_with(pgm, 'sshd:') OR pgm='N/A'").fetchall()[0][0] == 0
         expected_os = 'windows' if name.endswith(('fivedirections', 'marple')) else 'linux'
         assert connection.execute('SELECT DISTINCT os FROM COMMANDS').fetchall() == [(expected_os,)]
         if name == 'tc-e3-trace':
+            assert connection.execute("SELECT pgm, args FROM COMMANDS WHERE contains(record_id, '5325f54a-77b4-2309-3aa8-2df747293484')").fetchall() == [('groups', [])], 'TRACE Subject argv[0] must survive without arguments'
+            assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='-bash' AND len(args)=0 AND contains(record_id, ':Subject:')").fetchone()[0] > 0
             assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='sh' AND args[1]='-c' AND len(args)=2 AND contains(args[2], 'run-parts')").fetchall()[0][0] > 0
         if name == 'tc-e5-theia':
             assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='sh' AND args[1]='-c' AND len(args)=2 AND contains(args[2], 'run-parts')").fetchall()[0][0] > 0
