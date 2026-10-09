@@ -1,6 +1,5 @@
 """Execution selection checked with real source records and DuckDB writes."""
 import gzip
-import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
