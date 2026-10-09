@@ -106,7 +106,7 @@ def ingest(root, workers, *options):
 
 @pytest.mark.parametrize('collector', ['fivedirections', 'theia'])
 def test_parallel_preserves_order_parents_and_deduplication(tmp_path, collector):
-    """File workers preserve cross-file parents, scope, and first-observation IDs."""
+    """File workers preserve scoped execution IDs and each execution's parent."""
     root = make_root(tmp_path, collector)
     write_avro(root / 'data' / 'a.bin', [
         observation('Other', 'ignored'),
@@ -133,21 +133,32 @@ def test_parallel_preserves_order_parents_and_deduplication(tmp_path, collector)
     serial, _ = ingest(root, 1)
     parallel, progress = ingest(root, 2)
     assert parallel == serial
+    # Different EXECUTE UUIDs remain separate even when argv and time match.
+    # The repeated archive members contain the same UUIDs and add no rows.
     expected = {
-        'created': 'host:0:parent:old', 'before': 'host:0:parent:old',
-        'after': 'host:0:parent:new', 'restart': 'host:1:parent:restart',
-        'other-host': 'other:0:parent:child',
-        'other-session': 'host:2:parent:child', 'archive': 'host:0:parent:new',
+        'host:Event:duplicate': ('created', 'host:0:parent:old'),
+        'host:Event:before': ('before', 'host:0:parent:old'),
+        'host:Event:archive-duplicate': ('before', 'host:0:parent:new'),
+        'host:Event:after': ('after', 'host:0:parent:new'),
+        'host:Event:restart': ('restart', 'host:1:parent:restart'),
+        'other:Event:other-host': ('other-host', 'other:0:parent:child'),
+        'host:Event:other-session': ('other-session', 'host:2:parent:child'),
+        'host:Event:archive': ('archive', 'host:0:parent:new'),
     }
     if collector == 'fivedirections':
-        expected.update(fork='host:0:parent:new', exit='host:0:parent:new')
-    assert {row[2][0]: row[7] for row in parallel} == {
-        command: f'{root.name}:{session}' for command, session in expected.items()
+        # FORK supplies the process-creation row; Subject and EXIT are snapshots
+        # of that same process. The explicit EXECUTE still has its own row.
+        expected['host:Event:fork'] = ('fork', 'host:0:parent:new')
+    assert {row[4].rsplit(':', 1)[0]: (row[2][0], row[7]) for row in parallel} == {
+        identity: (command, f'{root.name}:{session}')
+        for identity, (command, session) in expected.items()
     }
     assert len(parallel) == len(expected)
     assert all(row[8] == ('windows' if collector == 'fivedirections' else 'linux')
                for row in parallel)
-    assert next(row[4] for row in parallel if row[2] == ['created']).startswith('host:Subject:child:')
+    # For Theia, the Subject's creation argv/time matches the explicit EXECUTE,
+    # so that execution replaces the creation snapshot rather than adding a row.
+    assert next(row[4] for row in parallel if row[2] == ['created']).startswith('host:Event:duplicate:')
     for name in ('a.bin', 'b.bin.gz', 'c.tar.gz'):
         assert any(name in line and 'finished scanning' in line
                    and 'retained' in line for line in progress.splitlines())
