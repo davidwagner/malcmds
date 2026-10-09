@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 import html
 import io
 import json
@@ -13,6 +11,8 @@ import re
 import sys
 import tarfile
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from _ingest import Command, normalize, select_files
