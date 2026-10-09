@@ -133,6 +133,36 @@ def ps_commands(raw, record, session):
         )
 
 
+
+def audit_cmdline_argv(text: str) -> list[str]:
+    """Read historical osquery's quoted-literal/unquoted-audit-hex arguments.
+
+    osquery 3.2.6 process_events.cpp joins the kernel's audit arguments without
+    decoding them. Retain quote information until each argument is decoded.
+    """
+    words = []
+    for match in re.finditer(r'"([^"]*)"|([^\s]+)', text):
+        literal, raw = match.groups()
+        words.append(literal if literal is not None else audit_value(raw))
+    return words
+
+
+def osquery_commands(obj, host, record, index):
+    """Convert an osquery envelope with its source-specific argv serialization."""
+    fields = json_fields(obj)
+    fields["host"] = host
+    fields["ParentProcessId"] = fields.get("parent", "")
+    text = fields.get("cmdline")
+    if not isinstance(text, str) or not text.strip():
+        return
+    argv = None
+    if obj.get("name") == "pack_process-monitoring_proc_events":
+        argv = audit_cmdline_argv(text)
+    for command in event_commands(fields, "splunk-bots", record, index, argv=argv):
+        command.session_id = f"splunk-bots:{host}:uid:{fields.get('uid', '?')}:parent:{fields.get('parent') or fields.get('auid', '?')}"
+        yield command
+
+
 def records(root, options):
     """Read all BOTS sourcetypes that contain observed command arguments."""
     csv.field_size_limit(100_000_000)
@@ -190,18 +220,7 @@ def records(root, options):
                             break
                         obj, position = decoder.raw_decode(raw, position)
                         index += 1
-                        fields = json_fields(obj)
-                        fields["host"] = host
-                        fields["ParentProcessId"] = fields.get("parent", "")
-                        if (
-                            isinstance(fields.get("cmdline"), str)
-                            and fields["cmdline"].strip()
-                        ):
-                            for command in event_commands(
-                                fields, "splunk-bots", record, index
-                            ):
-                                command.session_id = f"splunk-bots:{host}:uid:{fields.get('uid', '?')}:parent:{fields.get('parent') or fields.get('auid', '?')}"
-                                yield command
+                        yield from osquery_commands(obj, host, record, index)
                 elif kind == "winhostmon":
                     fields = text_fields(raw)
                     for key in fields:
