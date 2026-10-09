@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import html
 import io
 import json
@@ -148,6 +150,32 @@ def value(fields, *names):
     return ""
 
 
+def osquery_process_session_id(dataset, source, host, session, time, boot=None):
+    """Scope an osquery native session by source, host and boot or UTC day."""
+    return f"{dataset}:{source}:{host}:{'boot:' + str(boot) if boot else 'day:' + time}:{session}"
+
+
+def _osquery_time(fields):
+    for name in ("time", "unixTime", "calendarTime"):
+        raw = fields.get(name)
+        if raw in (None, ""):
+            continue
+        try:
+            if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", str(raw)):
+                stamp = datetime.fromtimestamp(float(raw), timezone.utc)
+            else:
+                try:
+                    stamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                except ValueError:
+                    stamp = parsedate_to_datetime(str(raw))
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+            return stamp.astimezone(timezone.utc).date().isoformat()
+        except (ValueError, TypeError, OverflowError, OSError):
+            continue
+    return ""
+
+
 def event_commands(fields, dataset, source, number, label="unknown", group=None, *, argv=None):
     """Convert recorded command lines while retaining their observed executable."""
     fields = dict(fields)
@@ -235,6 +263,19 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None,
             fields, "UtcTime", "TimeCreated", "event_original_time", "@timestamp"
         )[:10]
         session = f"{dataset}:{scope}:{host}:{date}:{login}"
+    if fields.get("_osquery_process"):
+        host = value(fields, "hostIdentifier") or f"source:{source}"
+        day = _osquery_time(fields)
+        boot = value(fields, "boot_id", "boot_uuid")
+        native = value(fields, "session_id")
+        if native and (day or boot):
+            identity = f"session:{native}"
+        else:
+            pid = value(fields, "pid")
+            lifetime = value(fields, "pidversion", "start_time", "startTime")
+            identity = (f"process:{pid}:{lifetime}" if pid and lifetime
+                        else f"record:{number}")
+        session = osquery_process_session_id(dataset, source, host, identity, day, boot)
     eventid = value(
         fields, "_id", "EventRecordID", "RecordNumber", "record_number"
     ) or str(number)
@@ -260,6 +301,11 @@ def json_fields(obj):
     if not isinstance(obj, dict):
         return {}
     fields = dict(obj.get("_source", obj))
+    columns = fields.get("columns")
+    if (isinstance(columns, dict) and "cmdline" in columns
+            and ("path" in columns or "pid" in columns)
+            and ("hostIdentifier" in fields or "name" in fields)):
+        fields["_osquery_process"] = True
     if obj.get("_id"):
         fields["_id"] = str(obj.get("_index", "")) + ":" + str(obj["_id"])
     for name in ["EventData", "event_data", "columns", "event", "data"]:
