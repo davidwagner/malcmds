@@ -175,7 +175,12 @@ def audit_events(lines, labels=None):
                                 if re.fullmatch(r"a\d+", key):
                                     entry[1][int(key[1:])] = audit_value(value)
                     if kind == "PROCTITLE":
-                        entry[2] = audit_value(fields.get("proctitle", ""))
+                        if "/" in event:
+                            # ausearch -i has already decoded the trailing title.
+                            title = re.search(r"\bproctitle=(.*)$", text)
+                            entry[2] = title[1].rstrip() if title else ""
+                        else:
+                            entry[2] = audit_value(fields.get("proctitle", ""))
                     if kind == "USER_CMD":
                         entry[3] = audit_value(fields.get("cmd", ""))
                 result = complete_audit_event(event, entry)
