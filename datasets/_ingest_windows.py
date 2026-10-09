@@ -241,6 +241,9 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None,
     record = f"{source}:{eventid}:{number}"
     pairs = [(pgm or argv[0], argv[1:])] if argv else normalize(text, os=osname, pgm=pgm)
     for index, (program, args) in enumerate(pairs):
+        if dataset == "atlasv2":
+            from _ingest_atlas_labels import launch_label
+            label = launch_label(fields, source, program, args, label)
         yield Command(
             program,
             args,
