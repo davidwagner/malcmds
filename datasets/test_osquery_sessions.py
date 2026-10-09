@@ -10,6 +10,7 @@ from test_ingest_performance import XML_READER, ingest
 def test_native_osquery_hosts_dates_and_sessions(tmp_path):
     """Seven publisher records give four host/date/session groups, in either order."""
     source = (Path(__file__).parent / "fixtures/osquery-keychains.jsonl").read_text()
+    previous = None
     for index, lines in enumerate([source.splitlines(), list(reversed(source.splitlines()))]):
         root = tmp_path / str(index) / "splunkad"
         root.mkdir(parents=True)
