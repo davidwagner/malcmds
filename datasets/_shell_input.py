@@ -12,7 +12,7 @@ def syntax_result(text):
     try:
         result = subprocess.run(
             ["/bin/bash", "--noprofile", "--norc", "-n"], input=text,
-            text=True, capture_output=True, timeout=2,
+            text=True, capture_output=True, timeout=2, check=False,
             env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
         )
     except (subprocess.TimeoutExpired, ValueError):
