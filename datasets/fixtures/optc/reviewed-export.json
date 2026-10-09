@@ -1,0 +1,23 @@
+[
+  {
+    "action": "CREATE",
+    "actorID": "3081546e-baf9-4047-b94b-765750e63b31",
+    "hostname": "SysClient0051.systemia.com",
+    "id": "e1d1e64f-b418-45e6-bc3a-fea857a367f1",
+    "object": "PROCESS",
+    "objectID": "3360bc38-784d-422d-9899-779f0e558da9",
+    "pid": 5664,
+    "ppid": 5032,
+    "principal": "SYSTEMIACOM\\dcoombes",
+    "properties": {
+      "acuity_level": "1",
+      "command_line": "\"\\\\?\\C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe\" -marionette -profile C:\\Users\\dcoombes\\AppData\\Local\\Temp\\rust_mozprofile.53pdfRlWrpEI",
+      "image_path": "\\\\?\\C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe",
+      "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\conhost.exe",
+      "sid": "S-1-5-21-4190936083-3304963419-1584388968-3196",
+      "user": "SYSTEMIACOM\\dcoombes"
+    },
+    "tid": -1,
+    "timestamp": "2019-09-25T14:21:31.546-04:00"
+  }
+]

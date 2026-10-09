@@ -1,0 +1,21 @@
+{
+  "action": "CREATE",
+  "actorID": "eb732cb7-2525-4fab-9d75-56cb915ae83b",
+  "hostname": "SysClient0201.systemia.com",
+  "id": "e0b002a2-b54e-4bb5-8031-3f5d98764864",
+  "object": "PROCESS",
+  "objectID": "c7a9f715-3221-428a-b4d8-2144e8b6f88d",
+  "pid": 5320,
+  "ppid": 2540,
+  "principal": "SYSTEMIACOM\\zleazer",
+  "properties": {
+    "acuity_level": "1",
+    "command_line": "\\??\\C:\\Windows\\system32\\conhost.exe 0xffffffff -ForceV1",
+    "image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\conhost.exe",
+    "parent_image_path": "\\Device\\HarddiskVolume1\\Windows\\system32\\schtasks.exe",
+    "sid": "S-1-5-21-4190936083-3304963419-1584388968-3346",
+    "user": "SYSTEMIACOM\\zleazer"
+  },
+  "tid": -1,
+  "timestamp": "2019-09-23T11:25:47.860-04:00"
+}

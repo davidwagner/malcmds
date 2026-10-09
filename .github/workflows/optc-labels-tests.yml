@@ -1,0 +1,32 @@
+name: OpTC label ingestion
+
+on:
+  pull_request:
+    paths:
+      - 'datasets/**'
+      - '.github/workflows/optc-labels-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'datasets/**'
+      - '.github/workflows/optc-labels-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ingestion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r datasets/ingest-requirements.txt pytest
+      - name: Verify published labels and Arrow/DuckDB ingestion assumptions
+        run: >-
+          python -m pytest -q
+          datasets/test_optc_labels.py
+          datasets/test_ingest_optc.py
+          datasets/test_ingest_optc_parallel.py
+          datasets/test_ingest_optc_speed.py
