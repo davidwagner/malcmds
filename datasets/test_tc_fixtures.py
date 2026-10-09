@@ -38,6 +38,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
     """Flattened TRACE text has no encoding marker; numeric words stay literal."""
     import copy
     import gzip
+
     import fastavro
     from test_ingest_performance import ingest
 
@@ -72,6 +73,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
 def test_raw_audit_hex_argument_still_decodes(tmp_path):
     """Raw audit's explicit unquoted field encoding remains independent of TRACE."""
     import tarfile
+
     from test_ingest_lade_otrf import add_member, zipped
     from test_ingest_performance import ingest
 
@@ -118,6 +120,7 @@ def test_fivedirections_process_images_and_prefixes(tmp_path):
     import copy
     import gzip
     import uuid
+
     import fastavro
     from test_ingest_performance import ingest
 
@@ -183,6 +186,7 @@ def test_tc_creation_snapshots_and_distinct_execs(tmp_path):
     """FORK/Subject/EXIT copies collapse; separate native EXECUTE IDs survive."""
     import copy
     import gzip
+
     import fastavro
     from test_ingest_performance import ingest
 

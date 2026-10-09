@@ -5,7 +5,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import duckdb
-
 from _ingest import Command, _initialize, _insert, command_table
 from _ingest_misc import audit_events
 from _ingest_optc import file_commands
