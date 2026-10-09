@@ -8,7 +8,8 @@ import zipfile
 from pathlib import Path
 
 import duckdb
-from test_ingest_aviator_parallel import archive_root, ingest as aviator_ingest
+from test_ingest_aviator_parallel import archive_root
+from test_ingest_aviator_parallel import ingest as aviator_ingest
 from test_ingest_performance import ingest
 
 FIXTURES = Path(__file__).parent / "fixtures"
