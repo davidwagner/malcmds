@@ -60,6 +60,7 @@ def test_sudo_serialization_roundtrip_storage(tmp_path):
         (r'''echo 'a\'b \\c' '' #011''', ['echo', "a'b \\c", '', '\t']),
         ("echo 'unfinished script", ['echo', 'unfinished script']),
         (r'echo a\q', ['echo', r'a\q']),
+        ('echo #07 #0177', ['echo', '\x07', '\x7f']),
         ('', []),
     ]
     commands = []

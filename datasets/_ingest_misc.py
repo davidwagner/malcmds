@@ -59,10 +59,13 @@ def sudo_command_argv(text: str) -> list[str]:
             started = True
             index += 2
             continue
-        if char == "#" and re.fullmatch(r"0[0-7]{2}", text[index + 1:index + 4]):
-            word.append(chr(int(text[index + 1:index + 4], 8)))
+        # sudo's lbuf.c escape() writes #0 plus one to three octal digits:
+        # bell is #07, tab #011, and DEL #0177.
+        control = re.match(r"#0([0-7]{1,3})", text[index:]) if char == "#" else None
+        if control:
+            word.append(chr(int(control[1], 8)))
             started = True
-            index += 4
+            index += len(control[0])
             continue
         if char == "'":
             quoted = not quoted
