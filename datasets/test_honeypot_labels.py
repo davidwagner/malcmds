@@ -30,7 +30,7 @@ def test_published_honeypot_commands(tmp_path, dataset):
     with duckdb.connect(str(database)) as con:
         rows = con.execute('SELECT pgm,args,label,group_id,session_id,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
     assert rows and all(r[2]=='malicious' and r[3] is None and r[4] for r in rows)
-    assert set(r[5] for r in rows if r[5] is not None) == set(inputs)
+    assert {r[5] for r in rows if r[5] is not None} == set(inputs)
     assert any(';' in r[6] for r in rows), 'Bash parser lost multi-command input syntax'
     if dataset == 'cyberlab':
         assert sum(r[0]=='system' for r in rows) == 1, 'A failed handler echo must not duplicate original input'
