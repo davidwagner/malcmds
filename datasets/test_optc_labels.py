@@ -15,10 +15,11 @@ from pathlib import Path
 
 import duckdb
 import pytest
+
+from _ingest import COLUMNS
 from test_ingest_optc_parallel import ingest, rows, write_stream
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'optc'
-COLUMNS = ['pgm', 'pgm_base', 'args', 'dataset', 'record_id', 'label', 'group_id', 'session_id', 'os']
 
 
 def fixture(name):
@@ -44,7 +45,7 @@ def install_labels(root, tasks, exported=(), inria=(), intervals=()):
 def labels(database):
     """Read final labels while enforcing the existing persistent schema."""
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert [row[0] for row in connection.execute('DESCRIBE COMMANDS').fetchall()] == COLUMNS, (
+        assert [row[0] for row in connection.execute('DESCRIBE COMMANDS').fetchall()] == list(COLUMNS), (
             'OpTC labels must use existing COMMANDS columns; no evidence columns are needed')
         assert connection.execute('SHOW TABLES').fetchall() == [('COMMANDS',), ('INGESTED',)]
         return {record.removesuffix(':0'): (label, group) for record, label, group in
