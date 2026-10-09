@@ -32,3 +32,57 @@ def test_trace_executable_only_subjects(tmp_path):
     subprocess.run(argv, capture_output=True, text=True, check=True)
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+
+
+def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
+    """Flattened TRACE text has no encoding marker; numeric words stay literal."""
+    import copy
+    import gzip
+    import fastavro
+    from test_ingest_performance import ingest
+
+    root = tmp_path / 'tc-e3-trace'
+    (root / 'data').mkdir(parents=True)
+    with gzip.open(HERE / 'fixtures/trace-no-args.bin.gz', 'rb') as stream:
+        reader = fastavro.reader(stream, return_record_name=True)
+        native = list(reader)
+        schema = reader.writer_schema
+    # Independently constructed command variants retain native Subject layout.
+    texts = ['gdb --ex set backtrace limit 2000', 'printf "%s" "2020" 612062',
+             'printf\0%s\0a b\0']
+    records = []
+    for index, text in enumerate(texts):
+        row = copy.deepcopy(native[0])
+        row['datum'][1]['cmdLine'] = text
+        row['datum'][1]['startTimestampNanos'] += index
+        records.append(row)
+    with (root / 'data/literals.bin').open('wb') as stream:
+        fastavro.writer(stream, schema, records)
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(root, database, 'from _ingest_tc import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        rows = con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall()
+        assert rows == [('gdb', ['--ex', 'set', 'backtrace', 'limit', '2000']),
+                        ('printf', ['%s', '2020', '612062']), ('printf', ['%s', 'a b'])], 'TRACE text must never infer hex encoding from token spelling'
+        assert all('\0' not in arg for _, args in rows for arg in args)
+
+
+def test_raw_audit_hex_argument_still_decodes(tmp_path):
+    """Raw audit's explicit unquoted field encoding remains independent of TRACE."""
+    import tarfile
+    from test_ingest_lade_otrf import add_member, zipped
+    from test_ingest_performance import ingest
+
+    root = tmp_path / 'otrf-security-datasets'
+    root.mkdir()
+    # Authentic audit event with an independently constructed encoded argument.
+    lines = (HERE / 'otrf_audit_fixture.log').read_text().splitlines()[:6]
+    lines[1] = lines[1].replace('a1="-a"', 'a1=612062')
+    with tarfile.open(root / 'security-datasets.tar.gz', 'w:gz') as archive:
+        add_member(archive, 'OTRF/datasets/atomic/linux/host/audit.zip', zipped('audit.log', '\n'.join(lines)))
+    database = tmp_path / 'audit.duckdb'
+    result = ingest(root, database, 'from _ingest_otrf import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT pgm,args FROM COMMANDS').fetchall() == [('/usr/sbin/arp', ['a b'])]
