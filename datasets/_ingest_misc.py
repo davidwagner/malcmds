@@ -563,7 +563,11 @@ def windows_apt(root, options):
             command = row.get(prefix + "commandLine", "").strip()
             os = "windows"
             image = row.get(prefix + "image", "").strip()
+            label = "unknown"
             if command:
+                techniques = row.get("_source.rule.mitre.id", "").strip()
+                if re.search(r"\bT\d{4}(?:\.\d{3})?\b", techniques) or row.get("_source.rule.id", "").strip() in {"92031", "92039", "92052", "92066"}:
+                    label = "malicious"
                 command = decode_windows_apt_field(command, json_contents=True, html_entities=True)
                 image = decode_windows_apt_field(image, json_contents=True, html_entities=True)
             else:
@@ -594,6 +598,7 @@ def windows_apt(root, options):
                 command,
                 rid if rid != ":" else f"source/combined.csv:{index}",
                 f"windows-apt-2025:{host}:{guid}",
+                label=label,
                 os=os,
                 pgm=image or None,
             )
