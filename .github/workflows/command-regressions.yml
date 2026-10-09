@@ -13,4 +13,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r datasets/ingest-requirements.txt pytest
-      - run: python -m pytest -q datasets/test_carbon_black_escaping.py
+      - run: python -m pytest -q datasets/test_carbon_black_escaping.py datasets/test_rendered_records.py
