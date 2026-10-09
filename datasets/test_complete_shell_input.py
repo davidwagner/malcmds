@@ -51,6 +51,7 @@ def test_fragments_substitutions_exec_and_multiple_documents(tmp_path):
              f"echo $(touch {sentinel})", 'exec "$target"', "echo after",
              'echo $((1 << 2))', '(( value <<= 1 )); echo final',
              'echo foo\\', 'bar', 'echo $(echo', 'inner)',
+             '3<<END cat', 'input on descriptor three', 'END',
              "cat <<NEVER", "unclosed body"]
     source = f'''
 from _ingest import shell_command_fragments
@@ -64,9 +65,10 @@ def records(root, options):
     assert not sentinel.exists(), "Syntax validation must never evaluate the recorded shell input"
     with duckdb.connect(str(database)) as con:
         rows = con.execute("SELECT pgm,args,shell_input,other_tokens FROM COMMANDS ORDER BY rowid").fetchall()
-    assert [r[0] for r in rows] == ["echo", "/bin/id", "$(name)", "$(name)", "echo", "cat", "echo", "touch", "echo", "echo", "echo", "echo", "echo", "echo", "inner"]
-    assert rows[-4][1] == ["foobar"]
-    assert rows[-1][1] == []
+    assert [r[0] for r in rows] == ["echo", "/bin/id", "$(name)", "$(name)", "echo", "cat", "echo", "touch", "echo", "echo", "echo", "echo", "echo", "echo", "inner", "cat"]
+    assert rows[-5][1] == ["foobar"]
+    assert rows[-2][1] == []
+    assert rows[-1][3] == ["3", "<<", "END", "input on descriptor three\n", "END"]
     assert rows[4][1] == ["multi\nline"]
     assert rows[5][1] == []
     assert rows[5][3] == ["<<", "A", "<<-", "'B'", "first body\n", "A", "\tsecond body\n", "\tB"]

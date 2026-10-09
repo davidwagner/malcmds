@@ -100,6 +100,11 @@ def heredoc_spans(text):
                 return spans, False
             if not words:
                 return spans, False
+            descriptor = start
+            while descriptor > offset and text[descriptor - 1].isdigit():
+                descriptor -= 1
+            if descriptor < start and (descriptor == offset or text[descriptor - 1].isspace()):
+                spans.append((descriptor, start))
             spans.extend([(start, op_end), (word_start, i)])
             pending.append((words[0], tabs))
         offset = end + 1
