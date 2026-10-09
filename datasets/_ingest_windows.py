@@ -332,7 +332,6 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
         ):
             if not argv:
                 continue
-            host = value(fields, "node", "host") or "unknown-host"
             ses = fields["_session"]
             yield Command(
                 audit_value(value(fields, "exe")) or argv[0],
