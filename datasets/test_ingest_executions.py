@@ -101,3 +101,23 @@ def test_creation_without_guid_and_later_attack_annotation(tmp_path):
     assert commands[0].args == ['/c', 'whoami']
     assert commands[0].label == 'malicious' and commands[0].group_id is None
     assert len(store(commands, tmp_path)) == 1
+
+
+def test_optc_boot_identity_without_label_files(tmp_path):
+    """A reboot separates a reused UUID even when no publisher labels are installed."""
+    from _ingest_optc import records
+    native = json.loads((FIXTURES / 'optc.json').read_text())[0]
+    native.update(id='before', objectID='reused-guid', action='CREATE', hostname='host.example', timestamp='2019-09-23T10:00:00Z')
+    native.pop('timestamp_ms', None)
+    later = dict(native, id='after', timestamp='2019-09-23T12:00:00Z')
+    reboot = {'object': 'HOST', 'action': 'START', 'hostname': 'HOST', 'timestamp': '2019-09-23T11:00:00Z'}
+    directory = tmp_path / 'ecar/evaluation'
+    directory.mkdir(parents=True)
+    # The boot marker is in a different file from both process observations.
+    for name, events in [('a', [later, native]), ('b', [reboot])]:
+        with gzip.open(directory / f'{name}.json.gz', 'wt') as stream:
+            for event in events:
+                stream.write(json.dumps(event) + '\n')
+    commands = list(records(tmp_path, SimpleNamespace(max_records=None, limit=None, sample_files=None)))
+    assert {c.record_id for c in commands} == {'before:0', 'after:0'}
+    assert len(store(commands, tmp_path)) == 2

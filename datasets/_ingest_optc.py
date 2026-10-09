@@ -3,6 +3,7 @@ import json
 import multiprocessing
 import re
 import tempfile
+from bisect import bisect_right
 from collections import defaultdict, deque
 from datetime import datetime
 from functools import lru_cache
@@ -243,5 +244,6 @@ def file_observations(root, path, max_records, lookup):
                 creation = event.get('action') == 'CREATE'
                 if not target and not creation:
                     continue
-                identity = (str(relative.parts[1]) if len(relative.parts) > 2 else 'capture', host, target or record, index)
+                boot = bisect_right(lookup.get('reboots', {}).get(machine, ()), time) if time is not None else 'unknown-time'
+                identity = (str(relative.parts[1]) if len(relative.parts) > 2 else 'capture', host, boot, target or record, index)
                 yield identity, Command(pgm, args, f'{record}:{index}', label, group, session, 'windows'), creation
