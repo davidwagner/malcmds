@@ -1,14 +1,14 @@
 """Read independent AVIATOR exports concurrently, preserving source order."""
 
-import multiprocessing
 import codecs
-import re
+import multiprocessing
 import ntpath
-from functools import lru_cache
+import re
 import tarfile
 import tempfile
 import zipfile
 from collections import deque
+from functools import lru_cache
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 from types import SimpleNamespace
@@ -111,7 +111,7 @@ def _matches_procedure(command, rules):
         hosts = [part.split(".", 1)[0] for part in command.session_id.lower().split(":")]
         if host not in hosts or ntpath.basename(command.pgm).lower() != program:
             continue
-        profile = re.search(r"[a-z]:\\users\\[^\\]+", " ".join([command.pgm, *command.args]), re.I)
+        profile = re.search(r"[a-z]:\\users\\[^\\]+", " ".join([command.pgm, *command.args]), re.IGNORECASE)
         expected = []
         for argument in arguments:
             if profile:
