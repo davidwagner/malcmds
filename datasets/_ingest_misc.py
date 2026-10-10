@@ -10,10 +10,10 @@ import io
 import json
 import ntpath
 import re
-import subprocess
 import sqlite3
-import tempfile
+import subprocess
 import sys
+import tempfile
 import zipfile
 import zlib
 from datetime import datetime
@@ -22,7 +22,13 @@ from pathlib import Path
 
 import ijson
 import openpyxl
-from _ingest import Command, normalize, select_files, shell_commands
+from _ingest import (
+    Command,
+    normalize,
+    select_files,
+    shell_command_fragments,
+    shell_commands,
+)
 
 
 def emitted(
@@ -173,66 +179,66 @@ def audit_events(lines, labels=None, *, state=None, scope=""):
     processes = state.setdefault("processes", {})
     scratch = Path(__file__).resolve().parent.parent / "tmp"
     scratch.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="audit-events-", dir=scratch) as temporary:
-        with sqlite3.connect(str(Path(temporary) / "events.sqlite")) as db:
-            db.execute("CREATE TABLE events (identity TEXT PRIMARY KEY, event TEXT, raw TEXT, first_line INTEGER, attack INTEGER, boot TEXT)")
-            boots = state.setdefault("boots", {})
-            for number, raw in enumerate(lines, 1):
-                text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
-                match = re.search(r"msg=audit\(([^)]+)\)", text)
-                if not match:
-                    continue
-                event = match[1]
-                host_match = re.search(r"(?:^|\s)node=(\S+)", text)
-                host = host_match[1] if host_match else ""
-                if re.search(r"\btype=SYSTEM_BOOT\b", text):
-                    boots[(scope, host)] = event
-                explicit_boot = re.search(r"\bboot_id=(\S+)", text)
-                if explicit_boot:
-                    boots[(scope, host)] = explicit_boot[1]
-                boot = boots.get((scope, host), "initial")
-                identity = json.dumps([host, boot, event])
-                db.execute(
-                    "INSERT INTO events VALUES (?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET raw=raw || char(10) || excluded.raw, attack=max(attack,excluded.attack)",
-                    (identity, event, text.rstrip(), number, int(number in labels), boot),
-                )
-            for event, raw, number, attack, boot in db.execute("SELECT event,raw,first_line,attack,boot FROM events ORDER BY first_line"):
-                entry = [{"_boot": boot}, {}, "", "", number, bool(attack)]
-                for text in raw.splitlines():
-                    fields = dict(re.findall(r'(?<![\w-])([\w]+)=("[^"]*"|[^\s\']+)', text))
-                    entry[0].update(fields)
-                    kind = fields.get("type")
-                    if kind in {"EXECVE", "USER_CMD"}:
+    with (tempfile.TemporaryDirectory(prefix="audit-events-", dir=scratch) as temporary,
+          sqlite3.connect(str(Path(temporary) / "events.sqlite")) as db):
+        db.execute("CREATE TABLE events (identity TEXT PRIMARY KEY, event TEXT, raw TEXT, first_line INTEGER, attack INTEGER, boot TEXT)")
+        boots = state.setdefault("boots", {})
+        for number, raw in enumerate(lines, 1):
+            text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
+            match = re.search(r"msg=audit\(([^)]+)\)", text)
+            if not match:
+                continue
+            event = match[1]
+            host_match = re.search(r"(?:^|\s)node=(\S+)", text)
+            host = host_match[1] if host_match else ""
+            if re.search(r"\btype=SYSTEM_BOOT\b", text):
+                boots[(scope, host)] = event
+            explicit_boot = re.search(r"\bboot_id=(\S+)", text)
+            if explicit_boot:
+                boots[(scope, host)] = explicit_boot[1]
+            boot = boots.get((scope, host), "initial")
+            identity = json.dumps([host, boot, event])
+            db.execute(
+                "INSERT INTO events VALUES (?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET raw=raw || char(10) || excluded.raw, attack=max(attack,excluded.attack)",
+                (identity, event, text.rstrip(), number, int(number in labels), boot),
+            )
+        for event, raw, number, attack, boot in db.execute("SELECT event,raw,first_line,attack,boot FROM events ORDER BY first_line"):
+            entry = [{"_boot": boot}, {}, "", "", number, bool(attack)]
+            for text in raw.splitlines():
+                fields = dict(re.findall(r'(?<![\w-])([\w]+)=("[^"]*"|[^\s\']+)', text))
+                entry[0].update(fields)
+                kind = fields.get("type")
+                if kind in {"EXECVE", "USER_CMD"}:
+                    entry[0]["_execution"] = True
+                if kind == "SYSCALL":
+                    syscall = fields.get("syscall", "").lower()
+                    arch = fields.get("arch", "").lower()
+                    numbers = {"c000003e": {"59", "322"}, "40000003": {"11", "358"}, "c00000b7": {"221", "281"}, "40000028": {"11", "387"}}
+                    if syscall in {"execve", "execveat"} or syscall in numbers.get(arch, set()):
                         entry[0]["_execution"] = True
-                    if kind == "SYSCALL":
-                        syscall = fields.get("syscall", "").lower()
-                        arch = fields.get("arch", "").lower()
-                        numbers = {"c000003e": {"59", "322"}, "40000003": {"11", "358"}, "c00000b7": {"221", "281"}, "40000028": {"11", "387"}}
-                        if syscall in {"execve", "execveat"} or syscall in numbers.get(arch, set()):
-                            entry[0]["_execution"] = True
-                    if kind == "PATH" and fields.get("nametype") in {"NORMAL", "CREATE"}:
-                        entry[0]["_attempted_path"] = fields.get("name", "")
-                    if kind == "EXECVE":
-                        if "/" in event:
-                            for key, value in re.findall(r"(?<!\S)a(\d+)=(.*?)(?=\s+a\d+=|$)", text.rstrip()):
-                                entry[1][int(key)] = value
-                        else:
-                            for key, value in fields.items():
-                                if re.fullmatch(r"a\d+", key):
-                                    entry[1][int(key[1:])] = audit_value(value)
-                    if kind == "PROCTITLE":
-                        if "/" in event:
-                            # ausearch -i has already decoded the trailing title.
-                            title = re.search(r"\bproctitle=(.*)$", text)
-                            entry[2] = title[1].rstrip() if title else ""
-                        else:
-                            entry[2] = audit_value(fields.get("proctitle", ""))
-                    if kind == "USER_CMD":
-                        entry[3] = audit_value(fields.get("cmd", ""))
-                entry[0]["_session"] = audit_session_id(scope, boot, event, entry[0], processes)
-                result = complete_audit_event(event, entry)
-                if result:
-                    yield result
+                if kind == "PATH" and fields.get("nametype") in {"NORMAL", "CREATE"}:
+                    entry[0]["_attempted_path"] = fields.get("name", "")
+                if kind == "EXECVE":
+                    if "/" in event:
+                        for key, value in re.findall(r"(?<!\S)a(\d+)=(.*?)(?=\s+a\d+=|$)", text.rstrip()):
+                            entry[1][int(key)] = value
+                    else:
+                        for key, value in fields.items():
+                            if re.fullmatch(r"a\d+", key):
+                                entry[1][int(key[1:])] = audit_value(value)
+                if kind == "PROCTITLE":
+                    if "/" in event:
+                        # ausearch -i has already decoded the trailing title.
+                        title = re.search(r"\bproctitle=(.*)$", text)
+                        entry[2] = title[1].rstrip() if title else ""
+                    else:
+                        entry[2] = audit_value(fields.get("proctitle", ""))
+                if kind == "USER_CMD":
+                    entry[3] = audit_value(fields.get("cmd", ""))
+            entry[0]["_session"] = audit_session_id(scope, boot, event, entry[0], processes)
+            result = complete_audit_event(event, entry)
+            if result:
+                yield result
 
 
 def audit_rotation_order(name):
@@ -340,15 +346,12 @@ def microsoft_iot(root, options):
         for index, row in enumerate(limited(ijson.items(stream, "item"), options)):
             sequence = str(row.get("ID", index))
             group = "microsoft-iot:" + sequence
-            for i, text in enumerate(row["Commands"]):
-                yield from emitted(
-                    text,
-                    f"{sequence}:{i}",
-                    group,
-                    "malicious",
-                    None,
-                    shell=True,
-                )
+            occurrences = {}
+            for i, text, program, args, other in shell_command_fragments(row["Commands"]):
+                occurrence = occurrences.get(i, 0)
+                occurrences[i] = occurrence + 1
+                yield Command(program, args, f"{sequence}:{i}:{occurrence}", "malicious",
+                              session_id=group, shell_input=text, other_tokens=other)
 
 
 def gzip_json_items(path, *, allow_truncated=False):
@@ -412,6 +415,19 @@ def cyberlab(root, options):
                 has_input = any(
                     e.get("eventid") == "cowrie.command.input" for e in events
                 )
+                if has_input:
+                    inputs = [(n, event, event.get("input") or event.get("message", "").removeprefix("CMD: "))
+                              for n, event in enumerate(events) if event.get("eventid") == "cowrie.command.input"]
+                    occurrences = {}
+                    for part, text, program, args, other in shell_command_fragments([item[2] for item in inputs]):
+                        n, event, _ = inputs[part]
+                        host = event.get("dst_host_identifier") or event.get("sensor") or ""
+                        occurrence = occurrences.get(n, 0)
+                        occurrences[n] = occurrence + 1
+                        yield Command(program, args, f"{path.name}:{index}:{sid}:{n}:{occurrence}",
+                                      "malicious", session_id=f"cyberlab:{path.name}:{host}:{sid}",
+                                      shell_input=text, other_tokens=other)
+                    continue
                 for n, event in enumerate(events):
                     kind = event.get("eventid", "")
                     prefixes = {
