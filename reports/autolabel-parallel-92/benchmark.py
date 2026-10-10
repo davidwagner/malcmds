@@ -72,16 +72,16 @@ def _measure(sample, database, workers, scratch, logfile):
                str(sample), str(database), str(workers)]
     started = time.perf_counter()
     rss = reads = arrow = 0
-    with logfile.open('w') as log:
-        with subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT) as child:
-            process = psutil.Process(child.pid)
-            while child.poll() is None:
-                current_rss, current_reads, current_arrow = _observe(process, scratch)
-                rss = max(rss, current_rss)
-                reads = max(reads, current_reads)
-                arrow = max(arrow, current_arrow)
-                time.sleep(0.02)
-            code = child.wait()
+    with logfile.open('w') as log, \
+            subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT) as child:
+        process = psutil.Process(child.pid)
+        while child.poll() is None:
+            current_rss, current_reads, current_arrow = _observe(process, scratch)
+            rss = max(rss, current_rss)
+            reads = max(reads, current_reads)
+            arrow = max(arrow, current_arrow)
+            time.sleep(0.02)
+        code = child.wait()
     elapsed = time.perf_counter() - started
     if code:
         raise RuntimeError(f'Ingestion exited {code}; see {logfile}')

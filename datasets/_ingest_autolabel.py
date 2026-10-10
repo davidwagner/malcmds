@@ -159,7 +159,7 @@ def _archive_records(archive, run, limit):
 def _run_members(path):
     """Find independent runs; compressed or mixed outer archives stay serial."""
     try:
-        archive = tarfile.open(path, mode='r:')
+        archive = tarfile.open(path, mode='r:')  # noqa: SIM115 -- Only opening errors select the fallback; context managed below.
     except tarfile.ReadError:
         return None
     with archive:

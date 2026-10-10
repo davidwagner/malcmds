@@ -88,8 +88,10 @@ def assert_clean(root):
 
 def test_parallel_progress_and_order(tmp_path):
     """Parallel execution must be observable and preserve every stored column."""
+    shell = event(3, **{'proc.cmdline': "sh -c printf '%s' safe; id",
+                       'proc.exepath': '/bin/sh'})
     root = archive_root(tmp_path, [
-        ('first.tar.gz', tar_bytes([('sysdig/events.log', log(event(1), event(2), event(3)))], True)),
+        ('first.tar.gz', tar_bytes([('sysdig/events.log', log(event(1), event(2), shell))], True)),
         ('second.tar', tar_bytes([('sysdig/events.log', log(event(1)))])),
     ])
     serial, parallel = tmp_path / 'serial.db', tmp_path / 'parallel.db'
@@ -98,13 +100,14 @@ def test_parallel_progress_and_order(tmp_path):
     assert 'completed run 2/2' in result.stderr, 'Requested workers must execute independent runs and report run completion'
     assert rows(parallel) == rows(serial), 'PyArrow IPC must preserve every command column and source order for the shared DuckDB writer'
     assert len(rows(parallel)) == 4
+    assert rows(parallel)[2][2] == ['-c', "printf '%s' safe; id"], 'Parallel IPC must retain flat Sysdig shell payload quotes and operators'
     assert completed(parallel) == [('autolabel', True)]
     assert_clean(root)
 
 
 def test_nested_formats_cross_log_state_labels_and_failed_attempts(tmp_path):
     """Rotated logs share ancestry and duplicates; independent runs keep IDs."""
-    parent = event(1, **{'malicious': True})
+    parent = event(1, malicious=True)
     first = log(parent, event(2, **{'evt.type': 'clone', 'evt.rawres': 20}))
     second = log(
         parent,
@@ -314,4 +317,29 @@ def test_arrow_batches_and_early_close_stop_worker_processes(tmp_path):
               'assert not multiprocessing.active_children()')
     subprocess.run([sys.executable, '-c', driver], check=True, capture_output=True,
                    text=True, timeout=90)
+    assert_clean(root)
+
+
+def test_multiple_outer_archives_mix_serial_and_arrow_outputs(tmp_path):
+    """Outer order survives transitions between commands and worker Arrow batches."""
+    root = archive_root(tmp_path, [('sysdig/direct.log', log(event(1)))], name='a.tar')
+    archive_root(tmp_path, [
+        ('first.tar', tar_bytes([('sysdig/events.log', log(event(1), event(2)))])),
+        ('second.tar', tar_bytes([('sysdig/events.log', log(event(1)))])),
+    ], name='b.tar')
+    archive_root(tmp_path, [('sysdig/compressed.log', log(event(1)))],
+                 name='c.tar.gz', compressed=True)
+    serial, parallel = tmp_path / 'serial.db', tmp_path / 'parallel.db'
+    ingest(root, serial, 1)
+    result = ingest(root, parallel, 3)
+    assert 'b.tar: completed run 2/2' in result.stderr
+    assert rows(parallel) == rows(serial), 'The shared DuckDB writer must commit pending serial commands before worker Arrow tables'
+    assert [row[6] for row in rows(parallel)] == [
+        'a.tar:container:1',
+        'b.tar/first.tar:container:1',
+        'b.tar/first.tar:container:2',
+        'b.tar/second.tar:container:1',
+        'c.tar.gz:container:1',
+    ]
+    assert completed(parallel) == [('autolabel', True)]
     assert_clean(root)
