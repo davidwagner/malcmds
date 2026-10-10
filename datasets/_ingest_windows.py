@@ -25,6 +25,7 @@ class Budget:
     def __init__(self, options):
         self.remaining = options.max_records
         self.process_labels: set[str] = set()
+        self.audit_state = {}
 
     def take(self):
         """Return whether another source record may be examined."""
@@ -322,25 +323,23 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
                 )
             if fields:
                 yield from event_commands(fields, dataset, source, number, label, group)
-    elif re.search(r"\btype=(?:SYSCALL|EXECVE|PROCTITLE|PATH|USER_CMD)\b", sample):
+    elif re.search(r"\btype=(?:SYSCALL|EXECVE|PROCTITLE|PATH|USER_CMD|SYSTEM_BOOT)\b", sample):
         from _ingest_misc import audit_events, audit_value
 
         for event_id, fields, argv, number, _ in audit_events(
-            bounded_lines(stream, budget)
+            bounded_lines(stream, budget), state=budget.audit_state,
+            scope=f"{dataset}:{source.split('.zip/', 1)[0] if dataset == 'aviator' else str(Path(source).parent)}",
         ):
             if not argv:
                 continue
-            host = value(fields, "node", "host") or "unknown-host"
-            ses = value(fields, "ses")
-            if not ses or ses in {"4294967295", "-1", "unset"}:
-                ses = "parent:" + (value(fields, "ppid") or "unknown")
+            ses = fields["_session"]
             yield Command(
                 audit_value(value(fields, "exe")) or argv[0],
                 argv[1:],
                 f"{source}:{event_id}:{number}",
                 label=label,
                 group_id=group if label == "malicious-group" else None,
-                session_id=f"{dataset}:{source}:{host}:{ses}",
+                session_id=ses,
                 os="linux",
             )
     elif sample.lstrip().startswith("{"):

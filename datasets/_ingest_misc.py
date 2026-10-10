@@ -121,19 +121,56 @@ def complete_audit_event(event, entry):
     return None
 
 
-def audit_events(lines, labels=None):
+
+def audit_session_id(scope, boot, event_id, fields, processes):
+    """Scope native logins or observed process lifetimes to their host and boot.
+
+    Parent sessions are inherited only from an observed live parent. A missing
+    parent never creates a shared PID-1/unknown session. Exit records retire PIDs.
+    """
+    host = fields.get("node") or fields.get("host") or "unknown-host"
+    prefix = f"{scope}:{host}:boot:{boot}"
+    pid = fields.get("pid", "")
+    key = (prefix, pid)
+    session = fields.get("ses", "")
+    native = session not in {"", "-1", "4294967295", "unset"}
+    if native:
+        result = f"{prefix}:session:{session}"
+    elif pid:
+        result = processes.get(key)
+        if result is None:
+            parent = processes.get((prefix, fields.get("ppid", "")), "")
+            result = parent if ":session:" in parent else f"{prefix}:process:{pid}:start:{event_id}"
+    else:
+        result = f"{prefix}:event:{event_id}"
+    if pid:
+        processes[key] = result
+        syscall = fields.get("syscall", "")
+        arch = fields.get("arch", "")
+        if syscall in {"exit", "exit_group"} or (arch == "c000003e" and syscall in {"60", "231"}):
+            processes.pop(key, None)
+        if syscall in {"fork", "vfork", "clone"} or (arch == "c000003e" and syscall in {"56", "57", "58"}):
+            child = fields.get("exit", "")
+            if child.isdigit() and int(child) > 0:
+                processes[(prefix, child)] = result if ":session:" in result else f"{prefix}:process:{child}:start:{event_id}"
+    return result
+
+
+def audit_events(lines, labels=None, *, state=None, scope=""):
     """Join execution companions, including repeated alerts, in a temporary index.
 
     Titles from unrelated system calls are process observations and never create
     executions. Audit event IDs are scoped by recorded host and boot segment.
     """
     labels = set() if labels is None else labels
+    state = {} if state is None else state
+    processes = state.setdefault("processes", {})
     scratch = Path(__file__).resolve().parent.parent / "tmp"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="audit-events-", dir=scratch) as temporary:
         with sqlite3.connect(str(Path(temporary) / "events.sqlite")) as db:
             db.execute("CREATE TABLE events (identity TEXT PRIMARY KEY, event TEXT, raw TEXT, first_line INTEGER, attack INTEGER, boot TEXT)")
-            boots = {}
+            boots = state.setdefault("boots", {})
             for number, raw in enumerate(lines, 1):
                 text = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
                 match = re.search(r"msg=audit\(([^)]+)\)", text)
@@ -143,8 +180,11 @@ def audit_events(lines, labels=None):
                 host_match = re.search(r"(?:^|\s)node=(\S+)", text)
                 host = host_match[1] if host_match else ""
                 if re.search(r"\btype=SYSTEM_BOOT\b", text):
-                    boots[host] = event
-                boot = boots.get(host, "initial")
+                    boots[(scope, host)] = event
+                explicit_boot = re.search(r"\bboot_id=(\S+)", text)
+                if explicit_boot:
+                    boots[(scope, host)] = explicit_boot[1]
+                boot = boots.get((scope, host), "initial")
                 identity = json.dumps([host, boot, event])
                 db.execute(
                     "INSERT INTO events VALUES (?,?,?,?,?,?) ON CONFLICT(identity) DO UPDATE SET raw=raw || char(10) || excluded.raw, attack=max(attack,excluded.attack)",
@@ -183,17 +223,25 @@ def audit_events(lines, labels=None):
                             entry[2] = audit_value(fields.get("proctitle", ""))
                     if kind == "USER_CMD":
                         entry[3] = audit_value(fields.get("cmd", ""))
+                entry[0]["_session"] = audit_session_id(scope, boot, event, entry[0], processes)
                 result = complete_audit_event(event, entry)
                 if result:
                     yield result
 
 
+def audit_rotation_order(name):
+    """Read numbered rotations oldest first, followed by the current log."""
+    match = re.search(r"(.*\.log)(?:\.(\d+))?(?:\.gz)?$", name)
+    return (match[1], -int(match[2] or 0)) if match else (name, 0)
+
+
 def ait(root, options):
     """Read audit commands and sudo records with per-line attack annotations."""
+    audit_state = {}
     for path in select_files(root.glob("*.zip"), options):
         with zipfile.ZipFile(path) as archive:
             members = set(archive.namelist())
-            for name in sorted(members):
+            for name in sorted(members, key=audit_rotation_order):
                 if not name.startswith("gather/") or name.endswith("/"):
                     continue
                 audit = "/logs/audit/audit.log" in name
@@ -214,13 +262,9 @@ def ait(root, options):
                     stream = gzip.GzipFile(fileobj=raw) if name.endswith(".gz") else raw
                     if audit:
                         for eid, fields, argv, line, attack in audit_events(
-                            limited(stream, options), attacks
+                            limited(stream, options), attacks, state=audit_state, scope=prefix
                         ):
-                            ses = fields.get("ses", "")
-                            if ses in ("", "4294967295", "-1"):
-                                ses = "parent:" + fields.get(
-                                    "ppid", fields.get("pid", eid)
-                                )
+                            ses = fields["_session"]
                             program = audit_value(fields.get("exe", "")) or argv[0]
                             # USER_CMD exe describes sudo itself, not the command it runs.
                             if fields.get("type") == "USER_CMD":
@@ -231,7 +275,7 @@ def ait(root, options):
                                 f"{path.name}:{name}:{eid}",
                                 "malicious" if attack else "benign",
                                 None,
-                                f"{prefix}:{ses}",
+                                ses,
                             )
                     else:
                         for line, rawline in enumerate(limited(stream, options), 1):
@@ -471,14 +515,14 @@ def linux_apt(root, options):
             if argv:
                 yield Command(argv[0], argv[1:], rid + ":0", label, session_id=session)
     attacks = set()
-    for eid, fields, argv, _, attack in audit_events(linux_apt_audit_lines(root, options, labels, attacks), attacks):
+    for eid, fields, argv, _, attack in audit_events(linux_apt_audit_lines(root, options, labels, attacks), attacks, scope="linux-apt-2024"):
         host = fields.get("node", "unknown-host")
-        ses = fields.get("ses") or "process:" + fields.get("pid", eid)
+        ses = fields["_session"]
         label = "malicious" if attack else fields.get("dataset_label", "unknown")
         yield Command(
             audit_value(fields.get("exe", "")) or argv[0], argv[1:],
             f"source/combine.csv:{host}:{fields['_boot']}:{eid}", label,
-            session_id=f"linux-apt-2024:{host}:{fields['_boot']}:{ses}",
+            session_id=ses,
         )
 
 
