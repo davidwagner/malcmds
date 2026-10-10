@@ -43,7 +43,9 @@ def invoke(dataset, database, *options, root=None):
     [
         ("atlasv2", ["--limit", "30"]),
         ("aviator", ["--limit", "30", "--sample-files", "1", "--seed", "42"]),
-        ("comiset", ["--limit", "30", "--max-records", "100000"]),
+        # The LAB archive starts with 431,033 records from other providers;
+        # scan far enough to reach real Sysmon process identities.
+        ("comiset", ["--limit", "30", "--max-records", "440000"]),
         ("splunkad", ["--limit", "30", "--sample-files", "30", "--seed", "42"]),
     ],
 )

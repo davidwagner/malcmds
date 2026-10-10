@@ -30,7 +30,16 @@ def test_json_candidates_keep_aliases_envelopes_and_source_numbers(tmp_path, enc
               '{"huge": ' + '9' * 100 + '}', '   ', '{"unused": [1, 2]}']
     with zipfile.ZipFile(root / "input.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("events.json", ("\n".join(lines) + "\n").encode(encoding))
-    reader = "from _ingest_windows import comiset as records\n"
+    # Exercise the generic event parser directly: COMISET now requires native
+    # process identities and annotations, which these alias-only records lack.
+    reader = """
+import zipfile
+def records(root, options):
+    budget = Budget(options)
+    with zipfile.ZipFile(root / 'input.zip') as archive:
+        with archive.open('events.json') as stream:
+            yield from parse_log(stream, 'input.zip/events.json', root.name, budget)
+"""
     db = tmp_path / "commands.duckdb"
     result = ingest(root, db, reader)
     assert result.returncode == 0, result.stderr
