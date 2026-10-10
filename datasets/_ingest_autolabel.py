@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import shlex
 import tarfile
 from collections.abc import Iterator
@@ -18,6 +19,21 @@ def _clean(text):
     for marker in MARKERS:
         text = text.replace(marker, '')
     return text
+
+
+def _flat_shell_args(text: str, pgm: str | None) -> list[str] | None:
+    """Infer one -c payload from Sysdig's flat argv, retaining its literal text.
+
+    Lost shell positional arguments and leading payload spaces cannot be
+    recovered. Explicit NUL separators and unsupported forms use normalize().
+    """
+    shells = {'sh', 'bash', 'dash'}
+    if '\0' in text or not pgm or pgm.rsplit('/', 1)[-1] not in shells:
+        return None
+    match = re.match(r'''^([^\s'"\\]+)\s+-c\s+(\S.*)$''', text, re.DOTALL)
+    if match and match[1].rsplit('/', 1)[-1] in shells:
+        return ['-c', match[2]]
+    return None
 
 
 def _decode_event(line: bytes) -> dict[str, object]:
@@ -70,11 +86,13 @@ def _log_records(stream, run, seen, lifetimes, limit):
         success = result in (0, '0')
         if success:
             pgm = event.get('proc.exepath') or event.get('proc.name')
-            parsed = normalize(text, pgm=pgm)
-            if parsed:
-                pgm, args = parsed[0]
-            else:
-                args = []
+            args = _flat_shell_args(text, pgm)
+            if args is None:
+                parsed = normalize(text, pgm=pgm)
+                if parsed:
+                    pgm, args = parsed[0]
+                else:
+                    args = []
         else:
             pgm = event.get('evt.arg.filename') or event.get('evt.arg.pathname')
             arguments = event.get('evt.arg.args') or event.get('evt.arg.argv')
