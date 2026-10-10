@@ -133,6 +133,11 @@ def test_carbon_black_exact_reapr_process_join():
                     row["process_uuid"].strip()
                     for row in csv.DictReader(stream, skipinitialspace=True)
                 )
+        # This released payload execution is explicitly attack-labelled in
+        # h1-s4.labels. The first annotated browser can instead be an ordinary
+        # launch whose later interaction was malicious (see issue #60).
+        payload_guid = "7DMF69PK-05e6ded8-00001058-00000000-1d89bd350b5a1df"
+        assert payload_guid in attack_guids
         with (
             tarfile.open(archive) as original,
             tarfile.open(root / archive.name, "w:gz") as small,
@@ -158,7 +163,7 @@ def test_carbon_black_exact_reapr_process_join():
                             found_target = True
                         elif (
                             not found_attack
-                            and row.get("process_guid") in attack_guids
+                            and row.get("process_guid") == payload_guid
                             and row.get("process_cmdline")
                         ):
                             selected.append(line)
@@ -171,13 +176,36 @@ def test_carbon_black_exact_reapr_process_join():
                     small.addfile(subset, io.BytesIO(payload))
                 if found_alerts and found_attack:
                     break
+        assert found_alerts and found_attack, "Native alert and payload records must both be present"
+        # Count source process identities independently of the command reader.
+        # Actor and child GUIDs are different executions even when argv matches.
+        process_ids = set()
+        with tarfile.open(root / archive.name) as sample:
+            for member in sample:
+                source = sample.extractfile(member)
+                assert source is not None
+                scope = (member.name.split("/cbc-", 1)[0], Path(member.name).stem.rsplit("-", 1)[-1])
+                for line in source:
+                    event = json.loads(line)
+                    host = event.get("device_name")
+                    if event.get("process_guid") and event.get("process_cmdline"):
+                        process_ids.add((*scope, host, event["process_guid"]))
+                    child = event.get("childproc_guid") or event.get("crossproc_guid")
+                    if child and event.get("target_cmdline"):
+                        process_ids.add((*scope, host, child))
+        assert len(process_ids) == 27, "The native subset should identify twenty-seven actor/child processes"
         db = Path(directory) / "commands.duckdb"
         invoke("atlasv2", db, root=root)
         with duckdb.connect(str(db)) as connection:
             rows = connection.execute("SELECT pgm,args,label FROM COMMANDS").fetchall()
-            assert len(rows) == 31
-            assert all("\\\\" not in pgm for pgm, _, _ in rows)
-            assert any(label == "malicious" for _, _, label in rows)
+            assert len(rows) == len(process_ids), "Repeated alerts must not create repeated process executions"
+            assert connection.execute("SELECT count(DISTINCT record_id) FROM COMMANDS").fetchone()[0] == len(rows)
+            # Backslash fidelity is checked with native pipe/UNC fixtures. Some
+            # source alerts themselves contain doubled separators after JSON decoding.
+            assert any(
+                pgm.lower().endswith("payload.exe") and label == "malicious"
+                for pgm, _, label in rows
+            ), "The released payload process GUID must join its REAPr attack label"
             assert any("udp port 53" in args for _, args, _ in rows)
             assert any(
                 pgm.lower().endswith("searchprotocolhost.exe") for pgm, _, _ in rows

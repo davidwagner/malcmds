@@ -38,6 +38,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
     """Flattened TRACE text has no encoding marker; numeric words stay literal."""
     import copy
     import gzip
+
     import fastavro
     from test_ingest_performance import ingest
 
@@ -55,6 +56,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
         row = copy.deepcopy(native[0])
         row['datum'][1]['cmdLine'] = text
         row['datum'][1]['startTimestampNanos'] += index
+        row['datum'][1]['uuid'] = (100 + index).to_bytes(16, 'big')
         records.append(row)
     with (root / 'data/literals.bin').open('wb') as stream:
         fastavro.writer(stream, schema, records)
@@ -71,6 +73,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
 def test_raw_audit_hex_argument_still_decodes(tmp_path):
     """Raw audit's explicit unquoted field encoding remains independent of TRACE."""
     import tarfile
+
     from test_ingest_lade_otrf import add_member, zipped
     from test_ingest_performance import ingest
 
@@ -117,6 +120,7 @@ def test_fivedirections_process_images_and_prefixes(tmp_path):
     import copy
     import gzip
     import uuid
+
     import fastavro
     from test_ingest_performance import ingest
 
@@ -160,8 +164,10 @@ def test_fivedirections_process_images_and_prefixes(tmp_path):
     early['datum'][1]['hostId'] = native[0]['datum'][1]['hostId']
     early['datum'][1]['cmdLine'] = '/early'
     early['datum'][1]['startTimestampNanos'] = native[0]['datum'][1]['timestampNanos'] - 1
-    rows += [early, native[0]]
-    expected += [('dllhost.exe', ['/early']), (r'C:\WINDOWS\system32\DllHost.exe', ['/Processid:{7966B4D8-4FDC-4126-A10B-39A3209AD251}'])]
+    image_only = copy.deepcopy(native[0])
+    image_only['datum'][1]['properties']['CommandLine'] = ''
+    rows += [early, image_only]
+    expected += [('dllhost.exe', ['/early'])]
     other_host = copy.deepcopy(early)
     other_host['datum'][1]['hostId'] = uuid.UUID(int=999).bytes
     other_restart = copy.deepcopy(early)
@@ -174,3 +180,57 @@ def test_fivedirections_process_images_and_prefixes(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall() == expected, 'Process UUIDs must remain qualified by host and collector restart; FORK images belong to the child'
+
+
+def test_tc_creation_snapshots_and_distinct_execs(tmp_path):
+    """FORK/Subject/EXIT copies collapse; separate native EXECUTE IDs survive."""
+    import copy
+    import gzip
+
+    import fastavro
+    from test_ingest_performance import ingest
+
+    root = tmp_path / 'tc-e3-fivedirections'
+    (root / 'data').mkdir(parents=True)
+    with gzip.open(HERE / 'fixtures/fivedirections-images.bin.gz', 'rb') as stream:
+        reader = fastavro.reader(stream, return_record_name=True)
+        native = list(reader)
+        schema = reader.writer_schema
+    fork = copy.deepcopy(native[0])
+    event = fork['datum'][1]
+    process = event['predicateObject']
+    with gzip.open(HERE / 'fixtures/trace-no-args.bin.gz', 'rb') as stream:
+        subject = next(fastavro.reader(stream, return_record_name=True))
+    subject['datum'][1].update(uuid=process[1], hostId=event['hostId'],
+                              cmdLine=event['properties']['CommandLine'],
+                              startTimestampNanos=event['timestampNanos'] - 1)
+    exit_row = copy.deepcopy(fork)
+    exit_row['datum'][1].update(type='EVENT_EXIT', subject=process,
+                               timestampNanos=event['timestampNanos'] + 100)
+    rows = [subject, exit_row, fork]
+    for index in range(2):
+        execute = copy.deepcopy(fork)
+        execute['datum'][1].update(type='EVENT_EXECUTE', subject=process,
+                                  uuid=(900 + index).to_bytes(16, 'big'),
+                                  timestampNanos=event['timestampNanos'] + 200)
+        rows.extend([execute, copy.deepcopy(execute)])
+    other_process = copy.deepcopy(fork)
+    other_process['datum'][1]['predicateObject'] = ('com.bbn.tc.schema.avro.cdm18.UUID', (800).to_bytes(16, 'big'))
+    other_process['datum'][1]['uuid'] = (801).to_bytes(16, 'big')
+    rows.append(other_process)
+    creation_exec = copy.deepcopy(other_process)
+    creation_exec['datum'][1].update(type='EVENT_EXECUTE',
+                                    subject=other_process['datum'][1]['predicateObject'],
+                                    uuid=(802).to_bytes(16, 'big'))
+    rows.append(creation_exec)
+    with (root / 'data/snapshots.bin').open('wb') as stream:
+        fastavro.writer(stream, schema, rows)
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(root, database, 'from _ingest_tc import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        result_rows = con.execute('SELECT pgm,args,record_id FROM COMMANDS').fetchall()
+        assert len(result_rows) == 4, 'One creation per process plus both distinct EXECUTE IDs; EXIT time is not another launch'
+        assert len({row[2] for row in result_rows}) == 4
+        assert len({(row[0], tuple(row[1])) for row in result_rows}) == 1, 'Identical argv must not merge distinct process identities'
+        assert not any(':Subject:' in row[2] for row in result_rows), 'FORK supplies the preferred actual creation observation'

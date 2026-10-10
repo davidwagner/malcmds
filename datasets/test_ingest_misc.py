@@ -95,7 +95,7 @@ def test_linux_audit_headers_and_excel_escapes(tmp_path):
         rows = connection.execute(
             "SELECT pgm,args,label FROM COMMANDS WHERE record_id LIKE '%1704304027.612:3126'"
         ).fetchall()
-        assert len(rows) == 2  # Two Wazuh alerts describe this same kernel event.
+        assert len(rows) == 1  # Two Wazuh alerts describe one kernel execution.
         assert all(
             row
             == (

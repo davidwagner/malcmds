@@ -111,7 +111,7 @@ def test_repeated_commands_preserve_images_labels_sessions_and_limits(tmp_path):
             for index, (action, text, image, pgm, args) in enumerate(cases):
                 record = f'event-{repeat}-{index}'
                 event = {
-                    'object': 'PROCESS', 'action': action, 'id': record,
+                    'object': 'PROCESS', 'action': action, 'id': record, 'objectID': 'process-' + record,
                     'hostname': 'sysclient0201.example',
                     'timestamp': f'2019-09-23T{12 if repeat == 0 else 16}:00:00-04:00',
                     'properties': {'command_line': text, 'image_path': image,

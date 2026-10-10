@@ -118,22 +118,19 @@ def bound_intervals(paths, lookup, max_records=None):
     with command limits: a later file can supply an earlier creation or reboot.
     """
     intervals = lookup['intervals']
-    if not intervals:
-        return
     creations = defaultdict(set)
     reboots = defaultdict(set)
-    hosts = {host for host, _ in intervals}
     for path in paths:
         with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as stream:
             for number, line in enumerate(stream, 1):
                 if max_records is not None and number > max_records:
                     break
-                if not any(word in line for word in ('"PROCESS"', '"HOST"', '\\u00')):
+                # Boot markers affect process identity even without PID labels.
+                # Without intervals, leave process parsing to the bounded reader.
+                if not ('"HOST"' in line or '\\u00' in line or intervals and '"PROCESS"' in line):
                     continue
                 event = json.loads(line)
                 host = host_name(event.get('hostname'))
-                if host not in hosts:
-                    continue
                 time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
                 if time is None:
                     continue
@@ -143,6 +140,7 @@ def bound_intervals(paths, lookup, max_records=None):
                     key = (host, str(event.get('pid')))
                     if key in intervals:
                         creations[key].add(time)
+    lookup['reboots'] = {host: sorted(times) for host, times in reboots.items()}
     for key, ranges in intervals.items():
         bounded = []
         for start, end in ranges:

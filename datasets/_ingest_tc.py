@@ -363,6 +363,9 @@ def records(root, options):
             db.execute('PRAGMA synchronous=OFF')
             db.execute('CREATE TABLE subjects (host TEXT, id TEXT, parent TEXT, PRIMARY KEY(host,id)) WITHOUT ROWID')
             db.execute('CREATE TABLE seen (id TEXT PRIMARY KEY) WITHOUT ROWID')
+            db.execute('CREATE TABLE creations (scope TEXT, subject TEXT, priority INTEGER, time INTEGER, pgm TEXT, args TEXT, command BLOB, PRIMARY KEY(scope,subject))')
+            db.execute('CREATE TABLE executions (scope TEXT, subject TEXT, time INTEGER, pgm TEXT, args TEXT)')
+            db.execute('CREATE INDEX execution_creation ON executions (scope,subject,time,pgm,args)')
             paths = select_files(paths, options)
             files = _ordered_files(paths, options, temporary, os_name == 'windows')
             if collector == 'fivedirections':
@@ -373,7 +376,7 @@ def records(root, options):
                 match = re.search(r'ta1-([a-z]+-\d+)-e5', path.name)
                 instance = match[1] if match else collector
                 stream_id = path.name.split('.bin')[0]
-                for outer in source:
+                for record_number, outer in enumerate(source):
                     branch, record = outer['datum']
                     kind = branch.rsplit('.', 1)[-1]
                     host = identifier(outer.get('hostId') or record.get('hostId')) or stream_id
@@ -418,17 +421,32 @@ def records(root, options):
                             session = f'{root.name}:{scope}:windows-session:{native_session}'
                         else:
                             session = f'{root.name}:{scope}:parent:{parent or subject or record_uuid}'
-                        # Same process creation can be repeated as Subject, FORK,
-                        # and EXECUTE records. Retain one exact observation.
-                        identity = json.dumps([scope, subject, timestamp, pgm, args], ensure_ascii=True)
+                        execution = kind == 'Event' and record.get('type') == 'EVENT_EXECUTE'
+                        if not execution and not subject:
+                            continue
+                        # A process UUID groups snapshots; each EXECUTE UUID is
+                        # a separate attempt, even for repeated argv in one PID.
+                        identity = json.dumps([scope, 'exec', record_uuid or f'{path.name}:{record_number}'] if execution else
+                                              [scope, subject, timestamp, pgm, args], ensure_ascii=True)
                         digest = hashlib.sha256(identity.encode()).hexdigest()
-                        if db.execute('INSERT OR IGNORE INTO seen VALUES (?)', (digest,)).rowcount == 0:
+                        if execution and db.execute('INSERT OR IGNORE INTO seen VALUES (?)', (digest,)).rowcount == 0:
                             continue
                         group = attack_group(root.name, instance, host, timestamp)
-                        yield Command(pgm=pgm, args=args,
-                                      record_id=f'{host}:{kind}:{record_uuid}:{digest[:16]}',
-                                      label='malicious-group' if group else 'unknown',
-                                      group_id=group, session_id=session, os=os_name)
+                        command = Command(pgm=pgm, args=args,
+                                          record_id=f'{host}:{kind}:{record_uuid}:{digest[:16]}',
+                                          label='malicious-group' if group else 'unknown',
+                                          group_id=group, session_id=session, os=os_name)
+                        if execution:
+                            db.execute('INSERT INTO executions VALUES (?,?,?,?,?)',
+                                       (scope, subject, timestamp, pgm, json.dumps(args)))
+                            yield command
+                        else:
+                            priority = (0 if record.get('type') == 'EVENT_FORK' and text else
+                                        1 if kind == 'Subject' else 2 if record.get('type') == 'EVENT_FORK' else 3)
+                            db.execute('INSERT INTO creations VALUES (?,?,?,?,?,?,?) ON CONFLICT(scope,subject) DO UPDATE SET priority=excluded.priority,time=excluded.time,pgm=excluded.pgm,args=excluded.args,command=excluded.command WHERE excluded.priority < creations.priority',
+                                       (scope, subject, priority, timestamp, pgm, json.dumps(args), pickle.dumps(command)))
+            for row in db.execute('SELECT command FROM creations c WHERE NOT EXISTS (SELECT 1 FROM executions e WHERE e.scope=c.scope AND e.subject=c.subject AND e.time=c.time AND e.pgm=c.pgm AND e.args=c.args) ORDER BY c.rowid'):
+                yield pickle.loads(row[0])
         finally:
             if source is not None:
                 source.close()
