@@ -16,7 +16,7 @@ def invoke(root, database, source, *options):
     driver.write_text(
         f'import sys\nfrom pathlib import Path\nsys.path.insert(0, {str(ROOT)!r})\n'
         'from _ingest import Command, run\n' + source
-        + '\nrun(Path(__file__).parent, records)\n'
+        + '\nif __name__ == "__main__":\n    run(Path(__file__).parent, records)\n'
     )
     return subprocess.run(
         [sys.executable, str(driver), '--db', str(database), *options],

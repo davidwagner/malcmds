@@ -2,14 +2,19 @@
 
 import argparse
 import json
+import multiprocessing
 import re
 import shlex
+import sys
 import tarfile
+import tempfile
+from collections import deque
 from collections.abc import Iterator
 from pathlib import Path
 
 import orjson
-from _ingest import Command, normalize, select_files
+import pyarrow as pa
+from _ingest import SCHEMA, Command, command_table, normalize, select_files
 from _ingest_acme import ordinary_launch
 
 MARKERS = ('A#t#k#F#1#', 'A#t#k#F#2#', 'A#t#k#F#3#')
@@ -151,7 +156,92 @@ def _archive_records(archive, run, limit):
                 yield from _log_records(stream, run, seen, lifetimes, limit)
 
 
-def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
+def _run_members(path):
+    """Find independent runs; compressed or mixed outer archives stay serial."""
+    try:
+        archive = tarfile.open(path, mode='r:')
+    except tarfile.ReadError:
+        return None
+    with archive:
+        members = []
+        for member in archive:
+            if not member.isfile():
+                continue
+            name = member.name.lstrip('./')
+            if name.endswith(('.tar.gz', '.tgz', '.tar')):
+                members.append(member)
+            elif '/sysdig/' in '/' + name and name.endswith('.log'):
+                return None
+        return members
+
+
+def _write_run(dataset, path, member, max_records, batch_size, output):
+    """Spool one run in bounded Arrow batches, retaining its sequential state."""
+    with tarfile.open(path, mode='r:') as archive, \
+            archive.extractfile(member) as stream, \
+            tarfile.open(fileobj=stream, mode='r|*') as nested, \
+            pa.OSFile(str(output), 'wb') as sink, \
+            pa.ipc.new_stream(sink, SCHEMA) as writer:
+        run = f'{path.name}/{member.name.lstrip("./")}'
+        batch = []
+        for command in _archive_records(nested, run, max_records):
+            batch.append(command)
+            if len(batch) >= batch_size:
+                writer.write_table(command_table(batch, dataset))
+                batch.clear()
+        if batch:
+            writer.write_table(command_table(batch, dataset))
+    return output
+
+
+def _read_tables(path):
+    """Read one Arrow batch at a time and remove the consumed spool."""
+    try:
+        with pa.OSFile(str(path), 'rb') as source, pa.ipc.open_stream(source) as reader:
+            for batch in reader:
+                yield pa.Table.from_batches([batch])
+    finally:
+        path.unlink()
+
+
+def _parallel_tables(root, path, members, max_records, batch_size, workers):
+    """Keep at most workers unconsumed runs and yield their batches in order.
+
+    Spool disk use depends on run output size. Each worker also retains the
+    run's duplicate and process state; --memory-limit only bounds DuckDB.
+    """
+    scratch = root.parent.parent / 'tmp' / 'ingest'
+    scratch.mkdir(parents=True, exist_ok=True)
+    workers = min(workers, len(members))
+    with tempfile.TemporaryDirectory(prefix='autolabel-', dir=scratch) as temporary:
+        pool = multiprocessing.get_context('spawn').Pool(workers)
+        pending = deque()
+        completed = 0
+        try:
+            for index, member in enumerate(members):
+                output = Path(temporary) / f'{index}.arrow'
+                pending.append(pool.apply_async(
+                    _write_run, (root.name, path, member, max_records, batch_size, output)
+                ))
+                if len(pending) >= workers:
+                    yield from _read_tables(pending.popleft().get())
+                    completed += 1
+                    print(f'{root.name}: {path.name}: completed run {completed}/{len(members)} '
+                          f'({members[completed - 1].name})', file=sys.stderr, flush=True)
+            while pending:
+                yield from _read_tables(pending.popleft().get())
+                completed += 1
+                print(f'{root.name}: {path.name}: completed run {completed}/{len(members)} '
+                      f'({members[completed - 1].name})', file=sys.stderr, flush=True)
+            pool.close()
+            pool.join()
+        finally:
+            # Join before deleting private files, including on consumer closure.
+            pool.terminate()
+            pool.join()
+
+
+def records(root: Path, options: argparse.Namespace) -> Iterator[Command | pa.Table]:
     """Read all scenario archives and every nested run's Sysdig exec attempts."""
     files = select_files([*root.glob('*.tar'), *root.glob('*.tar.gz'), *root.glob('*.tgz')], options)
     if not files:
@@ -162,5 +252,13 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
         if missing:
             raise FileNotFoundError('AutoLabel release is incomplete; run ./fetch: ' + ', '.join(missing))
     for path in files:
+        workers = getattr(options, 'workers', 1)
+        if workers > 1 and getattr(options, 'limit', None) is None:
+            members = _run_members(path)
+            if members:
+                yield from _parallel_tables(
+                    root, path, members, options.max_records, options.batch_size, workers
+                )
+                continue
         with tarfile.open(path, mode='r|*') as archive:
             yield from _archive_records(archive, path.name, options.max_records)
