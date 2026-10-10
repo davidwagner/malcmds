@@ -31,3 +31,5 @@ The reader streams daily compressed JSON arrays. It uses cowrie.command.input wh
 `record_id` is daily filename + zero-based session-object index + session ID + event index + normalized-command index. `session_id` is `cyberlab:` + daily filename + destination host identifier (sensor fallback) + Cowrie session ID. Honeypot attack sessions have `label=malicious-group` and `group_id=session_id`.
 
 Validation sampled daily files with seed 83 and checked 100 normalized commands. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.
+
+The published Cyberlab file `cyberlab_2020-01-29.json.gz` is truncated. `./fetch` verifies its known publisher checksum, and ingestion keeps all complete JSON objects.

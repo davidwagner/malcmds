@@ -1,6 +1,10 @@
 # Datasets containing Unix/Microsoft commands
 
-Download all datasets with `./fetchall`.
+This directory contains a variety of public datasets,
+which contain Unix/Microsoft commands.
+
+To use this, first download all datasets:
+see Download/fetch below.
 Then, run `./ingestall` to populate `../cmds.duckdb`.
 
 # Contents
@@ -12,56 +16,46 @@ One directory per dataset.  Each directory contains:
 
 # Download/fetch
 
-Run `./fetch` from within a dataset directory to download
-just that dataset.
+To download all datasets, run
+
+```
+while ! ./fetchall; do sleep 1200; done
+```
+
+until it completes without errors.
+
+To make this go quicker, log into your Google account
+from your web browser, and set the environment variable
+`FETCH_GOOGLE_BROWSER` to `firefox` [default], `chrome`,
+or `safari`. This will authenticate to Google when downloading.
+Run `python _google.py check` to make sure it is working.
+Then, run the `fetchall` command above. This helps avoid
+some rate limits with Google Drive.
+
+Even using your Google account, it may take several days
+before the download completes successfully, as some datasets
+are enormous and run into Google and Zenodo's rate limits.
+
+To download a single dataset, run `./fetch` from within
+a dataset directory.
 
 If `fetch` or `fetchall` fails or is terminated partway through,
-simply re-run it. If you've already downloaded the dataset,
-`fetch` does nothing.  Once a file is downloaded, `fetch` creates
-`*.download.json` to help avoid the need to re-download it.
-
-Some datasets download from Google Drive, which imposes rate
-limits. To avoid this, log into your Google account from your
-web browser, and set the environment variable
-`FETCH_GOOGLE_BROWSER` to `firefox` [default], `chrome`,
-`safari`, etc. This will authenticate to Google when downloading.
-Run `python _google.py check` to make sure it is working.
-Otherwise, run `fetchall` once a day until everything has
-been downloaded.
+simply re-run it. It will continue from where it left off.
+If you've already downloaded the dataset, `fetch` does nothing.
+Once a file is downloaded, `fetch` creates `*.download.json`
+to help avoid the need to re-download it.
 
 ## Ingest commands
 
-Run `./ingestall` or a dataset's `./ingest` to populate `../cmds.duckdb`.
+Run `./ingestall` to populate `../cmds.duckdb`.
+
+Or, if you want only a single dataset, run `./ingest` from
+the dataset directory.
 
 It is safe to run `./ingestall` or `./ingest` multiple times.
-A `(dataset, record_id)` primary key prevents duplicate insertion
-when rerunning these scripts.
-
-Each batch of 100,000 commands commits separately. If parsing or writing fails,
-completed batches remain saved; fix the input and rerun to fill in missing rows.
-Connections reopen between batches to release DuckDB's primary-key index memory.
-Both `ingest` and `ingestall` accept `--batch-size` and `--memory-limit` (default
-`2GB`). For example, use `--batch-size 10000 --memory-limit 1GB` on a smaller machine.
-
-OpTC ingestion parses several gzip files at once, one per worker process
-(`--workers`, default: the number of CPUs). Each worker writes its batches to a
-temporary Arrow file under `../tmp/ingest/`; the main process inserts them into
-DuckDB in the same file order as a single-process run, so the stored rows are
-identical. Temporary files are deleted as they are inserted. Use `--workers 1`
-to parse in the main process.
-
-The published Cyberlab file `cyberlab_2020-01-29.json.gz` is truncated. After
-verifying its known publisher checksum, ingestion retains complete JSON objects,
-discards the incomplete final object, warns, and continues with the next file.
-Unexpected archive or JSON corruption still fails with the affected file named.
+The scripts will prevent duplicates.
 
 For datasets containing shell input, `ingest` uses a Bash syntax
 parser to split compound commands, remove redirections and assignments
-preceding commands, and remove shell quoting.  Substitution commands
-are extracted too. 
-
-
-New databases use all columns in `schema.md`, including `shell_input` and
-`other_tokens`. An older database must be rebuilt with `--db` pointing to a new
-file; existing completed imports cannot recover omitted source input. Limited
-and sampled imports remain incomplete, so a later full import replaces them.
+preceding commands, remove shell quoting, extract substitution commands,
+and normalize to simulate what a kernel logger would observe.
