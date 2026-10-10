@@ -189,9 +189,12 @@ def _unspool(stream):
         yield pickle.load(stream)
 
 
-def command_line(text, collector, pgm=None, require_arguments=True):
+def command_line(text, collector, pgm=None):
     """Normalize captured argv text without interpreting it as typed shell input."""
     if not text or text.strip() in {'N/A', '(null)', 'null', '<unknown>'}:
+        return []
+    if collector == 'fivedirections' and text.lstrip().startswith(('/', '-')):
+        # Argument-only Windows observations need image metadata (#54).
         return []
     text = text.removesuffix('\0') if '\0' in text else text.strip()
     # Titles such as "sshd: admin [priv]" are not an executed argv vector.
@@ -227,7 +230,7 @@ def command_line(text, collector, pgm=None, require_arguments=True):
             tokens = [tokens[0], match[1], match[2]]
     # Check the parsed executable: raw whitespace splitting can be empty, split
     # a quoted executable, or include NUL-delimited arguments in the first word.
-    if (not tokens or (require_arguments and len(tokens) < 2) or not tokens[0]
+    if (not tokens or not tokens[0]
             or '\ufffd' in tokens[0] or any(ord(c) < 32 for c in tokens[0])):
         return []
     return [(pgm or tokens[0], tokens[1:])]
@@ -300,7 +303,7 @@ def records(root, options):
                     if not text:
                         continue
                     try:
-                        commands = command_line(text, collector, executable, kind == 'Subject')
+                        commands = command_line(text, collector, executable)
                     except ValueError:
                         # Unmatched quotes occur in corrupted/truncated cmdLine.
                         continue
