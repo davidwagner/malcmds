@@ -1,0 +1,182 @@
+[
+  {
+    "bucket": "bots303",
+    "row": 9936,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7286\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9937,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7289\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9938,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7292\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9956,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7319\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9957,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7321\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9958,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7325\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9959,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7327\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9960,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7331\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9961,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7333\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9965,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7339\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9973,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7354\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9974,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7357\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9975,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7360\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9993,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7386\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "bots303",
+    "row": 9994,
+    "event": {
+      "_time": "1534755902",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:05:02 2018 UTC\",\"unixTime\":1534755902,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531878277\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"sed\\\" 732F3A2F202F67\",\"ctime\":\"1531878245\",\"cwd\":\"\",\"egid\":\"0\",\"euid\":\"0\",\"gid\":\"0\",\"mode\":\"0100755\",\"mtime\":\"1341647739\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/sed\",\"pid\":\"7389\",\"status\":\"\",\"time\":\"1534755855\",\"uid\":\"0\",\"uptime\":\"168485\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534756169 timestartpos::110 timeendpos::126 date_second::29 date_hour::9 date_minute::9 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  }
+]

@@ -147,7 +147,7 @@ def value(fields, *names):
     return ""
 
 
-def event_commands(fields, dataset, source, number, label="unknown", group=None):
+def event_commands(fields, dataset, source, number, label="unknown", group=None, *, argv=None):
     """Convert recorded command lines while retaining their observed executable."""
     fields = dict(fields)
     if fields.get("_reapr_attack"):
@@ -162,7 +162,7 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None)
         "process.command_line",
         "HostApplication",
     )
-    if not text:
+    if not text and not argv:
         return
     pgm = (
         value(
@@ -238,7 +238,8 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None)
         fields, "_id", "EventRecordID", "RecordNumber", "record_number"
     ) or str(number)
     record = f"{source}:{eventid}:{number}"
-    for index, (program, args) in enumerate(normalize(text, os=osname, pgm=pgm)):
+    pairs = [(pgm or argv[0], argv[1:])] if argv else normalize(text, os=osname, pgm=pgm)
+    for index, (program, args) in enumerate(pairs):
         yield Command(
             program,
             args,
