@@ -295,6 +295,40 @@ def text_fields(block):
     return fields
 
 
+def rendered_windows_events(stream):
+    """Read date-headed Windows records, ignoring unrelated lines and searches."""
+    fields = None
+    number = 0
+    for line in stream:
+        if line.lstrip().startswith("Audit:["):
+            if fields is not None:
+                yield number, fields
+                fields = None
+            continue
+        if TEXT_START.match(line):
+            if fields is not None:
+                yield number, fields
+            number += 1
+            fields = {}
+        elif fields is not None:
+            fields.update(text_fields(line))
+    if fields is not None:
+        yield number, fields
+
+
+def is_rendered_windows_event(fields):
+    """Accept identified process events and recorded PowerShell host invocations."""
+    provider = value(fields, "SourceName", "Provider", "source_name").lower()
+    event = value(fields, "EventCode", "EventID", "Event ID")
+    return (
+        (provider == "microsoft-windows-sysmon" and event == "1")
+        or (provider in {"microsoft-windows-security-auditing",
+                         "microsoft windows security auditing."} and event == "4688")
+        or (provider in {"powershell", "microsoft-windows-powershell"}
+            and event in {"400", "403", "600"})
+    )
+
+
 def bounded_lines(stream, budget):
     """Count audit source lines before the event-joining reader buffers them."""
     for line in stream:
@@ -405,31 +439,11 @@ def parse_log(binary, source, dataset, budget, label="unknown", group=None):
                         related, dataset, source, f"{number}:target", label, group
                     )
     else:
-        block: list[str] = []
-        number = 0
-        for line in stream:
-            if TEXT_START.match(line) and block:
-                number += 1
-                if not budget.take():
-                    return
-                yield from event_commands(
-                    text_fields("".join(block)), dataset, source, number, label, group
-                )
-                block = []
-            block.append(line)
-            # Non-Windows logs are delimited by lines; avoid retaining a whole file.
-            if len(block) == 1 and not TEXT_START.match(line):
-                if not budget.take():
-                    return
-                number += 1
-                yield from event_commands(
-                    text_fields(line), dataset, source, number, label, group
-                )
-                block = []
-        if block and budget.take():
-            yield from event_commands(
-                text_fields("".join(block)), dataset, source, number + 1, label, group
-            )
+        for number, fields in rendered_windows_events(stream):
+            if not budget.take():
+                return
+            if is_rendered_windows_event(fields):
+                yield from event_commands(fields, dataset, source, number, label, group)
 
 
 def comiset(root, options):
