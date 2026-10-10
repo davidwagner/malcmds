@@ -1,0 +1,110 @@
+{
+  "python": "3.14.8",
+  "duckdb": "1.5.6",
+  "orjson": "3.13.0",
+  "timing": "Warm input; database setup, parsing, insertion and close; excludes imports and comparison.",
+  "results": [
+    {
+      "sample": "CVE-2018-17246",
+      "rows": 364,
+      "all_columns_equal": true,
+      "sha256": "8fe292df06145244ff833dff7a7b3f17e5dc910f4667b6cdcacbf78b665a906b",
+      "seconds": {
+        "baseline": [
+          2.3141396725550294,
+          2.088388890028,
+          2.1748592602089047
+        ],
+        "updated": [
+          1.3402637355029583,
+          1.319373371079564,
+          1.337618994526565
+        ]
+      },
+      "median_seconds": {
+        "baseline": 2.1748592602089047,
+        "updated": 1.337618994526565
+      },
+      "speedup": 1.6259183437946552
+    },
+    {
+      "sample": "python-demo",
+      "rows": 20,
+      "all_columns_equal": true,
+      "sha256": "1c66c05b4c89e2ce32f825d132cae422ebcb14e3f24d3b5a2c20f3db6b2c2853",
+      "seconds": {
+        "baseline": [
+          2.9555725064128637,
+          3.0317073725163937,
+          3.0008781757205725
+        ],
+        "updated": [
+          1.650927978567779,
+          1.6282003009691834,
+          1.6354258637875319
+        ]
+      },
+      "median_seconds": {
+        "baseline": 3.0008781757205725,
+        "updated": 1.6354258637875319
+      },
+      "speedup": 1.8349215590676478
+    },
+    {
+      "sample": "CVE-2024-36401",
+      "rows": 248,
+      "all_columns_equal": true,
+      "sha256": "71e1e09af26792625051caf6980bd45416345da9ee795bc50b9634979c8ee1f1",
+      "seconds": {
+        "baseline": [
+          8.55441016331315,
+          8.267327917739749,
+          8.42537475656718
+        ],
+        "updated": [
+          4.102924634702504,
+          4.065306301228702,
+          4.073687022551894
+        ]
+      },
+      "median_seconds": {
+        "baseline": 8.42537475656718,
+        "updated": 4.073687022551894
+      },
+      "speedup": 2.068243021597973
+    }
+  ],
+  "baseline_commit": "f3a4160ee4fa6793e61ddf554cc715dc1d0476b1",
+  "inputs": [
+    {
+      "archive": "CVE-2018-17246.tar",
+      "members": [
+        {
+          "name": "CVE-2018-17246/dataset-17.tar.gz",
+          "bytes": 10110305
+        }
+      ],
+      "sha256": "9baaf85d2d7a2f49f803130416567a66692a7891974ab49222d07c808218ac73"
+    },
+    {
+      "archive": "python-demo.tar",
+      "members": [
+        {
+          "name": "python-demo/datasets-3.tar.gz",
+          "bytes": 20019452
+        }
+      ],
+      "sha256": "331d89c90e4b6f2457df87a174b85435c3e27b73e5c8c606031208c7c28b7113"
+    },
+    {
+      "archive": "CVE-2024-36401.tar",
+      "members": [
+        {
+          "name": "CVE-2024-36401/dataset-17.tar.gz",
+          "bytes": 45460746
+        }
+      ],
+      "sha256": "7ff968c8cfdf3714a5916333873f68c4c185cfb255affd7b57baa19099907f1b"
+    }
+  ]
+}

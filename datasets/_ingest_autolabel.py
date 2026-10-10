@@ -7,6 +7,7 @@ import tarfile
 from collections.abc import Iterator
 from pathlib import Path
 
+import orjson
 from _ingest import Command, normalize, select_files
 from _ingest_acme import ordinary_launch
 
@@ -19,11 +20,29 @@ def _clean(text):
     return text
 
 
+def _decode_event(line: bytes) -> dict[str, object]:
+    """Use fast decoding while preserving fields that affect commands or sessions."""
+    try:
+        event = orjson.loads(line)
+    except orjson.JSONDecodeError:
+        # Keep existing support for nonstandard numbers and encodings, and let
+        # the original parser report malformed input instead of skipping it.
+        return json.loads(line)
+    if event.get('evt.type') in {
+        'execve', 'execveat', 'clone', 'clone3', 'fork', 'vfork',
+        'procexit', 'exit', 'exit_group',
+    }:
+        # orjson can round large integers without raising an error. Preserve
+        # exact attempt/process IDs and all other fields used by these events.
+        return json.loads(line)
+    return event
+
+
 def _log_records(stream, run, seen, lifetimes, limit):
     for index, line in enumerate(stream):
         if limit is not None and index >= limit:
             break
-        event = json.loads(line)
+        event = _decode_event(line)
         kind = event.get('evt.type')
         container = str(event.get('container.id') or 'host')
         process = str(event.get('proc.vpid') or event.get('thread.vtid') or event.get('proc.pid') or '')
