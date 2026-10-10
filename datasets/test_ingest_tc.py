@@ -40,7 +40,10 @@ def test_native_avro_ingestion_and_idempotence(name, tmp_path):
         if name == 'tc-e3-trace':
             assert connection.execute("SELECT pgm, args FROM COMMANDS WHERE contains(record_id, '5325f54a-77b4-2309-3aa8-2df747293484')").fetchall() == [('groups', [])], 'TRACE Subject argv[0] must survive without arguments'
             assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='-bash' AND len(args)=0 AND contains(record_id, ':Subject:')").fetchone()[0] > 0
-            assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='sh' AND args[1]='-c' AND len(args)=2 AND contains(args[2], 'run-parts')").fetchall()[0][0] > 0
+            # This native flattened cmdLine contains literal hex characters;
+            # it has no raw-audit encoding marker authorizing another decode.
+            script = '/usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin run-parts --lsbsysinit /etc/update-motd.d > /run/motd.dynamic.new'
+            assert connection.execute("SELECT pgm,args FROM COMMANDS WHERE contains(record_id, '0ac3ac95-c0c4-1685-b6e6-c2bb7a467ae8')").fetchall() == [('sh', ['-c', script.encode('ascii').hex().upper()])]
         if name == 'tc-e5-theia':
             assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='sh' AND args[1]='-c' AND len(args)=2 AND contains(args[2], 'run-parts')").fetchall()[0][0] > 0
         if name == 'tc-e3-cadets':

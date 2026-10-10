@@ -204,17 +204,9 @@ def command_line(text, collector, pgm=None):
     if os_name == 'linux' and '\0' in text:
         tokens = text.split('\0')
     elif collector == 'trace':
-        # TRACE's audit exporter concatenates a0..aN; audit hex strings each
-        # represent one argv item, even when decoded bytes contain whitespace.
+        # Flattened cmdLine has no encoding marker. Numeric/hex-looking words
+        # are literal; only the raw audit reader can interpret audit encoding.
         tokens = shlex.split(text)
-        for index, token in enumerate(tokens):
-            if len(token) >= 4 and len(token) % 2 == 0 and re.fullmatch('[0-9A-F]+', token):
-                try:
-                    decoded = bytes.fromhex(token).decode('utf-8')
-                except UnicodeDecodeError:
-                    continue
-                if any(c.isspace() or c in '\\"' for c in decoded):
-                    tokens[index] = decoded
     else:
         commands = normalize(text, os=os_name, shell=False)
         if not commands:
@@ -222,8 +214,8 @@ def command_line(text, collector, pgm=None):
         executable, args = commands[0]
         tokens = [executable, *args]
     # Flattened, unquoted shell -c observations lose the script's argv boundary.
-    # Infer one script argument from the remainder; quoted strings and decoded
-    # audit hex tokens already preserve that argument.
+    # Infer one script argument from the remainder; quoted strings already
+    # preserve that argument.
     if os_name == 'linux' and tokens and Path(tokens[0]).name in {'sh', 'bash', 'dash', 'ksh', 'zsh'}:
         match = re.match(r'^\S+\s+(-[a-zA-Z]*c)\s+(.+)$', text, re.DOTALL)
         if match and match[2][0] not in "\"'" and len(tokens) > 3:
