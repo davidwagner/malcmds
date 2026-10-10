@@ -17,9 +17,11 @@ def fetch(engagement, collector):
     )
     args = parser.parse_args()
     dataset = f"tc-{engagement}-{collector}"
-    manifest = Path(__file__).with_name("_tc_manifest.tsv")
-    with manifest.open() as stream:
-        for row in csv.DictReader(stream, delimiter="\t"):
+    manifests = [Path(__file__).with_name(name) for name in ("_tc_manifest.tsv", "_tc_annotation_sources.tsv")]
+    for manifest in manifests:
+        with manifest.open() as stream:
+            rows = list(csv.DictReader(stream, delimiter="\t"))
+        for row in rows:
             if row["dataset"] not in (engagement, dataset):
                 continue
             if args.metadata_only and row["path"].startswith("data/"):

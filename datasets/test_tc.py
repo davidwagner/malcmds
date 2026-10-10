@@ -41,7 +41,7 @@ class TCIntegrationTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.datasets = self.base / "datasets"
         self.datasets.mkdir()
-        for name in ("_fetch.py", "_tc.py", "_tc_manifest.tsv", "fetchall"):
+        for name in ("_fetch.py", "_google.py", "_tc.py", "_tc_manifest.tsv", "_tc_annotation_sources.tsv", "fetchall"):
             shutil.copy2(ROOT / name, self.datasets / name)
         for name in COUNTS:
             (self.datasets / name).mkdir()
@@ -80,6 +80,10 @@ class TCIntegrationTests(unittest.TestCase):
                 )
                 self.assertEqual(metadata.returncode, 0, metadata.stderr)
                 self.assertNotIn("data/", metadata.stdout)
+                if name.startswith('tc-e3-'):
+                    self.assertIn('annotations/original-reapr.csv', metadata.stdout)
+                    self.assertIn('annotations/threatrace/', metadata.stdout)
+                    self.assertIn('annotations/orthrus/', metadata.stdout)
         selected = self.run_script(
             "fetchall", "tc-e3-theia", "tc-e5-marple", listing=True
         )
@@ -109,6 +113,8 @@ class TCIntegrationTests(unittest.TestCase):
         """Real Drive ground truth and schemas download and skip on a second run."""
         with (ROOT / "_tc_manifest.tsv").open() as stream:
             manifest = list(csv.DictReader(stream, delimiter="\t"))
+        with (ROOT / "_tc_annotation_sources.tsv").open() as stream:
+            manifest.extend(csv.DictReader(stream, delimiter="\t"))
         for name in COUNTS:
             with self.subTest(dataset=name):
                 first = self.run_script(name + "/fetch", "--metadata-only")
@@ -167,8 +173,9 @@ class TCIntegrationTests(unittest.TestCase):
         partial = self.base / "sample.bin.gz.part"
         prefix = subprocess.run(
             [
+                sys.executable,
+                str(ROOT / "_google.py"),
                 "curl",
-                "--disable",
                 "--fail",
                 "--silent",
                 "--show-error",
