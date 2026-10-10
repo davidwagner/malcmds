@@ -1,0 +1,74 @@
+{
+  "tagged": {
+    "_index": "wazuh-alerts-4.x-2024.12.01",
+    "_id": "YqHkgJMBrrvr6pEbYnNx",
+    "_source.rule.id": "92031",
+    "_source.data.win.eventdata.logonGuid": "{D8AF36FB-00FA-674C-E703-000000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-FMI6MML",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": "[\"T1087\"]",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\SysWOW64\\\\net1.exe",
+    "_source.data.win.eventdata.commandLine": "C:\\\\Windows\\\\system32\\\\net1 accounts"
+  },
+  "rule-11": {
+    "_index": "wazuh-alerts-4.x-2024.12.01",
+    "_id": "tC3kg5MBenunWll4tB47",
+    "_source.rule.id": "11",
+    "_source.data.win.eventdata.logonGuid": "{D8AF36FB-A5AE-674C-878D-080000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-FMI6MML",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": " ",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\System32\\\\slui.exe",
+    "_source.data.win.eventdata.commandLine": "C:\\\\Windows\\\\System32\\\\slui.exe -Embedding"
+  },
+  "rule-92031": {
+    "_index": "wazuh-alerts-4.x-2024.12.03",
+    "_id": "nbQijpMB5I68Eu0XcsNs",
+    "_source.rule.id": "92031",
+    "_source.data.win.eventdata.logonGuid": "{15959494-6477-674F-E703-000000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-QGB4EQH",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": " ",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\SysWOW64\\\\net.exe",
+    "_source.data.win.eventdata.commandLine": "net.exe accounts"
+  },
+  "rule-92039": {
+    "_index": "wazuh-alerts-4.x-2024.12.03",
+    "_id": "oLQijpMB5I68Eu0XtMPR",
+    "_source.rule.id": "92039",
+    "_source.data.win.eventdata.logonGuid": "{15959494-6477-674F-E703-000000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-QGB4EQH",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": " ",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\SysWOW64\\\\net1.exe",
+    "_source.data.win.eventdata.commandLine": "C:\\\\Windows\\\\system32\\\\net1 user administrator"
+  },
+  "rule-92066": {
+    "_index": "wazuh-alerts-4.x-2024.12.03",
+    "_id": "D7Q3jpMB5I68Eu0XDMSc",
+    "_source.rule.id": "92066",
+    "_source.data.win.eventdata.logonGuid": "{d8af36fb-6538-674f-e703-000000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-FMI6MML",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": " ",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\SysWOW64\\\\SecEdit.exe",
+    "_source.data.win.eventdata.commandLine": "\\\"C:\\\\WINDOWS\\\\system32\\\\SecEdit.exe\\\" /export /cfg C:\\\\WINDOWS\\\\TEMP/secexport.cfg"
+  },
+  "rule-92052": {
+    "_index": "wazuh-alerts-4.x-2024.12.03",
+    "_id": "2LRojpMB5I68Eu0Xn8Rk",
+    "_source.rule.id": "92052",
+    "_source.data.win.eventdata.logonGuid": "{15959494-6477-674F-E703-000000000000}",
+    "_source.data.win.system.eventID": "1",
+    "_source.data.win.system.computer": "DESKTOP-QGB4EQH",
+    "_source.data.win.system.providerName": "Microsoft-Windows-Sysmon",
+    "_source.rule.mitre.id": " ",
+    "_source.data.win.eventdata.image": "C:\\\\Windows\\\\System32\\\\cmd.exe",
+    "_source.data.win.eventdata.commandLine": "C:\\\\Windows\\\\system32\\\\cmd.exe /c C:\\\\Windows\\\\system32\\\\powercfg.exe /getactivescheme &gt; C:\\\\Windows\\\\TEMP\\\\PowerPlan.log"
+  }
+}
