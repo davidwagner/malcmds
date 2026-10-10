@@ -8,6 +8,7 @@ from email.utils import parsedate_to_datetime
 import html
 import io
 import json
+import ntpath
 import re
 import sys
 import tarfile
@@ -285,6 +286,10 @@ def event_commands(fields, dataset, source, number, label="unknown", group=None,
         if dataset == "atlasv2":
             from _ingest_atlas_labels import launch_label
             label = launch_label(fields, source, program, args, label)
+        if (dataset == "splunkad" and group == "splunkad:98070d52-1c52-407b-8be1-1534d77cd245"
+                and ntpath.basename(program).lower().removesuffix(".exe") == "conhost"
+                and "--headless" in args):
+            label, group = "malicious", None
         yield Command(
             program,
             args,
@@ -615,6 +620,7 @@ def splunkad(root, options):
     budget = Budget(options)
     source_root = root / "source"
     groups = {}
+    current_groups = {}
     for path in sorted(source_root.rglob("*.yml")):
         with path.open() as stream:
             metadata = yaml.safe_load(stream)
@@ -623,10 +629,16 @@ def splunkad(root, options):
         exercise = metadata.get("id")
         if not exercise:
             continue
+        for url in metadata.get("dataset", []):
+            if isinstance(url, str) and "/datasets/" in url:
+                from urllib.parse import urlsplit
+                rel = "datasets/" + urlsplit(url).path.split("/datasets/", 1)[1]
+                groups.setdefault(rel, f"splunkad:{exercise}")
         for entry in metadata.get("datasets", []):
             if isinstance(entry, dict) and entry.get("path"):
                 rel = str(entry["path"]).lstrip("/")
-                groups[rel] = f"splunkad:{exercise}"
+                current_groups[rel] = f"splunkad:{exercise}"
+    groups.update(current_groups)
     files = [
         p
         for p in source_root.rglob("*")

