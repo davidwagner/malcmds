@@ -1,0 +1,1 @@
+{"_time": "1534761179", "source": "source::/home/ec2-user/.bash_history", "host": "host::gacrux.i-0920036c8ca91e501", "sourcetype": "sourcetype::bash_history", "_raw": "ps -ef | grep stre", "_meta": "_indextime::1534761179 timestamp::none punct::_-_|__"}
