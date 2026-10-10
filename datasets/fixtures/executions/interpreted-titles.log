@@ -1,0 +1,12 @@
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.303:154702) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.270:154692) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.270:154691) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.269:154688) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.260:154687) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.260:154686) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.260:154685) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.259:154684) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.259:154683) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.258:154678) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.258:154677) : proctitle=sudo systemctl status auditd.service 
+type=PROCTITLE msg=audit(02/20/2025 13:35:09.245:154676) : proctitle=sudo systemctl status auditd.service 
