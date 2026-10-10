@@ -37,6 +37,53 @@ def limited(rows, options):
     yield from islice(rows, options.max_records)
 
 
+
+def sudo_command_argv(text: str) -> list[str]:
+    """Decode sudo eventlog COMMAND serialization once, without shell evaluation.
+
+    Sudo wraps arguments containing spaces in single quotes, escapes quotes
+    and backslashes, and writes control bytes as #0nn octal sequences.
+    Double quotes remain ordinary argument content.
+    """
+    words = []
+    word = []
+    quoted = False
+    started = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and index + 1 < len(text) and (
+            text[index + 1] in "\\'" or text[index + 1].isspace()
+        ):
+            word.append(text[index + 1])
+            started = True
+            index += 2
+            continue
+        # sudo's lbuf.c escape() writes #0 plus one to three octal digits:
+        # bell is #07, tab #011, and DEL #0177.
+        control = re.match(r"#0([0-7]{1,3})", text[index:]) if char == "#" else None
+        if control:
+            word.append(chr(int(control[1], 8)))
+            started = True
+            index += len(control[0])
+            continue
+        if char == "'":
+            quoted = not quoted
+            started = True
+        elif char.isspace() and not quoted:
+            if started:
+                words.append("".join(word))
+                word = []
+                started = False
+        else:
+            word.append(char)
+            started = True
+        index += 1
+    if started:
+        words.append("".join(word))
+    return words
+
+
 def audit_value(value):
     """Decode Linux audit quoted strings and hexadecimal argument values."""
     if value.startswith('"'):
@@ -176,12 +223,13 @@ def ait(root, options):
                             command = text.split("COMMAND=", 1)[1].strip()
                             if command == "list":
                                 command = "sudo -l"
-                            yield from emitted(
-                                command,
-                                f"{path.name}:{name}:{line}",
-                                session,
-                                "malicious" if line in attacks else "benign",
-                            )
+                            argv = sudo_command_argv(command)
+                            if argv:
+                                yield Command(
+                                    argv[0], argv[1:], f"{path.name}:{name}:{line}:0",
+                                    "malicious" if line in attacks else "benign",
+                                    session_id=session,
+                                )
 
 
 def kypo(root, options):
@@ -408,7 +456,9 @@ def linux_apt(root, options):
                         audit_session,
                     )
             else:
-                yield from emitted(command, rid, session, label)
+                argv = sudo_command_argv(command)
+                if argv:
+                    yield Command(argv[0], argv[1:], rid + ":0", label, session_id=session)
 
 
 def windows_apt(root, options):

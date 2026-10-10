@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from _ingest import Command, normalize, select_files
-from _ingest_misc import audit_events, audit_value
+from _ingest_misc import audit_events, audit_value, sudo_command_argv
 from _ingest_windows import event_commands, json_fields, text_fields, xml_events
 
 SPLUNK_URL = "https://download.splunk.com/products/splunk/releases/9.1.3/linux/splunk-9.1.3-d95b3299fa65-Linux-x86_64.tgz"
@@ -232,12 +232,9 @@ def records(root, options):
                             )
                         yield command
                 elif "COMMAND=" in raw and kind in ("syslog", "linux_secure"):
-                    for i, (pgm, args) in enumerate(
-                        normalize(raw.split("COMMAND=", 1)[1])
-                    ):
-                        yield Command(
-                            pgm, args, f"{record}:sudo:{i}", session_id=session
-                        )
+                    argv = sudo_command_argv(raw.split("COMMAND=", 1)[1])
+                    if argv:
+                        yield Command(argv[0], argv[1:], f"{record}:sudo:0", session_id=session)
     # Audit companion records can be in separate exported buckets; join by host/event.
     # The release has only 112 audit rows, so this small cross-bucket join is bounded.
     for (host, source), entries in audits.items():
