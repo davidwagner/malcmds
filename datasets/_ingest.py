@@ -351,8 +351,9 @@ def arguments(dataset_dir):
     )
     parser.add_argument(
         "--workers", type=_positive, default=os.cpu_count() or 1,
-        help="processes reading input files in parallel for OpTC and unbounded AVIATOR runs "
-        "(default: number of CPUs)",
+        help="processes reading input files in parallel for OpTC, unbounded AVIATOR, "
+        "and AutoLabel runs (default: number of CPUs; try 8 for AutoLabel; "
+        "AutoLabel --limit uses one; worker memory is separate from --memory-limit)",
     )
     return parser.parse_args()
 

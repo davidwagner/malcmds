@@ -1,0 +1,240 @@
+{
+  "python": "3.14.8",
+  "duckdb": "1.5.6",
+  "orjson": "3.13.0",
+  "pyarrow": "25.0.1",
+  "logical_cpus": 14,
+  "platform": "Linux-7.1.3-200.fc44.x86_64-x86_64-with-glibc2.43",
+  "physical_memory_bytes": 66832588800,
+  "source_sha256": {
+    "datasets/_ingest_autolabel.py": "7cc73e4f08fe16ea061b8d5d12abb51f8994e1821e2a7cde3b6ed8e266c14c24",
+    "datasets/_ingest.py": "f5d005e1714bf93d47e2f378a5889abe74862fab8d2108e0f8c0939608c338ac"
+  },
+  "git_commit": "ba70808f3d6b3d3afc1090ab100daa60a12af45e",
+  "timing": "Full production ingestion run and CLI parsing; includes process startup, imports, database creation, parsing, insertion, and close. Excludes cache preparation and row comparison.",
+  "resources": "20 ms polling; RSS is summed over parent and live descendants (shared pages counted per process). Arrow size sums *.arrow files. Peaks may be missed between samples. Read bytes is the high-water sum of live process I/O counters; short-lived child I/O may be missed and this does not count cache hits.",
+  "comparison": "SHA-256 of every column in every row, encoded as JSON with newline separators; sorted by record_id and separately by DuckDB rowid (insertion order).",
+  "cpu": "Intel Core Ultra 5 245K, 14 logical CPUs",
+  "storage": "Local rotational disk mounted at /slow",
+  "experiments": [
+    {
+      "name": "warm-small-12-workers",
+      "cache": "Every archive read sequentially before each trial to warm the input cache.",
+      "results": [
+        {
+          "scenario": "CVE-2018-17246",
+          "archive_bytes": 222238720,
+          "trials": {
+            "1": [
+              {
+                "seconds": 16.07506441604346,
+                "peak_parent_and_children_rss_bytes": 147759104,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 16.257497468031943,
+                "peak_parent_and_children_rss_bytes": 147968000,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 16.259805219247937,
+                "peak_parent_and_children_rss_bytes": 147722240,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ],
+            "12": [
+              {
+                "seconds": 3.0056556602939963,
+                "peak_parent_and_children_rss_bytes": 1418027008,
+                "peak_temporary_arrow_bytes": 655168,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 3.0948628671467304,
+                "peak_parent_and_children_rss_bytes": 1417801728,
+                "peak_temporary_arrow_bytes": 750952,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 2.9239955227822065,
+                "peak_parent_and_children_rss_bytes": 1417527296,
+                "peak_temporary_arrow_bytes": 655168,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ]
+          },
+          "comparison": {
+            "all_columns_sorted": {
+              "rows": 7297,
+              "sha256": "5890a352acb1a3cb84d49571f1951c21149a1af574708aebecec40f2cf2b7911"
+            },
+            "all_columns_in_insertion_order": {
+              "rows": 7297,
+              "sha256": "df43c35d8992e19e2701a8dc8cd82ca14e007757c082aaf9e908184fe20a4d0d"
+            }
+          },
+          "all_columns_and_insertion_order_equal": true,
+          "median_seconds": {
+            "1": 16.257497468031943,
+            "12": 3.0056556602939963
+          },
+          "speedup": 5.408968726125376
+        },
+        {
+          "scenario": "python-demo",
+          "archive_bytes": 395520000,
+          "trials": {
+            "1": [
+              {
+                "seconds": 23.02259434107691,
+                "peak_parent_and_children_rss_bytes": 137527296,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 23.18444899842143,
+                "peak_parent_and_children_rss_bytes": 137699328,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 23.41710147820413,
+                "peak_parent_and_children_rss_bytes": 137367552,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ],
+            "12": [
+              {
+                "seconds": 3.6690420527011156,
+                "peak_parent_and_children_rss_bytes": 1414025216,
+                "peak_temporary_arrow_bytes": 91568,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 3.9367122650146484,
+                "peak_parent_and_children_rss_bytes": 1411821568,
+                "peak_temporary_arrow_bytes": 144104,
+                "observed_process_tree_read_bytes_high_water": 0
+              },
+              {
+                "seconds": 3.676020943559706,
+                "peak_parent_and_children_rss_bytes": 1415286784,
+                "peak_temporary_arrow_bytes": 104712,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ]
+          },
+          "comparison": {
+            "all_columns_sorted": {
+              "rows": 391,
+              "sha256": "51278e5ef7f59562f3738bb5cbf0ecb8c93673bba7e562558c87cc3115a0809e"
+            },
+            "all_columns_in_insertion_order": {
+              "rows": 391,
+              "sha256": "4623fd7bd2b6a8673f0764918db47bb4816c7d22c4402040c1dcc1103d800c93"
+            }
+          },
+          "all_columns_and_insertion_order_equal": true,
+          "median_seconds": {
+            "1": 23.18444899842143,
+            "12": 3.676020943559706
+          },
+          "speedup": 6.306941487653923
+        }
+      ]
+    },
+    {
+      "name": "warm-large-8-workers",
+      "cache": "Every archive read sequentially before each trial to warm the input cache.",
+      "results": [
+        {
+          "scenario": "CVE-2024-36401",
+          "archive_bytes": 892487680,
+          "trials": {
+            "1": [
+              {
+                "seconds": 74.11004691570997,
+                "peak_parent_and_children_rss_bytes": 144809984,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ],
+            "8": [
+              {
+                "seconds": 13.060394871979952,
+                "peak_parent_and_children_rss_bytes": 995168256,
+                "peak_temporary_arrow_bytes": 362448,
+                "observed_process_tree_read_bytes_high_water": 0
+              }
+            ]
+          },
+          "comparison": {
+            "all_columns_sorted": {
+              "rows": 4974,
+              "sha256": "e8b639c28babc0efdd06bd2077a313e4d9f15d11fe2275b0802c178ab37f4d4e"
+            },
+            "all_columns_in_insertion_order": {
+              "rows": 4974,
+              "sha256": "4c2d6c5492e9c2c82cfddbc6c38a4e4aaccb7536ecfd91517bb75372aabd92a4"
+            }
+          },
+          "all_columns_and_insertion_order_equal": true,
+          "median_seconds": {
+            "1": 74.11004691570997,
+            "8": 13.060394871979952
+          },
+          "speedup": 5.67441089202496
+        }
+      ]
+    },
+    {
+      "name": "advisory-cold-large-8-workers",
+      "cache": "Advisory POSIX_FADV_DONTNEED before each trial; not guaranteed cold.",
+      "results": [
+        {
+          "scenario": "CVE-2024-36401",
+          "archive_bytes": 892487680,
+          "trials": {
+            "1": [
+              {
+                "seconds": 74.94736572168767,
+                "peak_parent_and_children_rss_bytes": 144510976,
+                "peak_temporary_arrow_bytes": 0,
+                "observed_process_tree_read_bytes_high_water": 892489728
+              }
+            ],
+            "8": [
+              {
+                "seconds": 14.22941771056503,
+                "peak_parent_and_children_rss_bytes": 995295232,
+                "peak_temporary_arrow_bytes": 362448,
+                "observed_process_tree_read_bytes_high_water": 892489728
+              }
+            ]
+          },
+          "comparison": {
+            "all_columns_sorted": {
+              "rows": 4974,
+              "sha256": "e8b639c28babc0efdd06bd2077a313e4d9f15d11fe2275b0802c178ab37f4d4e"
+            },
+            "all_columns_in_insertion_order": {
+              "rows": 4974,
+              "sha256": "4c2d6c5492e9c2c82cfddbc6c38a4e4aaccb7536ecfd91517bb75372aabd92a4"
+            }
+          },
+          "all_columns_and_insertion_order_equal": true,
+          "median_seconds": {
+            "1": 74.94736572168767,
+            "8": 14.22941771056503
+          },
+          "speedup": 5.267071868024571
+        }
+      ]
+    }
+  ],
+  "source_note": "Hashes identify the measured commit. Subsequent changes add a lint comment to the reader and combine equivalent context managers in the benchmark; ingestion behavior is unchanged."
+}
