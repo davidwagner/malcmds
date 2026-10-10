@@ -383,17 +383,20 @@ def bounded_lines(stream, budget):
         yield line
 
 
-def parse_log(binary, source, dataset, budget, label="unknown", group=None):
+def parse_log(binary, source, dataset, budget, label="unknown", group=None, *, encoding=None):
     """Stream XML, JSONL, rendered Windows events, and Linux audit records."""
     print(f"{dataset}: reading {source}", file=sys.stderr, flush=True)
     # BufferedReader also works for archive members without materializing them.
     buffered = io.BufferedReader(binary)
     prefix = buffered.peek(4096)[:4096]
-    encoding = (
+    errors = "strict" if encoding is not None else "replace"
+    encoding = encoding or (
         "utf-16" if prefix.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
     )
-    stream = io.TextIOWrapper(buffered, encoding=encoding, errors="replace")
-    sample = prefix.decode(encoding, errors="replace")
+    stream = io.TextIOWrapper(buffered, encoding=encoding, errors=errors)
+    # Incremental decoding tolerates a prefix ending inside a multibyte character.
+    import codecs
+    sample = codecs.getincrementaldecoder(encoding)(errors=errors).decode(prefix)
     if EVENT_START.search(sample):
         for number, fields in xml_events(stream, commands_only=True):
             if not budget.take():
