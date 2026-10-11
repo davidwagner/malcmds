@@ -636,7 +636,7 @@ def _publicarena_attack(config, text):
         return program == "mimikatz" and args == ["lsadump:sam"]
     if step == "F5":
         return program == "schtasks" and args == ["/create", "/tn", "test", "/tr", r"C:\Users\Public\logic.exe", "/sc", "onlogon"]
-    prefix = [r"\192.168.0.110", "-u", "administrator", "-p", "Data123456!"]
+    prefix = [r"\\192.168.0.110", "-u", "administrator", "-p", "Data123456!"]
     if step == "F15onHostA-paexecip":
         return program == "paexec" and args == [*prefix, "ipconfig"]
     if step == "F16onHostA-paexecdown":
@@ -699,7 +699,7 @@ def publicarena(root, options):
                     # Match the same unzoned local wall times used by the attack configs.
                     date = datetime.strptime(row["date"], "%m/%d/%Y %H:%M:%S")  # noqa: DTZ007
                     pname = str(row.get("PName", "")).lower().removesuffix(".exe")
-                    text = html.unescape(row["CommandLine"]).replace("\\\\", "\\")
+                    text = html.unescape(row["CommandLine"])
                     for target, start, end, programs, config in truth:
                         if (
                             target == host
