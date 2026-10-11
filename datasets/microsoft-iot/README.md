@@ -1,31 +1,19 @@
 # Microsoft IoT attack command sequences
 
-Unix/Linux shell command sequences captured by Microsoft's IoT honeypot network during four months in 2019. The collection contains more than 125,000 distinct sequences seen over 150 million times. Repeated occurrences of a sequence are combined into one record with a count and the first and last times it appeared.
+Microsoft's IoT honeypots captured Unix/Linux malware and attack command sequences during four months in 2019. Repeated observations of the same sequence are combined into one record with a count and first/last observation times. A sequence is an aggregate, not an individual connection.
 
-`Microsoft.IoT-Dump1.json` contains a JSON array of sequence records. Every record contains commands.
+## Mapping to the database
 
-## Fields
+The reader opens `Microsoft.IoT-Dump-pwd-infected.zip` with the publisher's password, `infected`. Its JSON records contain an `ID` and an ordered `Commands` array. Each shell input is parsed into program-and-argument rows; `shell_input` retains that input and `other_tokens` retains the remaining shell syntax. Repeated observations are imported once per recorded sequence.
 
-| Field | Meaning |
-| --- | --- |
-| `Commands` | Ordered array of full command strings. A string can include pipelines, multiple commands, and other shell syntax. |
-| `ID` | SHA-256 identifier for the sequence. This ID and a command's array position identify that command within the sequence. |
-| `FirstSeen`, `LastSeen` | First and last times the sequence appeared. The timestamps contain fractional seconds and have no timezone suffix. |
+- `record_id` combines the sequence ID, zero-based `Commands` position and parsed-command position.
+- `session_id` is `microsoft-iot:` followed by the sequence ID. It groups the recorded sequence; individual connection IDs are unavailable.
+- `label` is `malicious` for every parsed command; `group_id` is NULL.
 
-The data has no individual connection/session ID or per-command timestamp.
-
-## Labels
-
-Microsoft describes the collection as malware and attack activity. That classification applies to the collected sequences, and each sequence's commands are grouped under its `ID`. The JSON has no separate malicious/benign field, and the collection has no benign partition.
-
-Sources: [Microsoft release announcement](https://techcommunity.microsoft.com/t5/azure-sentinel/enabling-security-research-amp-hunting-with-open-source-iot/ba-p/1279037), [dataset in Azure-Sentinel](https://github.com/Azure/Azure-Sentinel/blob/048039639702f528379307aca6f6881d74b142c8/Sample%20Data/Microsoft.IoT-Dump-pwd-infected.zip).
+These are best-effort labels attributing commands to malware/attack input captured by the publisher's honeypots. Individual rows have not all been independently reviewed. For example, `uname -a` in an attacker sequence stays `malicious`, although administrators also use it. Normalized row counts are counts of commands, not connections or distinct sequences.
 
 ## Ingestion
 
-Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+Run `./ingest` from this directory to append to the root `cmds.duckdb`. For a separate sample, run `./ingest --db ../../tmp/microsoft-iot.duckdb --limit 100`. Repeated imports preserve one row per source command.
 
-The reader opens the publisher ZIP with password infected and streams its UTF-8-BOM JSON array. Commands are parsed as shell input. Aggregated repetitions are ingested once per recorded sequence.
-
-`record_id` is sequence ID + zero-based Commands array index + normalized-command index. `session_id` and `group_id` are `microsoft-iot:` + sequence ID, the available grouping for these aggregated observations. All sequences have `label=malicious-group`, matching the publisher's honeypot attack collection.
-
-Validation streamed the encrypted source and inspected 100 normalized commands. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.
+Sources: [Microsoft announcement](https://techcommunity.microsoft.com/t5/azure-sentinel/enabling-security-research-amp-hunting-with-open-source-iot/ba-p/1279037), [published archive](https://github.com/Azure/Azure-Sentinel/blob/048039639702f528379307aca6f6881d74b142c8/Sample%20Data/Microsoft.IoT-Dump-pwd-infected.zip). See the shared [database schema](../../schema.md) for column definitions.

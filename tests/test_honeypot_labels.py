@@ -42,3 +42,43 @@ def test_published_honeypot_commands(tmp_path, dataset):
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(rows)
+
+
+@pytest.mark.parametrize('source', ['microsoft', 'input', 'success', 'failed'])
+def test_attacker_commands_keep_connection_or_sequence_without_label_group(tmp_path, source):
+    """Ordinary commands retain attacker attribution and independent source sessions."""
+    if source == 'microsoft':
+        records = [{'ID': sid, 'TimesSeen': 1000, 'Commands': ['uname -a; id']}
+                   for sid in ['first', 'second']]
+        with zipfile.ZipFile(tmp_path / 'Microsoft.IoT-Dump-pwd-infected.zip', 'w') as archive:
+            archive.writestr('Microsoft.IoT-Dump1.json', json.dumps(records))
+        reader = 'from _ingest_misc import microsoft_iot as records\n'
+        expected_sessions = {'microsoft-iot:first', 'microsoft-iot:second'}
+    else:
+        records = []
+        prefixes = {'input': 'CMD: ', 'success': 'Command found: ', 'failed': 'Command not found: '}
+        for sid in ['first', 'second']:
+            commands = ['uname -a; id'] if source == 'input' else ['uname -a', 'id']
+            events = [{'eventid': 'cowrie.command.' + source,
+                       'message': prefixes[source] + command,
+                       'dst_host_identifier': 'host-a'} for command in commands]
+            if source == 'input':
+                events.append({'eventid': 'cowrie.command.failed',
+                               'message': 'Command not found: uname -a',
+                               'dst_host_identifier': 'host-a'})
+            records.append({sid: events})
+        (tmp_path / 'sample.json.gz').write_bytes(gzip.compress(json.dumps(records).encode()))
+        reader = 'from _ingest_misc import cyberlab as records\n'
+        expected_sessions = {'cyberlab:sample.json.gz:host-a:first',
+                             'cyberlab:sample.json.gz:host-a:second'}
+    database = tmp_path / 'commands.duckdb'
+    result = invoke(tmp_path, database, reader)
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        rows = con.execute('SELECT pgm,args,label,group_id,session_id FROM COMMANDS').fetchall()
+    assert len(rows) == 4, 'Sequence repetition counts and Cowrie handler echoes must not multiply commands'
+    assert {row[4] for row in rows} == expected_sessions, 'Source connection/sequence IDs must survive without a label group'
+    for session in expected_sessions:
+        assert sorted((pgm, args, label, group) for pgm, args, label, group, sid in rows if sid == session) == [
+            ('id', [], 'malicious', None), ('uname', ['-a'], 'malicious', None),
+        ], 'Honeypot attribution must not depend on command syntax or Cowrie success/failure'
