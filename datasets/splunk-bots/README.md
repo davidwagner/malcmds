@@ -50,7 +50,8 @@ small records while streaming all other sources.
 - `record_id`: archive name, native index bucket name, exported event ordinal,
   and the XML event/JSON object/process-table row/shell-command ordinal as needed.
   Audit IDs additionally include the original `audit(timestamp:serial)` value.
-- `label`: `unknown`; competition questions are not individual command labels.
+- `label`: `malicious` for supported attack rules and indicator matches; otherwise
+  `unknown`. Competition questions are not individual command labels.
 - `group_id`: NULL.
 - `session_id`: host and native LogonGuid when present; otherwise host, collection
   scope and numeric logon ID. Osquery uses host, UID, and parent PID (audit UID
@@ -64,6 +65,39 @@ The complete native export contains 1,944,094 source events across 17 buckets.
 Use `--sample-files` to select buckets reproducibly and `--max-records` to bound
 source records per selected bucket. Normal invocations process every bucket.
 
-Full local validation ingested 320,479 commands from all 17 buckets. A seeded
+Earlier validation, before process deduplication, ingested 320,479 commands from all 17 buckets. A seeded
 bucket passed repeat-ingestion equality checks; a regression verifies that apt
 history metadata produces only the recorded `apt-get install netcat` command.
+
+### Best-effort indicator labels
+
+Ingestion also uses the 16 indicators of compromise (IOCs) from
+[`bots_rich.py` at commit `44ef4e047c5dbff13f52bc3856b8060f0524f192`](https://github.com/kmkholm/moe-mamba-soc-triage/blob/44ef4e047c5dbff13f52bc3856b8060f0524f192/src/data/bots_rich.py).
+An IOC is a value associated with an attack, such as a server address, malware
+filename, or stolen access key. The list is copied into the ingester so labels
+are reproducible without downloading code during ingestion.
+
+An unknown command becomes `malicious` if its program or arguments contain an
+indicator, using case-insensitive literal substring matching. This applies to
+all retained command sources, including Windows events, osquery and shell
+history. Existing labels are preserved and no attack group is assigned.
+The upstream script searches whole events; this ingester searches only the
+individual command, since parent-process fields and other commands in the same
+shell history entry can refer to different activity. This remains a heuristic:
+for example, inspecting a file named `hdoor.exe` also matches.
+
+Commands without a match remain `unknown`. The data contains attacks that use
+other names: native osquery events show decoding `/tmp/colonel`, compiling
+`colonel.c` into `colonelnew`, and executing `/tmp/colonelnew`. These names are
+absent from the indicator list, so lack of a match is insufficient evidence to
+label all remaining commands benign. The relevant records are in bucket
+`db_1534766463_1534762020_305`, at exported rows 70692, 89992 and 207477.
+
+Validation on 2026-10-10 against all 17 native buckets produced 220,783 retained commands.
+The indicators matched 90 commands, including 22 previously unknown commands;
+the other 68 already had exploit-invocation labels. This version therefore
+produced 90 malicious and 220,693 unknown commands. These counts describe the
+current command extraction and policy, rather than the older validation above.
+Tests preserve native examples from every source with new matches, including
+unmatched exploit activity. They also check every pinned indicator, quoted
+arguments, case handling, literal dots, and commands sharing shell input.
