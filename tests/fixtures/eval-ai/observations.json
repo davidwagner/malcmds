@@ -1,0 +1,278 @@
+[
+  {
+    "classifier": "jev",
+    "stage": "label",
+    "response": {
+      "model": "typesafe/jev-1.13-20260917",
+      "answers": {
+        "classification": {
+          "type": "choice",
+          "choice": "benign",
+          "probabilities": {
+            "malicious": 0,
+            "benign": 0.65,
+            "unknown": 0.35
+          },
+          "confidence": 0.48
+        }
+      },
+      "usage": {
+        "input_tokens": 505,
+        "output_tokens": 42,
+        "cost": 2.121e-05
+      }
+    },
+    "cost_usd": 2.121e-05,
+    "cost_kind": "reported"
+  },
+  {
+    "classifier": "pplx",
+    "stage": "label",
+    "response": {
+      "model": "perplexity/pplx-decider-v1.1-27b-20261006",
+      "answers": {
+        "classification": {
+          "type": "choice",
+          "choice": "benign",
+          "probabilities": {
+            "malicious": 0.0012734396482216484,
+            "benign": 0.9415764959771687,
+            "unknown": 0.057150064374609476
+          },
+          "confidence": 0.912364743965753
+        }
+      },
+      "usage": {
+        "input_tokens": 270,
+        "output_tokens": 1,
+        "cost": 5.4e-06
+      }
+    },
+    "cost_usd": 5.4e-06,
+    "cost_kind": "reported"
+  },
+  {
+    "classifier": "luna",
+    "stage": "label",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "output": [
+        {
+          "type": "reasoning",
+          "content": [],
+          "summary": []
+        },
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "benign"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 191,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 22,
+        "output_tokens_details": {
+          "reasoning_tokens": 14
+        },
+        "total_tokens": 213
+      }
+    },
+    "cost_usd": 3.01e-05,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "luna",
+    "stage": "scores",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "output": [
+        {
+          "type": "reasoning",
+          "content": [],
+          "summary": []
+        },
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"malicious\":0,\"benign\":0.99,\"unknown\":0.01}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 264,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 49,
+        "output_tokens_details": {
+          "reasoning_tokens": 21
+        },
+        "total_tokens": 313
+      }
+    },
+    "cost_usd": 5.0900000000000004e-05,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "haiku",
+    "stage": "label",
+    "response": {
+      "model": "claude-haiku-5-5",
+      "content": [
+        {
+          "type": "text",
+          "text": "benign"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 299,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 4,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      }
+    },
+    "cost_usd": 3.19e-05,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "haiku",
+    "stage": "scores",
+    "response": {
+      "model": "claude-haiku-5-5",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"malicious\":0.02,\"benign\":0.96,\"unknown\":0.02}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 593,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 29,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      }
+    },
+    "cost_usd": 7.38e-05,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "sol",
+    "stage": "label",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6.1-sol",
+      "output": [
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "benign"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 191,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 6,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 197
+      }
+    },
+    "cost_usd": 0.000442,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "sol",
+    "stage": "scores",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6.1-sol",
+      "output": [
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"malicious\":0.001,\"benign\":0.994,\"unknown\":0.005}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 264,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 28,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 292
+      }
+    },
+    "cost_usd": 0.000808,
+    "cost_kind": "estimated"
+  }
+]
