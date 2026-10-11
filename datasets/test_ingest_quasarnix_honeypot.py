@@ -1,6 +1,7 @@
 """Authentic source excerpts exercise full ingest paths and dependency assumptions."""
 import io
 import json
+import os
 import subprocess
 import sys
 import tarfile
@@ -117,3 +118,69 @@ def test_quasarnix_padding_mentions_socket(tmp_path):
     with duckdb.connect(str(db)) as con:
         assert con.execute('SELECT pgm,label FROM COMMANDS ORDER BY record_id').fetchall() == [
             ('echo', 'malicious-group'), ('cat', 'malicious-group'), ('bash', 'malicious')]
+
+
+def test_quasarnix_ansi_c_nul_arguments(tmp_path):
+    """Preserve Bash's NUL truncation per quoted segment through source ingestion."""
+    from _ingest_quasarnix import FILES
+
+    # Only these authored printf controls run in Bash; dataset commands never run.
+    # Explicit expectations catch changes in Bash or the tree-sitter dependency.
+    cases = [
+        (r"$'\0'", ''),
+        (r"$'\00'", ''),
+        (r"$'\000'", ''),
+        (r"$'\x0'", ''),
+        (r"$'\x00'", ''),
+        (r"$'\u0'", ''),
+        (r"$'\u0000'", ''),
+        (r"$'\U0'", ''),
+        (r"$'\U00000000'", ''),
+        (r"$'a\0b'", 'a'),
+        (r"pre$'a\0b'post", 'preapost'),
+        (r"$'\0'$'tail'", 'tail'),
+        (r"$'a\0b'$'c\0d'", 'ac'),
+        (r"$'a\0b\0c'", 'a'),
+        (r"$'\\0'", r'\0'),
+        (r"$'\\x00'", r'\x00'),
+        (r"$'\101\x42\u0043\U00000044\t\n'", 'ABCD\t\n'),
+        (r"$'ordinary'", 'ordinary'),
+    ]
+    commands = []
+    for word, expected in cases:
+        command = f"printf '%s' {word}"
+        control = subprocess.run(
+            ['bash', '--noprofile', '--norc', '-c', command],
+            env={'PATH': os.defpath, 'LC_ALL': 'C'},
+            capture_output=True, check=True,
+        )
+        assert control.stdout == expected.encode(), (
+            f'Bash ANSI-C quoting assumption changed for {word!r}'
+        )
+        commands.append(command)
+
+    # The source example from issue #97 must keep its empty read delimiter.
+    original = r"IFS= read -d $'\0' -r file"
+    commands.append(original)
+    root = tmp_path / 'quasarnix'
+    root.mkdir()
+    for name in FILES:
+        (root / name).write_text(json.dumps(commands if name == 'nl2bash.json' else []))
+    db = tmp_path / 'commands.duckdb'
+    result = _ingest(root, '_ingest_quasarnix', db)
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(db)) as con:
+        rows = dict(con.execute(
+            'SELECT record_id, struct_pack(pgm := pgm, args := args, '
+            'shell_input := shell_input, label := label) FROM COMMANDS'
+        ).fetchall())
+    assert len(rows) == len(commands), 'ANSI-C words must not drop or duplicate commands'
+    for index, (_, expected) in enumerate(cases):
+        assert rows[f'nl2bash.json:{index}:0'] == {
+            'pgm': 'printf', 'args': ['%s', expected],
+            'shell_input': commands[index], 'label': 'benign',
+        }, f'Bash argument semantics or source spelling lost for {cases[index][0]!r}'
+    assert rows[f'nl2bash.json:{len(cases)}:0'] == {
+        'pgm': 'read', 'args': ['-d', '', '-r', 'file'],
+        'shell_input': original, 'label': 'benign',
+    }
