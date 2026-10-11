@@ -33,7 +33,7 @@ def ingest_events(directory, events):
         _initialize(connection)
         _insert(connection, command_table(commands, "splunk-bots"))
         return connection.execute(
-            "SELECT pgm,args,label,group_id,session_id FROM COMMANDS ORDER BY record_id"
+            "SELECT pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id"
         ).fetchall()
 
 

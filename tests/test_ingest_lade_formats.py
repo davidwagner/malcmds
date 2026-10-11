@@ -62,13 +62,13 @@ def test_lade_cmd_quotes_caret_comments_and_redirections(tmp_path):
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall() == [
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall() == [
             ('echo', ['quoted & value', '&', '|', '<', '>', '^']),
             ('type', []), ('whoami', []), ('findstr', ['user']),
         ], 'cmd quoting and caret escaping must not create extra commands or arguments'
-        omitted = con.execute("SELECT other_tokens FROM COMMANDS WHERE pgm='type'").fetchone()[0]
-        assert all(token in omitted for token in ['<', 'input.txt', '>', 'out.txt', '2>&1'])
-        assert con.execute('SELECT DISTINCT shell_input,label,os FROM COMMANDS').fetchall() == [(code, 'benign', 'windows')]
+        omitted = con.execute("SELECT tokens FROM SHELL_INPUTS").fetchone()[0]
+        assert all(token in omitted for token in ['<', 'input.txt', '>', 'out.txt'])
+        assert con.execute('SELECT shell_input,dataset_label,os FROM SHELL_INPUTS').fetchall() == [(code, 'benign', 'windows')]
 
 
 def test_lade_linux_direct_process_and_partial_powershell(tmp_path):
@@ -87,16 +87,16 @@ def test_lade_linux_direct_process_and_partial_powershell(tmp_path):
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT pgm,args,os,shell_input,other_tokens FROM COMMANDS ORDER BY rowid').fetchall()
+        rows = con.execute('SELECT pgm,args,os FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall()
         assert [row[0] for row in rows] == ['printf', 'cat', '/usr/bin/id', r'C:\Program Files\viewer.exe', 'Get-Process', 'Get-Item', 'Write-Output']
         assert rows[0][1] == [r'%s\n', 'hello']
         assert rows[0][2] == rows[1][2] == rows[2][2] == 'linux'
-        assert rows[2][1:] == (['-u'], 'linux', None, [])
-        assert rows[3][1:] == (['--literal', 'a|b'], 'windows', None, [])
+        assert rows[2][1:] == (['-u'], 'linux')
+        assert rows[3][1:] == (['--literal', 'a|b'], 'windows')
         assert rows[4][1] == ['-Name', 'notepad']
         assert rows[5][1] == ['-LiteralPath', r'C:\Missing'], 'A valid command inside a partial script must survive AST parsing'
         assert rows[6][1] == ['$x'], 'Static parsing must not evaluate variables'
-        assert all(row[3] == snippets[index][0] for index, row in [(3, rows[4]), (4, rows[5]), (5, rows[6])])
+        assert con.execute('SELECT shell_input FROM SHELL_INPUTS ORDER BY rowid').fetchall() == [(snippets[i][0],) for i in [0, 3, 4, 5]]
 
 
 def test_lade_sequence_scenario_annotations_and_benign_processes(tmp_path):
@@ -116,12 +116,12 @@ def test_lade_sequence_scenario_annotations_and_benign_processes(tmp_path):
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT pgm,args,label,group_id,shell_input,other_tokens FROM COMMANDS ORDER BY rowid').fetchall()
+        rows = con.execute('SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall()
         assert [row[0] for row in rows] == ['Invoke-Persistence', 'Invoke-Persistence', r'C:\Program Files\Mozilla Firefox\firefox.exe', 'Get-Date', 'notepad.exe']
         assert rows[0][2:4] == ('malicious', None)
         assert rows[1][2] == 'malicious-group' and rows[1][3].endswith('Processed_APT29__scenario2.txt')
         assert all(row[2] == 'benign' for row in rows[2:])
-        assert all(row[4:] == (None, []) for row in rows), 'Expanded scripts and process telemetry are not submitted shell input'
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,), 'Expanded scripts and process telemetry are not submitted shell input'
 
 
 def test_lade_bounded_and_sampled_reads_remain_incomplete(tmp_path):
@@ -132,12 +132,12 @@ def test_lade_bounded_and_sampled_reads_remain_incomplete(tmp_path):
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n', '--sample-files', '1', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (4,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (4,)
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (True,)
 
 
@@ -152,19 +152,21 @@ def test_lade_standalone_static_parser_and_trailing_cmd_separator(tmp_path):
     reader = '''
 import json
 from _ingest_lade import snippet_commands
+from _ingest import ShellInput
 
 def records(root, options):
     """Persist static adapter results without executing any snippet."""
     for index, (text, platform) in enumerate(json.loads((root / 'snippets.json').read_text())):
-        for program, args, other in snippet_commands(text, platform):
-            yield Command(program, args, str(index), shell_input=text, other_tokens=other, os='windows')
+        commands = [Command(program, args, f'{index}:{number}', os='windows')
+                    for number, (program, args, _) in enumerate(snippet_commands(text, platform))]
+        yield ShellInput(text, str(index), commands, os='windows')
 '''
     database = tmp_path / 'commands.duckdb'
     result = ingest(tmp_path, database, reader)
     assert result.returncode == 0, result.stderr
     assert not marker.exists(), 'Static PowerShell parsing executed source text'
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall() == [
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall() == [
             ('Set-Content', ['-LiteralPath', str(marker), '-Value', 'never run']), ('echo', ['done']),
         ]
 
@@ -178,8 +180,8 @@ def test_lade_unknown_platform_infers_unix_from_executable(tmp_path):
     result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args,os,shell_input FROM COMMANDS ORDER BY rowid').fetchall() == [
-            ('/usr/bin/id', ['-u'], 'linux', code), ('/usr/bin/id', ['-g'], 'linux', None),
+        assert con.execute('SELECT pgm,args,os FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall() == [
+            ('/usr/bin/id', ['-u'], 'linux'), ('/usr/bin/id', ['-g'], 'linux'),
         ]
 
 
@@ -204,4 +206,17 @@ from _ingest_lade import records
         result = ingest(root, database, reader)
         assert result.returncode == 0, result.stderr
         with duckdb.connect(str(database)) as con:
-            assert con.execute('SELECT pgm,label FROM COMMANDS').fetchall() == [('Get-Date', 'benign')]
+            assert con.execute('SELECT pgm,dataset_label FROM PROCESS_LAUNCHES').fetchall() == [('Get-Date', 'benign')]
+
+
+def test_lade_assignment_only_input_has_no_process_launch(tmp_path):
+    """PowerShell AST changes must not discard submitted input without an invocation."""
+    code = "$value = 'assignment only'"
+    _release(tmp_path, [('Caldera-derived/APT_labeled_sequences/GroundTruth/assignment.txt',
+                         _ground(code, 'platform.windows.psh.command'))])
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(tmp_path, database, 'from _ingest_lade import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (0,)
+        assert con.execute('SELECT shell_input,pgms,dataset_label FROM SHELL_INPUTS').fetchall() == [(code, [], 'benign')]

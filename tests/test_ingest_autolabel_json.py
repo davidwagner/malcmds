@@ -56,7 +56,7 @@ def test_large_ids_and_lifecycle(tmp_path, clone, exit_kind):
     result = invoke(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT record_id,session_id FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = con.execute('SELECT record_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
         prefix = 'events.tar:container:'
         parent = f'{prefix}process:{BIG}:{BIG}'
         assert rows == [
@@ -108,7 +108,7 @@ def test_json_encodings_match_standard_fields(tmp_path, case):
         result = invoke(root, database, READER)
         assert result.returncode == 0, result.stderr
         with duckdb.connect(str(database)) as con:
-            outputs.append(con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall())
+            outputs.append(con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall())
             assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(True,)]
     assert outputs[0] == outputs[1], f'{case}: decoder changed stored command fields'
     assert len(outputs[1]) == (0 if case == 'duplicate-read' else 1)
@@ -133,10 +133,10 @@ def test_bad_json_keeps_ingestion_retryable(tmp_path, bad, error):
     assert result.returncode != 0 and error in result.stderr, result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(False,)]
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)
     _archive(root, [valid])
     result = invoke(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(True,)]
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)

@@ -20,14 +20,13 @@ def test_retry_replaces_dataset_and_preserves_other_datasets(tmp_path, markers):
     with duckdb.connect(str(database)) as con:
         con.execute("CREATE TYPE command_label AS ENUM ('malicious', 'benign', 'unknown', 'malicious-group')")
         con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
-        con.execute("""CREATE TABLE COMMANDS (
+        con.execute("""CREATE TABLE PROCESS_LAUNCHES (
             pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
-            shell_input VARCHAR, other_tokens VARCHAR[] NOT NULL,
-            dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
+            dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
             group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-            CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
+            CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
         for dataset in (root.name, 'other'):
-            con.execute("INSERT INTO COMMANDS VALUES ('old', 'old', [], NULL, [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
+            con.execute("INSERT INTO PROCESS_LAUNCHES VALUES ('old', 'old', [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
         if markers is not None:
             con.execute('CREATE TABLE INGESTED (dataset VARCHAR, ingested BOOLEAN)')
             con.executemany('INSERT INTO INGESTED VALUES (?, ?)', [(root.name, value) for value in markers])
@@ -41,21 +40,21 @@ def records(root, options):
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['stored'] == 2
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT dataset,record_id FROM COMMANDS ORDER BY dataset,record_id').fetchall() == [
+        assert con.execute('SELECT dataset,record_id FROM PROCESS_LAUNCHES ORDER BY dataset,record_id').fetchall() == [
             (root.name, 'new'), (root.name, 'new'), ('other', 'stale'),
         ]
         assert con.execute('SELECT ingested FROM INGESTED WHERE dataset=?', [root.name]).fetchall() == [(True,)]
         assert con.execute("SELECT ingested FROM INGESTED WHERE dataset='other'").fetchall() == ([] if markers is None else [(True,)])
-        constraints = con.execute("SELECT constraint_type FROM duckdb_constraints() WHERE table_name='COMMANDS'").fetchall()
-        assert ('PRIMARY KEY',) not in constraints, 'COMMANDS must not require a primary-key index'
+        constraints = con.execute("SELECT constraint_type FROM duckdb_constraints() WHERE table_name='PROCESS_LAUNCHES'").fetchall()
+        assert ('PRIMARY KEY',) not in constraints, 'PROCESS_LAUNCHES must not require a primary-key index'
         assert ('CHECK',) in constraints and ('NOT NULL',) in constraints
-        assert con.execute("SELECT typeof(label),typeof(os),typeof(args) FROM COMMANDS LIMIT 1").fetchone() == (
+        assert con.execute("SELECT typeof(dataset_label),typeof(os),typeof(args) FROM PROCESS_LAUNCHES LIMIT 1").fetchone() == (
             "ENUM('malicious', 'benign', 'unknown', 'malicious-group')", "ENUM('windows', 'linux')", 'VARCHAR[]',
         )
 
 
-def test_completed_dataset_skips_before_initializing_commands_or_reader(tmp_path):
-    """A true marker exits even if the source is unavailable or COMMANDS absent."""
+def test_completed_dataset_initializes_tables_without_opening_reader(tmp_path):
+    """Validate the current schema before a true marker skips source access."""
     database = tmp_path / 'commands.duckdb'
     with duckdb.connect(str(database)) as con:
         con.execute('CREATE TABLE INGESTED (dataset VARCHAR, ingested BOOLEAN)')
@@ -65,7 +64,9 @@ def test_completed_dataset_skips_before_initializing_commands_or_reader(tmp_path
     assert json.loads(result.stdout)['skipped'] is True
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT ingested FROM INGESTED ORDER BY ingested').fetchall() == [(False,), (True,)]
-        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',)]
+        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (0,)
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
 
 
 @pytest.mark.parametrize('failure', ['open', 'read', 'close', 'tail'])
@@ -84,11 +85,11 @@ def test_failures_remain_incomplete_and_retry_starts_over(tmp_path, failure):
     assert result.returncode != 0
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(False,)]
-        assert con.execute('SELECT record_id FROM COMMANDS').fetchall() == ([('stale',)] if failure in ('read', 'close') else [])
+        assert con.execute('SELECT record_id FROM PROCESS_LAUNCHES').fetchall() == ([('stale',)] if failure in ('read', 'close') else [])
     result = invoke(tmp_path, database, "def records(root, options):\n    return [Command('new', [], 'replacement')]\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id FROM COMMANDS').fetchall() == [('replacement',)]
+        assert con.execute('SELECT record_id FROM PROCESS_LAUNCHES').fetchall() == [('replacement',)]
         assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(True,)]
 
 
@@ -118,5 +119,5 @@ def test_dataset_reset_failure_rolls_back(tmp_path):
     assert result.returncode != 0
     assert 'ConstraintException' in result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id FROM COMMANDS').fetchall() == [('saved',)]
+        assert con.execute('SELECT record_id FROM PROCESS_LAUNCHES').fetchall() == [('saved',)]
         assert con.execute('SELECT * FROM INGESTED').fetchall() == [(tmp_path.name, None)]

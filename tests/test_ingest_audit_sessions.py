@@ -13,7 +13,7 @@ def stored_sessions(lines, tmp_path, state=None):
     with duckdb.connect(str(tmp_path / 'sessions.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'test'))
-        return dict(con.execute('SELECT record_id,session_id FROM COMMANDS').fetchall())
+        return dict(con.execute('SELECT record_id,session_id FROM PROCESS_LAUNCHES').fetchall())
 
 
 def test_process_lifetimes_parent_inheritance_boot_and_rotation(tmp_path):
@@ -77,6 +77,6 @@ def test_boot_only_rotated_member_updates_shared_parser_state(tmp_path):
     with duckdb.connect(str(tmp_path / 'rotations.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'splunkad'))
-        count, sessions = con.execute('SELECT count(*),count(DISTINCT session_id) FROM COMMANDS').fetchone()
+        count, sessions = con.execute('SELECT count(*),count(DISTINCT session_id) FROM PROCESS_LAUNCHES').fetchone()
     assert count == 2, 'A lifecycle-only file must never become a command row'
     assert sessions == 2, 'Audit format detection must recognize a boot-only rotation'

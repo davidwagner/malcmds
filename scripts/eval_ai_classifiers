@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["duckdb==1.5.6", "httpx==0.28.1", "python-dotenv==1.2.2"]
 # ///
-"""Sample COMMANDS, evaluate five classifiers, and materialize DuckDB analytics.
+"""Sample observations, evaluate five classifiers, and materialize DuckDB analytics.
 
 Usage: scripts/eval_ai_classifiers results.duckdb --source cmds.duckdb
 Repeat the same command with --resume after interruption; successful requests
@@ -19,7 +19,11 @@ Errors have NULL predictions; non-label model output becomes unknown.
 Incomplete runs expose coverage and return nonzero. Jev and Perplexity return
 native probabilities; Luna, Haiku, and Sol have NULL scores and score_kind.
 
-The default is 200 unique commands per (dataset,label), 50 concurrent requests,
+Use --table PROCESS_LAUNCHES (the default) for process observations or
+--table SHELL_INPUTS for shell observations. Each run samples one table so shell
+lines and their derived process launches are never counted together.
+
+The default is 200 unique commands per (dataset,dataset_label), 50 concurrent requests,
 medium reasoning effort where supported, and a three-hour classification limit.
 Each classifier completes before the next starts. Every classifier uses one
 request per sample, excluding retries.
@@ -136,6 +140,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('output', type=Path, help='new DuckDB results database')
     parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1] / 'cmds.duckdb')
+    parser.add_argument('--table', choices=['PROCESS_LAUNCHES', 'SHELL_INPUTS'],
+                        default='PROCESS_LAUNCHES', help='observation table to sample (default: PROCESS_LAUNCHES)')
     parser.add_argument('--keys', type=Path, default=Path('~/.api_keys'))
     parser.add_argument('--per-group', type=positive_int, default=200)
     parser.add_argument('--seed', type=int, default=0)
@@ -169,7 +175,7 @@ def main():
                   'seed': options.seed, 'classifiers': options.classifiers,
                   'max_output_tokens': options.max_output_tokens, 'models': MODELS,
                   'label_prompt': LABEL_PROMPT, 'confidence_classifiers': ['jev', 'pplx'],
-                  'schema_version': 1}
+                  'schema_version': 2, 'table': options.table}
         keys = {} if options.sample_only else load_keys(options.keys, options.classifiers)
         db = initialize(options.output, options.source, config, options.resume)
         count = db.execute('SELECT count(*) FROM samples').fetchone()[0]

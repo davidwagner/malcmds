@@ -20,7 +20,7 @@ def test_native_interpreted_titles_with_execution_companions(tmp_path):
     with duckdb.connect(str(tmp_path / 'titles.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'splunkad'))
-        rows = con.execute('SELECT pgm,args FROM COMMANDS').fetchall()
+        rows = con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES').fetchall()
     assert ('sudo', ['systemctl', 'status', 'auditd.service']) in rows
 
 
@@ -41,4 +41,4 @@ def test_raw_titles_and_execve_precedence(tmp_path):
     with duckdb.connect(str(tmp_path / 'raw.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'splunkad'))
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY record_id').fetchall() == [('dd', []), ('dd', ['of=random_data.bin', 'if=/dev/zero']), ('dd', ['of=x']), ('echo', ['a b'])]
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [('dd', []), ('dd', ['of=random_data.bin', 'if=/dev/zero']), ('dd', ['of=x']), ('echo', ['a b'])]

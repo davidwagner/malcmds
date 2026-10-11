@@ -29,17 +29,17 @@ def test_acme_released_arguments_labels_and_duplicates(tmp_path, dataset):
     result = invoke(root, database, 'from _ingest_acme import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len({row['pid_hash'] for row in rows})
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE record_id NOT LIKE dataset || ':%'").fetchone() == (0,)
-        args = con.execute("SELECT args FROM COMMANDS WHERE pgm_base='svchost.exe'").fetchall()
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == len({row['pid_hash'] for row in rows})
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE record_id NOT LIKE dataset || ':%'").fetchone() == (0,)
+        args = con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE pgm_base='svchost.exe'").fetchall()
         assert args and all(row[0][:2] == ['-k', 'unistacksvcgroup'] for row in args), 'ACME args is argument-only: dropping argv[0] loses -k'
-        assert con.execute("SELECT DISTINCT label FROM COMMANDS WHERE pgm_base IN ('chrome.exe','msedge.exe')").fetchall() == [('benign',)]
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE label='malicious'").fetchone()[0] >= 1
-        assert con.execute('SELECT count(*) FROM COMMANDS WHERE shell_input IS NOT NULL OR len(other_tokens)>0').fetchone() == (0,)
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE session_id != dataset || ':record:' || record_id").fetchone() == (0,)
+        assert con.execute("SELECT DISTINCT dataset_label FROM PROCESS_LAUNCHES WHERE pgm_base IN ('chrome.exe','msedge.exe')").fetchall() == [('benign',)]
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label='malicious'").fetchone()[0] >= 1
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE session_id != dataset || ':record:' || record_id").fetchone() == (0,)
         if dataset == 'acme4':
-            assert con.execute("SELECT count(*) FROM COMMANDS WHERE label='malicious-group' AND group_id LIKE 'acme4:%'").fetchone()[0] >= 1
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE (label='malicious-group') != (group_id IS NOT NULL)").fetchone() == (0,)
+            assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label='malicious-group' AND group_id LIKE 'acme4:%'").fetchone()[0] >= 1
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE (dataset_label='malicious-group') != (group_id IS NOT NULL)").fetchone() == (0,)
     rerun = invoke(root, database, 'from _ingest_acme import records\n')
     assert rerun.returncode == 0 and json.loads(rerun.stdout)['skipped'] is True
 
@@ -66,10 +66,10 @@ def test_autolabel_real_export_nested_archives_and_process_lifetimes(tmp_path):
     result = invoke(root, database, 'from _ingest_autolabel import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT label,count(*) FROM COMMANDS GROUP BY label ORDER BY label::VARCHAR').fetchall() == [('benign', 362), ('malicious', 2)], 'AutoLabel exporter emits one combined observation per exec, without evt.dir'
-        assert con.execute("SELECT pgm,args FROM COMMANDS WHERE label='malicious' ORDER BY pgm").fetchall() == [('/bin/dash', ['-c', 'id']), ('/usr/bin/id', [])]
-        assert con.execute("SELECT count(DISTINCT session_id) FROM COMMANDS WHERE label='malicious'").fetchone() == (1,), 'clone ancestry should connect the malicious shell and its id child'
-        assert con.execute('SELECT count(*) FROM COMMANDS WHERE shell_input IS NOT NULL OR len(other_tokens)>0 OR group_id IS NOT NULL').fetchone() == (0,)
+        assert con.execute('SELECT dataset_label,count(*) FROM PROCESS_LAUNCHES GROUP BY dataset_label ORDER BY dataset_label::VARCHAR').fetchall() == [('benign', 362), ('malicious', 2)], 'AutoLabel exporter emits one combined observation per exec, without evt.dir'
+        assert con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES WHERE dataset_label='malicious' ORDER BY pgm").fetchall() == [('/bin/dash', ['-c', 'id']), ('/usr/bin/id', [])]
+        assert con.execute("SELECT count(DISTINCT session_id) FROM PROCESS_LAUNCHES WHERE dataset_label='malicious'").fetchone() == (1,), 'clone ancestry should connect the malicious shell and its id child'
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES WHERE group_id IS NOT NULL').fetchone() == (0,)
     rerun = invoke(root, database, 'from _ingest_autolabel import records\n')
     assert rerun.returncode == 0 and json.loads(rerun.stdout)['skipped'] is True
 
@@ -77,7 +77,7 @@ def test_autolabel_real_export_nested_archives_and_process_lifetimes(tmp_path):
     result = invoke(root, bounded, 'from _ingest_autolabel import records\n', '--max-records', '7')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(bounded)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
 
 
@@ -116,12 +116,12 @@ def test_autolabel_failed_attempts_and_uncertain_labels(tmp_path):
     result = invoke(root, database, 'from _ingest_autolabel import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (9,)
-        assert con.execute("SELECT pgm,args,label,group_id FROM COMMANDS WHERE record_id LIKE '%:1000000'").fetchone() == ('/missing/program', ['--probe'], 'malicious-group', 'events.tar')
-        assert con.execute("SELECT pgm,args,label FROM COMMANDS WHERE record_id LIKE '%:1000001'").fetchone() == ('/forbidden/program', ['--literal', 'value'], 'unknown')
-        assert con.execute("SELECT label FROM COMMANDS WHERE pgm='/usr/bin/id'").fetchone() == ('malicious',)
-        assert con.execute("SELECT label,group_id FROM COMMANDS WHERE pgm='/usr/bin/chrome'").fetchone() == ('benign', None)
-        assert con.execute("SELECT args,session_id FROM COMMANDS WHERE record_id LIKE '%:1000007'").fetchone() == (['gen.py'], 'autolabel:record:events.tar:f146f0498642:1000007')
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (9,)
+        assert con.execute("SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES WHERE record_id LIKE '%:1000000'").fetchone() == ('/missing/program', ['--probe'], 'malicious-group', 'events.tar')
+        assert con.execute("SELECT pgm,args,dataset_label FROM PROCESS_LAUNCHES WHERE record_id LIKE '%:1000001'").fetchone() == ('/forbidden/program', ['--literal', 'value'], 'unknown')
+        assert con.execute("SELECT dataset_label FROM PROCESS_LAUNCHES WHERE pgm='/usr/bin/id'").fetchone() == ('malicious',)
+        assert con.execute("SELECT dataset_label,group_id FROM PROCESS_LAUNCHES WHERE pgm='/usr/bin/chrome'").fetchone() == ('benign', None)
+        assert con.execute("SELECT args,session_id FROM PROCESS_LAUNCHES WHERE record_id LIKE '%:1000007'").fetchone() == (['gen.py'], 'autolabel:record:events.tar:f146f0498642:1000007')
 
 
 @pytest.mark.parametrize('change,message', [
@@ -156,7 +156,7 @@ def test_acme_schema_change_and_bounded_inspection(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_acme import records\n', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
     parquet.write_table(pa.Table.from_pylist([{'renamed_hash': 'value', 'args': '-k unistacksvcgroup'}]), source)
     result = invoke(tmp_path, database, 'from _ingest_acme import records\n')
@@ -179,4 +179,4 @@ def test_acme_reviewed_gold_flag_without_graph_summary(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_acme import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT label FROM COMMANDS').fetchone() == ('malicious',)
+        assert con.execute('SELECT dataset_label FROM PROCESS_LAUNCHES').fetchone() == ('malicious',)

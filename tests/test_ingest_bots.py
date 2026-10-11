@@ -1,5 +1,6 @@
 """End-to-end regression checks using the publisher's BOTS index buckets."""
 
+import json
 import random
 import subprocess
 import sys
@@ -61,21 +62,36 @@ def test_bots_native_export_and_idempotence():
             "--seed",
             history_bucket_seed(),
         ]
-        invoke(db, *options)
+        result = invoke(db, *options)
+        stats = json.loads(result.stdout)
+        assert stats["processed"] == 50
         with duckdb.connect(str(db)) as connection:
             rows = connection.execute(
-                "SELECT * FROM COMMANDS ORDER BY record_id"
+                "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
             ).fetchall()
-            assert len(rows) == 50
+            shells = connection.execute(
+                "SELECT * FROM SHELL_INPUTS ORDER BY record_id"
+            ).fetchall()
+            parsed_count = connection.execute(
+                "SELECT coalesce(sum(len(pgms)), 0) FROM SHELL_INPUTS"
+            ).fetchone()[0]
+            assert len(rows) + len(shells) - parsed_count == 50, (
+                "The limit counts each native process or complete shell input once; "
+                "parsed invocations belong to their shell observation"
+            )
+            assert stats["process_launches"] == len(rows)
+            assert stats["shell_inputs"] == len(shells)
+            assert stats["stored"] == len(rows) + len(shells)
+            assert rows
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS WHERE label != 'unknown' OR group_id IS NOT NULL"
+                    "SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label != 'unknown' OR group_id IS NOT NULL"
                 ).fetchall()[0][0]
                 == 0
             )
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS "
+                    "SELECT count(*) FROM PROCESS_LAUNCHES "
                     "WHERE pgm = '' OR session_id = '' OR args IS NULL"
                 ).fetchall()[0][0]
                 == 0
@@ -84,10 +100,13 @@ def test_bots_native_export_and_idempotence():
         with duckdb.connect(str(db)) as connection:
             assert (
                 connection.execute(
-                    "SELECT * FROM COMMANDS ORDER BY record_id"
+                    "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
                 ).fetchall()
                 == rows
             )
+            assert connection.execute(
+                "SELECT * FROM SHELL_INPUTS ORDER BY record_id"
+            ).fetchall() == shells
 
 
 def test_apt_history_contains_only_its_recorded_invocation():
@@ -109,14 +128,14 @@ def test_apt_history_contains_only_its_recorded_invocation():
         with duckdb.connect(str(db)) as connection:
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS "
+                    "SELECT count(*) FROM PROCESS_LAUNCHES "
                     "WHERE pgm = 'apt-get' AND args = ['install','netcat']"
                 ).fetchall()[0][0]
                 > 0
             )
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS "
+                    "SELECT count(*) FROM PROCESS_LAUNCHES "
                     "WHERE pgm IN ('Start-Date:', 'End-Date:', 'Commandline:', 'Install:')"
                 ).fetchall()[0][0]
                 == 0
@@ -141,7 +160,7 @@ def test_winhostmon_preserves_quoted_executable_and_last_argument():
         )
         with duckdb.connect(str(db)) as connection:
             rows = connection.execute(
-                "SELECT pgm_base,args,session_id FROM COMMANDS WHERE record_id = ?",
+                "SELECT pgm_base,args,session_id FROM PROCESS_LAUNCHES WHERE record_id = ?",
                 [f"botsv3_data_set.tgz:{bucket}:165162:1:1:0"],
             ).fetchall()
             assert len(rows) == 1
@@ -160,7 +179,7 @@ def test_winhostmon_preserves_quoted_executable_and_last_argument():
             )
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS WHERE pgm_base = 'svchost.exe' "
+                    "SELECT count(*) FROM PROCESS_LAUNCHES WHERE pgm_base = 'svchost.exe' "
                     "AND list_contains(args, '-k')"
                 ).fetchall()[0][0]
                 > 0

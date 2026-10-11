@@ -42,7 +42,7 @@ def test_reviewed_browser_starts_and_attack_commands(tmp_path):
     result=invoke(tmp_path,database,source)
     assert result.returncode==0,result.stderr
     with duckdb.connect(str(database)) as con:
-        rows=con.execute('SELECT pgm,args,label,group_id FROM COMMANDS').fetchall()
+        rows=con.execute('SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()
     assert sum(label=='benign' for _,_,label,_ in rows)>=len(reviewed)
     assert all(label=='malicious' for pgm,args,label,_ in rows if pgm.lower().endswith(('payload.exe','cmd.exe')))
     assert all(label=='malicious' for pgm,args,label,_ in rows if args and pgm.lower().endswith('firefox.exe'))
@@ -67,4 +67,4 @@ def test_known_uuid_does_not_exempt_changed_command(tmp_path):
     result=invoke(tmp_path,database,source)
     assert result.returncode==0,result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT label,group_id FROM COMMANDS').fetchall()==[('malicious',None),('malicious',None)]
+        assert con.execute('SELECT dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()==[('malicious',None),('malicious',None)]

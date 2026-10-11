@@ -105,8 +105,8 @@ def test_native_process_annotations_and_inclusive_minutes(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
-        actual = con.execute('SELECT args[1],label,group_id FROM COMMANDS ORDER BY rowid').fetchall()
+        before = con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        actual = con.execute('SELECT args[1],dataset_label,group_id FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall()
         assert [(marker, label) for marker, label, _ in actual] == [(row[2], row[3]) for row in cases], 'Annotation IDs must be joined with native process identity and correctly zoned complete minutes'
         assert all((group is not None) == (label == 'malicious-group') for _, label, group in actual)
         assert 'threatrace-process-set' in actual[5][2]
@@ -114,7 +114,7 @@ def test_native_process_annotations_and_inclusive_minutes(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+        assert con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == before
 
 
 def test_original_cadets_attack_execution(tmp_path):
@@ -129,7 +129,7 @@ def test_original_cadets_attack_execution(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args,label,group_id FROM COMMANDS').fetchall() == [('/tmp/vUgefal', ['BBBB'], 'malicious', None)], 'Original CADETS UUID and Eastern attack window must agree through native decoding'
+        assert con.execute('SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall() == [('/tmp/vUgefal', ['BBBB'], 'malicious', None)], 'Original CADETS UUID and Eastern attack window must agree through native decoding'
 
 
 def test_failed_execution_and_report_benign_setup(tmp_path):
@@ -165,7 +165,7 @@ def test_failed_execution_and_report_benign_setup(tmp_path):
         result = ingest(root, database, 'from _ingest_tc import records\n')
         assert result.returncode == 0, result.stderr
         with duckdb.connect(str(database)) as con:
-            assert con.execute('SELECT label,group_id FROM COMMANDS').fetchall() == [(expected, None)], f'Report annotation must match the correct target instance for {filename}'
+            assert con.execute('SELECT dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall() == [(expected, None)], f'Report annotation must match the correct target instance for {filename}'
 
 
 def test_marple_benign_hosts_and_attack_endpoints(tmp_path):
@@ -220,15 +220,15 @@ def test_marple_benign_hosts_and_attack_endpoints(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n', '--tc-workers', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        actual = con.execute('SELECT args[1],label,group_id FROM COMMANDS').fetchall()
+        actual = con.execute('SELECT args[1],dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()
         assert {marker: label for marker, label, _ in actual} == expected, (
             'MARPLE filename identity, CDM20 nullable timestamps, complete EDT ending '
             'minutes and process annotation precedence must survive native ingestion')
         assert len(actual) == len(expected), 'Native Subject snapshots must remain distinct'
         assert all((group is not None) == (label == 'malicious-group')
                    for _, label, group in actual), 'Benign commands must never retain attack group IDs'
-        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
+        before = con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
     result = ingest(root, database, 'from _ingest_tc import records\n', '--tc-workers', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+        assert con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == before

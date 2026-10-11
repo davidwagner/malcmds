@@ -37,7 +37,7 @@ def records(root, options):
     assert 'ConstraintException' in result.stderr
     assert 'cannot rollback' not in result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id FROM COMMANDS ORDER BY record_id').fetchall() == [('0',), ('1',), ('2',)]
+        assert con.execute('SELECT record_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [('0',), ('1',), ('2',)]
     corrected = source.replace("label='malicious-group' if i == 5 else 'unknown'", "label='unknown'")
     for attempt in range(2):
         result = invoke(tmp_path, database, corrected, '--batch-size', '3')
@@ -64,7 +64,7 @@ def records(root, options):
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['skipped'] is True
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (300000,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (300000,)
 
 
 def test_write_oom_reports_original_error(tmp_path):
@@ -95,7 +95,7 @@ def test_empty_iterable_and_invalid_commands(tmp_path):
         assert 'Command requires nonempty pgm and record_id' in result.stderr
         assert 'cannot rollback' not in result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (0,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (0,)
 
 
 def test_mixed_command_and_arrow_batches_report_timing(tmp_path):
@@ -119,14 +119,14 @@ def records(root, options):
     assert json.loads(result.stdout)['processed'] == 6
     assert json.loads(result.stdout)['stored'] == 6
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id, args FROM COMMANDS ORDER BY record_id, args').fetchall() == [
+        assert con.execute('SELECT record_id, args FROM PROCESS_LAUNCHES ORDER BY record_id, args').fetchall() == [
             ('arrow', ['arrow']), ('duplicate', ['first']), ('duplicate', ['later']),
             ('full-1', ['full-1']), ('full-2', ['full-2']), ('tail', ['tail']),
         ]
     progress = [line for line in result.stderr.splitlines() if 'batches committed' in line]
     assert len(progress) == 3
     for line in progress:
-        assert 'commands/s' in line
+        assert 'observations/s' in line
         assert 'batch write' in line
         assert 'total write' in line
     assert 'read/normalize' in result.stderr

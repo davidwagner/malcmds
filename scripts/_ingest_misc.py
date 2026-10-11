@@ -24,12 +24,13 @@ import ijson
 import openpyxl
 from _ingest import (
     Command,
+    ShellInput,
     normalize,
     select_files,
-    shell_command_fragments,
     shell_commands,
 )
 from _ingest_windows_apt_labels import decode_windows_apt_field
+from _shell_input import complete_inputs
 
 
 def emitted(
@@ -37,9 +38,9 @@ def emitted(
 ):
     """Normalize one observed command, retaining its source and session."""
     if shell:
-        for i, (program, args, other) in enumerate(shell_commands(text)):
-            yield Command(program, args, f"{rid}:{i}", label, group, session, os,
-                          shell_input=text, other_tokens=other)
+        commands = [Command(program, args, f"{rid}:{i}", label, group, session, os)
+                    for i, (program, args, _) in enumerate(shell_commands(text))]
+        yield ShellInput(text, rid, commands, label, group, session, os)
     else:
         for i, (program, args) in enumerate(normalize(text, os=os, pgm=pgm)):
             yield Command(program, args, f"{rid}:{i}", label, group, session, os)
@@ -347,12 +348,8 @@ def microsoft_iot(root, options):
         for index, row in enumerate(limited(ijson.items(stream, "item"), options)):
             sequence = str(row.get("ID", index))
             group = "microsoft-iot:" + sequence
-            occurrences = {}
-            for i, text, program, args, other in shell_command_fragments(row["Commands"]):
-                occurrence = occurrences.get(i, 0)
-                occurrences[i] = occurrence + 1
-                yield Command(program, args, f"{sequence}:{i}:{occurrence}", "malicious",
-                              session_id=group, shell_input=text, other_tokens=other)
+            for i, text in complete_inputs(row["Commands"]):
+                yield from emitted(text, f"{sequence}:{i}", group, "malicious", shell=True)
 
 
 def gzip_json_items(path, *, allow_truncated=False):
@@ -419,15 +416,12 @@ def cyberlab(root, options):
                 if has_input:
                     inputs = [(n, event, event.get("input") or event.get("message", "").removeprefix("CMD: "))
                               for n, event in enumerate(events) if event.get("eventid") == "cowrie.command.input"]
-                    occurrences = {}
-                    for part, text, program, args, other in shell_command_fragments([item[2] for item in inputs]):
+                    for part, text in complete_inputs([item[2] for item in inputs]):
                         n, event, _ = inputs[part]
                         host = event.get("dst_host_identifier") or event.get("sensor") or ""
-                        occurrence = occurrences.get(n, 0)
-                        occurrences[n] = occurrence + 1
-                        yield Command(program, args, f"{path.name}:{index}:{sid}:{n}:{occurrence}",
-                                      "malicious", session_id=f"cyberlab:{path.name}:{host}:{sid}",
-                                      shell_input=text, other_tokens=other)
+                        yield from emitted(text, f"{path.name}:{index}:{sid}:{n}",
+                                           f"cyberlab:{path.name}:{host}:{sid}",
+                                           "malicious", shell=True)
                     continue
                 for n, event in enumerate(events):
                     kind = event.get("eventid", "")
@@ -646,7 +640,7 @@ def publicarena(root, options):
             continue
         # Publisher timestamps are local wall times without a specified timezone.
         start, end = [
-            datetime.strptime(t.strip(), "%m/%d/%Y %H:%M:%S")  # noqa: DTZ007
+            datetime.strptime(t.strip(), "%m/%d/%Y %H:%M:%S")
             for t in times[:2]
         ]
         host = "B" if path.name.startswith("E") or "onHostB" in path.name else "A"
@@ -689,7 +683,7 @@ def publicarena(root, options):
                         else ("unknown", None)
                     )
                     # Match the same unzoned local wall times used by the attack configs.
-                    date = datetime.strptime(row["date"], "%m/%d/%Y %H:%M:%S")  # noqa: DTZ007
+                    date = datetime.strptime(row["date"], "%m/%d/%Y %H:%M:%S")
                     pname = str(row.get("PName", "")).lower().removesuffix(".exe")
                     text = html.unescape(row["CommandLine"])
                     for target, start, end, programs, config in truth:

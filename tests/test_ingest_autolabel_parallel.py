@@ -69,7 +69,7 @@ def ingest(root, database, workers, *extra, check=True):
 def rows(database):
     """Read every persisted field in insertion order, including list arguments."""
     with duckdb.connect(str(database), read_only=True) as connection:
-        return connection.execute('SELECT * FROM COMMANDS ORDER BY rowid').fetchall()
+        return connection.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall()
 
 
 def completed(database):
@@ -137,7 +137,7 @@ def test_nested_formats_cross_log_state_labels_and_failed_attempts(tmp_path):
     assert len(rows(parallel)) == 16
     with duckdb.connect(str(parallel), read_only=True) as connection:
         attempts = connection.execute(
-            'SELECT record_id,args,label,group_id,session_id FROM COMMANDS ORDER BY rowid'
+            'SELECT record_id,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY rowid'
         ).fetchall()
     for offset in range(0, 16, 4):
         a, b, c, d = attempts[offset:offset + 4]
@@ -243,7 +243,7 @@ def test_worker_error_retains_prior_runs_and_retry_replaces_attempt(tmp_path):
     assert 'completed run 1/3' in result.stderr
     assert completed(database) == [('autolabel', False)]
     assert len(rows(database)) == 2
-    assert all('first.tar:' in row[6] for row in rows(database))
+    assert all('first.tar:' in row[4] for row in rows(database))
     assert_clean(root)
     driver = f"""
 import json
@@ -334,7 +334,7 @@ def test_multiple_outer_archives_mix_serial_and_arrow_outputs(tmp_path):
     result = ingest(root, parallel, 3)
     assert 'b.tar: completed run 2/2' in result.stderr
     assert rows(parallel) == rows(serial), 'The shared DuckDB writer must commit pending serial commands before worker Arrow tables'
-    assert [row[6] for row in rows(parallel)] == [
+    assert [row[4] for row in rows(parallel)] == [
         'a.tar:container:1',
         'b.tar/first.tar:container:1',
         'b.tar/first.tar:container:2',

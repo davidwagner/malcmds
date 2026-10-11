@@ -47,7 +47,7 @@ run(Path(__file__).parent, records)
     assert json.loads(first.stdout)["stored"] == 12
     assert json.loads(second.stdout)["skipped"] is True
     con = duckdb.connect(str(db), read_only=True)
-    rows = con.execute("SELECT pgm,args FROM COMMANDS ORDER BY record_id").fetchall()
+    rows = con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall()
     assert ("ls", ["docs a"]) in rows
     assert ("cat", []) in rows
     assert ("printf", ["%s", "", "a b", "x\ny"]) in rows
@@ -57,12 +57,12 @@ run(Path(__file__).parent, records)
     assert ("/bin/sh", ["-c", "echo x > y"]) in rows
     assert (
         con.execute(
-            "SELECT count(*) FROM COMMANDS WHERE group_id IS NOT NULL"
+            "SELECT count(*) FROM PROCESS_LAUNCHES WHERE group_id IS NOT NULL"
         ).fetchall()[0][0]
         == 1
     )
     assert con.execute(
-        "SELECT typeof(args),typeof(label),typeof(os) FROM COMMANDS LIMIT 1"
+        "SELECT typeof(args),typeof(dataset_label),typeof(os) FROM PROCESS_LAUNCHES LIMIT 1"
     ).fetchone() == (
         "VARCHAR[]",
         "ENUM('malicious', 'benign', 'unknown', 'malicious-group')",
@@ -98,8 +98,8 @@ run(Path(__file__).parent, records)
     )
     assert result.returncode != 0 and "source corruption" in result.stderr
     con = duckdb.connect(str(db), read_only=True)
-    assert con.execute("SELECT count(*) FROM COMMANDS").fetchall()[0][0] == 100000
-    assert con.execute("SELECT count(*) FROM COMMANDS WHERE record_id='100000'").fetchone() == (0,)
+    assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchall()[0][0] == 100000
+    assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE record_id='100000'").fetchone() == (0,)
     con.close()
     (tmp_path / 'repaired').touch()
     result = subprocess.run(
@@ -152,7 +152,7 @@ def test_ingest_all_order_and_failure_reporting(tmp_path):
     assert result.stdout.index("Ingesting kypo") < result.stdout.index("Ingesting optc")
     with duckdb.connect(str(db), read_only=True) as con:
         assert con.execute(
-            "SELECT dataset,count(*) FROM COMMANDS GROUP BY dataset ORDER BY dataset"
+            "SELECT dataset,count(*) FROM PROCESS_LAUNCHES GROUP BY dataset ORDER BY dataset"
         ).fetchall() == [("kypo", 3), ("optc", 3)]
     failed = subprocess.run(
         [

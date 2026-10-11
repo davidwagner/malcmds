@@ -39,14 +39,14 @@ def test_real_partition_ingestion_is_idempotent(partition, tmp_path):
     stats = json.loads(completed.stdout.splitlines()[-1])
     assert stats['stored'] > 0
     with duckdb.connect(str(database), read_only=True) as connection:
-        before = connection.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
-        assert connection.execute("SELECT count(*) FROM COMMANDS WHERE pgm='' OR session_id='' OR NOT starts_with(session_id, 'optc:') OR os <> 'windows'").fetchall()[0][0] == 0
+        before = connection.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        assert connection.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE pgm='' OR session_id='' OR NOT starts_with(session_id, 'optc:') OR os <> 'windows'").fetchall()[0][0] == 0
         expected_label = 'benign' if partition == 'benign' else 'unknown'
-        assert connection.execute('SELECT DISTINCT label FROM COMMANDS').fetchall() == [(expected_label,)]
-        assert connection.execute('SELECT count(DISTINCT record_id) FROM COMMANDS').fetchall()[0][0] == len(before)
+        assert connection.execute('SELECT DISTINCT dataset_label FROM PROCESS_LAUNCHES').fetchall() == [(expected_label,)]
+        assert connection.execute('SELECT count(DISTINCT record_id) FROM PROCESS_LAUNCHES').fetchall()[0][0] == len(before)
     subprocess.run(command, capture_output=True, text=True, check=True)
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+        assert connection.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == before
 
 
 def test_authentic_short_partition_process_commands(tmp_path):
@@ -72,16 +72,16 @@ def test_authentic_short_partition_process_commands(tmp_path):
     with duckdb.connect(str(database), read_only=True) as connection:
         opening, creation = events
         assert opening['action'] == 'OPEN' and 'MsMpEng.exe' in opening['properties']['image_path']
-        assert connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?',
+        assert connection.execute('SELECT pgm,args FROM PROCESS_LAUNCHES WHERE record_id=?',
                                   [opening['id'] + ':0']).fetchall() == [
             ('C:\\Windows\\System32\\svchost.exe', opening['properties']['command_line'].split()[1:]),
         ], 'An OPEN accessor image must not replace the target executable'
         assert creation['action'] == 'CREATE'
-        assert connection.execute('SELECT pgm,args FROM COMMANDS WHERE record_id=?',
+        assert connection.execute('SELECT pgm,args FROM PROCESS_LAUNCHES WHERE record_id=?',
                                   [creation['id'] + ':0']).fetchall() == [
             ('sc.exe', ['config', 'OneSyncSvc', 'start=disabled']),
         ], 'Real sc.exe arguments must survive repeated command-line whitespace'
-        assert connection.execute('SELECT count(*) FROM COMMANDS').fetchone() == (2,)
+        assert connection.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (2,)
 
 
 def test_repeated_commands_preserve_images_labels_sessions_and_limits(tmp_path):
@@ -136,10 +136,10 @@ def test_repeated_commands_preserve_images_labels_sessions_and_limits(tmp_path):
     for _ in range(2):
         subprocess.run(command, capture_output=True, text=True, check=True)
         with duckdb.connect(str(database), read_only=True) as con:
-            assert con.execute('SELECT record_id,pgm,args,label,group_id,session_id '
-                               'FROM COMMANDS ORDER BY record_id').fetchall() == sorted(expected)
+            assert con.execute('SELECT record_id,pgm,args,dataset_label,group_id,session_id '
+                               'FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == sorted(expected)
     limited = tmp_path / 'limited.duckdb'
     subprocess.run([*command, '--db', str(limited), '--max-records', '1'],
                    capture_output=True, text=True, check=True)
     with duckdb.connect(str(limited), read_only=True) as con:
-        assert con.execute('SELECT record_id FROM COMMANDS').fetchall() == [('event-0-0:0',)]
+        assert con.execute('SELECT record_id FROM PROCESS_LAUNCHES').fetchall() == [('event-0-0:0',)]

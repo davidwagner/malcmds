@@ -24,18 +24,18 @@ def test_carbanak_real_custom_dump_uuid_labels_and_argument_handling(tmp_path):
     result = invoke(root, database, 'from _ingest_carbanak import records\n')
     assert result.returncode == 0, 'pg_restore must emit the released subject COPY schema: ' + result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (13,)
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE label='malicious'").fetchone() == (6,), 'Repeated annotation UUIDs must label subjects without duplicating processes'
-        assert con.execute("SELECT args FROM COMMANDS WHERE pgm_base='svchost.exe'").fetchone() == (['-k', 'DcomLaunch', '-p'],)
-        assert con.execute("SELECT args FROM COMMANDS WHERE record_id='d4ecc9a0-1da0-80e6-94d4-4ed0278beaf6'").fetchone() == ([r'C:\Users\efficientgoldfinch\AppData\Roaming\\TransBaseOdbcDriver\\TransBaseOdbcDriver.js'],)
-        assert con.execute("SELECT args FROM COMMANDS WHERE record_id='f9419b5b-5155-81cd-b666-07f0d2b1f6cb'").fetchone() == (['/silentConfig'],), 'Argument-only cmd fields must retain their first option'
-        assert con.execute("SELECT args[1:2] FROM COMMANDS WHERE record_id='28fe59e9-23fb-80c0-8138-37daecb8261d'").fetchone() == ([r'Files\Microsoft', r'OneDrive\Update\OneDriveSetup.exe'],), 'The known unquoted image prefix must not become argument fragments'
-        assert con.execute('SELECT count(*) FROM COMMANDS WHERE shell_input IS NOT NULL OR len(other_tokens)>0 OR group_id IS NOT NULL').fetchone() == (0,)
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE session_id != dataset || ':record:' || record_id").fetchone() == (0,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (13,)
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label='malicious'").fetchone() == (6,), 'Repeated annotation UUIDs must label subjects without duplicating processes'
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE pgm_base='svchost.exe'").fetchone() == (['-k', 'DcomLaunch', '-p'],)
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE record_id='d4ecc9a0-1da0-80e6-94d4-4ed0278beaf6'").fetchone() == ([r'C:\Users\efficientgoldfinch\AppData\Roaming\\TransBaseOdbcDriver\\TransBaseOdbcDriver.js'],)
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE record_id='f9419b5b-5155-81cd-b666-07f0d2b1f6cb'").fetchone() == (['/silentConfig'],), 'Argument-only cmd fields must retain their first option'
+        assert con.execute("SELECT args[1:2] FROM PROCESS_LAUNCHES WHERE record_id='28fe59e9-23fb-80c0-8138-37daecb8261d'").fetchone() == ([r'Files\Microsoft', r'OneDrive\Update\OneDriveSetup.exe'],), 'The known unquoted image prefix must not become argument fragments'
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES WHERE group_id IS NOT NULL').fetchone() == (0,)
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE session_id != dataset || ':record:' || record_id").fetchone() == (0,)
     rerun = invoke(root, database, 'from _ingest_carbanak import records\n')
     assert rerun.returncode == 0, rerun.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (13,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (13,)
 
 
 def test_carbanak_schema_change_and_bounded_import(tmp_path):
@@ -50,7 +50,7 @@ def test_carbanak_schema_change_and_bounded_import(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_carbanak import records\n', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (1,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (1,)
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
     # Same-length archive metadata names produce a valid PostgreSQL custom dump
     # whose real table selector finds nothing. No executable is substituted.
@@ -101,7 +101,7 @@ def test_carbanak_duplicate_uuid_preserves_one_process(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_carbanak import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (12,)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (12,)
 
 
 @pytest.mark.parametrize('before,after,identity,arguments', [
@@ -123,4 +123,4 @@ def test_carbanak_copy_escape_representations(tmp_path, before, after, identity,
     result = invoke(tmp_path, database, 'from _ingest_carbanak import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT args FROM COMMANDS WHERE record_id=?', [identity]).fetchone() == (arguments,)
+        assert con.execute('SELECT args FROM PROCESS_LAUNCHES WHERE record_id=?', [identity]).fetchone() == (arguments,)

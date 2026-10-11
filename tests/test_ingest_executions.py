@@ -19,7 +19,7 @@ def store(commands, tmp_path):
     with duckdb.connect(str(tmp_path / 'commands.duckdb')) as db:
         _initialize(db)
         _insert(db, command_table(commands, 'test'))
-        return db.execute('SELECT pgm,args,record_id FROM COMMANDS ORDER BY record_id').fetchall()
+        return db.execute('SELECT pgm,args,record_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
 
 
 def test_native_audit_repeated_alerts(tmp_path):

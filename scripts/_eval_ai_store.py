@@ -48,26 +48,31 @@ def initialize(output: Path, source: Path, config: dict, resume: bool):
                 finished_at TIMESTAMPTZ DEFAULT current_timestamp);
         ''')
         db.execute('INSERT INTO evaluation_run(config) VALUES (?)', [encoded])
-        # Deduplicate BEFORE sampling. Array/NULL identities remain distinct;
-        # shell text takes precedence even when it is the empty string.
+        # Sample one observation type so a shell line and its derived processes
+        # never compete in the same sample. Preserve array/NULL identities.
+        table = config['table']
+        if table == 'SHELL_INPUTS':
+            observation_sql = '''SELECT dataset, dataset_label, record_id, shell_input,
+                NULL::VARCHAR AS pgm_base, NULL::VARCHAR[] AS args FROM source.SHELL_INPUTS'''
+        else:
+            observation_sql = '''SELECT dataset, dataset_label, record_id, NULL::VARCHAR AS shell_input,
+                pgm_base, args FROM source.PROCESS_LAUNCHES'''
         source_sql = str(source).replace("'", "''")
         db.execute(f"ATTACH '{source_sql}' AS source (READ_ONLY)")
-        db.execute('''CREATE TABLE samples AS
-            WITH unique_commands AS (
-                SELECT dataset, label::VARCHAR AS label, shell_input,
-                       CASE WHEN shell_input IS NULL THEN pgm_base END AS pgm_base,
-                       CASE WHEN shell_input IS NULL THEN args END AS args,
+        db.execute(f'''CREATE TABLE samples AS
+            WITH observations AS ({observation_sql}), unique_commands AS (
+                SELECT dataset, dataset_label::VARCHAR AS dataset_label, shell_input, pgm_base, args,
                        min(record_id::VARCHAR) AS record_id
-                FROM source.COMMANDS GROUP BY ALL
+                FROM observations GROUP BY ALL
             ), ranked AS (
                 SELECT *, row_number() OVER (
-                    PARTITION BY dataset, label
+                    PARTITION BY dataset, dataset_label
                     ORDER BY md5(? || to_json(struct_pack(
                         shell_input := shell_input, pgm_base := pgm_base, args := args))),
                         shell_input, pgm_base, args
                 ) AS sample_rank FROM unique_commands
             )
-            SELECT row_number() OVER (ORDER BY dataset, label, sample_rank) AS sample_id,
+            SELECT row_number() OVER (ORDER BY dataset, dataset_label, sample_rank) AS sample_id,
                    * EXCLUDE(sample_rank)
             FROM ranked WHERE sample_rank <= ?
         ''', [str(config['seed']), config['per_group']])
@@ -100,8 +105,8 @@ def analyze(db):
     db.execute('BEGIN')
     try:
         db.execute('''CREATE OR REPLACE TEMP TABLE comparisons AS
-            SELECT r.classifier, s.dataset, 'COMMANDS' AS reference,
-                   s.label AS reference_label, r.prediction
+            SELECT r.classifier, s.dataset, 'dataset_label' AS reference,
+                   s.dataset_label AS reference_label, r.prediction
             FROM results r JOIN samples s USING(sample_id)
             WHERE r.prediction IS NOT NULL
             UNION ALL
@@ -129,7 +134,7 @@ def analyze(db):
                     ((classifier, reference, reference_label, prediction),
                      (classifier, reference, dataset, reference_label, prediction))
             ), reference_labels AS (
-                SELECT 'COMMANDS' AS reference, label AS reference_label FROM samples GROUP BY label
+                SELECT 'dataset_label' AS reference, dataset_label AS reference_label FROM samples GROUP BY dataset_label
                 UNION SELECT 'sol', unnest(['malicious', 'benign', 'unknown'])
             ), grid AS (
                 SELECT d.classifier, d.reference, d.scope, d.dataset, l.reference_label,

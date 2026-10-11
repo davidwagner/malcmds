@@ -20,21 +20,31 @@ CLASSIFIERS = ['jev', 'pplx', 'luna', 'haiku', 'sol']
 
 
 def create_source(path, rows):
-    """Write source records with the production command identity columns."""
+    """Write shell observations and corresponding process observations."""
     with duckdb.connect(str(path)) as db:
-        db.execute('''CREATE TABLE COMMANDS (
-            record_id VARCHAR, dataset VARCHAR, label VARCHAR,
-            shell_input VARCHAR, pgm_base VARCHAR, args VARCHAR[])''')
+        db.execute("""CREATE TABLE PROCESS_LAUNCHES (
+            record_id VARCHAR, dataset VARCHAR, dataset_label VARCHAR,
+            pgm VARCHAR, pgm_base VARCHAR, args VARCHAR[],
+            group_id VARCHAR, session_id VARCHAR, os VARCHAR);
+            CREATE TABLE SHELL_INPUTS (
+            record_id VARCHAR, dataset VARCHAR, dataset_label VARCHAR,
+            shell_input VARCHAR, pgms VARCHAR[], tokens VARCHAR[],
+            group_id VARCHAR, session_id VARCHAR, os VARCHAR)""")
         db.execute('BEGIN')
-        if rows:
-            db.executemany('INSERT INTO COMMANDS VALUES (?, ?, ?, ?, ?, ?)', rows)
+        for record_id, dataset, dataset_label, shell_input, pgm_base, args in rows:
+            db.execute('INSERT INTO PROCESS_LAUNCHES VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL)',
+                       [record_id, dataset, dataset_label, pgm_base, pgm_base, args])
+            if shell_input is not None:
+                db.execute('INSERT INTO SHELL_INPUTS VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL)',
+                           [record_id, dataset, dataset_label, shell_input, [pgm_base], args])
         db.execute('COMMIT')
 
 
-def run_cli(output, *arguments, success=True, timeout=180):
+def run_cli(output, *arguments, success=True, timeout=180, table="SHELL_INPUTS"):
     """Run the public entry point and retain useful output on assertion failure."""
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), str(output), *map(str, arguments)],
+        [sys.executable, str(SCRIPT), str(output),
+         *(["--table", table] if table is not None else []), *map(str, arguments)],
         check=False, capture_output=True, text=True, timeout=timeout,
     )
     assert (result.returncode == 0) == success, result.stdout + result.stderr
@@ -47,7 +57,8 @@ def read_rows(path, sql):
         return db.execute(sql).fetchall()
 
 
-def test_sampling_identity_caps_and_reproducibility(tmp_path):
+@pytest.mark.parametrize("table, identity_count", [("SHELL_INPUTS", 2), ("PROCESS_LAUNCHES", 7)])
+def test_sampling_identity_caps_and_reproducibility(tmp_path, table, identity_count):
     """Deduplicate per stratum before the seeded sample, preserving NULL argv."""
     source = tmp_path / 'source.duckdb'
     rows = [
@@ -70,22 +81,22 @@ def test_sampling_identity_caps_and_reproducibility(tmp_path):
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     first, second, third = [tmp_path / f'{name}.duckdb' for name in ('first', 'second', 'third')]
     for output in (first, second):
-        run_cli(output, '--source', source, '--sample-only', '--seed', '23')
-    run_cli(third, '--source', source, '--sample-only', '--seed', '24')
+        run_cli(output, '--source', source, '--sample-only', '--seed', '23', table=table)
+    run_cli(third, '--source', source, '--sample-only', '--seed', '24', table=table)
     query = 'SELECT * FROM samples ORDER BY sample_id'
     assert read_rows(first, query) == read_rows(second, query)
     assert read_rows(first, query) != read_rows(third, query)
-    assert read_rows(first, '''SELECT dataset, label, count(*) FROM samples
-        GROUP BY ALL ORDER BY dataset, label''') == [
-        ('identity', 'benign', 7), ('identity', 'malicious', 1),
+    assert read_rows(first, '''SELECT dataset, dataset_label, count(*) FROM samples
+        GROUP BY ALL ORDER BY dataset, dataset_label''') == [
+        ('identity', 'benign', identity_count), ('identity', 'malicious', 1),
         ('large', 'benign', 200), ('other', 'benign', 1),
     ]
-    assert read_rows(first, "SELECT count(*) FROM samples WHERE shell_input = ''") == [(1,)]
+    assert read_rows(first, "SELECT count(*) FROM samples WHERE shell_input = ''") == [(int(table == "SHELL_INPUTS"),)]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == before
     assert read_rows(first, 'SELECT count(*) FROM classifier_costs') == [(5,)]
-    run_cli(first, '--source', source, '--sample-only', '--seed', '23', '--resume')
+    run_cli(first, '--source', source, '--sample-only', '--seed', '23', '--resume', table=table)
     assert read_rows(first, query) == read_rows(second, query)
-    run_cli(first, '--source', source, '--sample-only', '--seed', '24', '--resume', success=False)
+    run_cli(first, '--source', source, '--sample-only', '--seed', '24', '--resume', success=False, table=table)
 
 
 def test_reject_overwrite_and_invalid_sampling(tmp_path):
@@ -141,10 +152,10 @@ def test_analytics_denominators_pairing_confusion_costs_and_time(tmp_path):
         db.execute('UPDATE evaluation_run SET classification_seconds = 12, total_seconds = 14')
     run_cli(output, '--analyze-only')
     assert read_rows(output, '''SELECT sample_count, disagreement_count, disagreement_rate
-        FROM disagreements WHERE classifier='jev' AND reference='COMMANDS' AND scope='overall'
+        FROM disagreements WHERE classifier='jev' AND reference='dataset_label' AND scope='overall'
     ''') == [(5, 2, 0.4)]
     assert read_rows(output, '''SELECT dataset, sample_count, disagreement_count, disagreement_rate
-        FROM disagreements WHERE classifier='jev' AND reference='COMMANDS' AND scope='dataset'
+        FROM disagreements WHERE classifier='jev' AND reference='dataset_label' AND scope='dataset'
         ORDER BY dataset''') == [('a', 3, 2, 2 / 3), ('b', 2, 0, 0)]
     assert read_rows(output, '''SELECT sample_count, disagreement_count, disagreement_rate
         FROM disagreements WHERE classifier='jev' AND reference='sol' AND scope='overall'
@@ -155,10 +166,10 @@ def test_analytics_denominators_pairing_confusion_costs_and_time(tmp_path):
     assert read_rows(output, '''SELECT max(disagreement_rate) FROM disagreements
         WHERE classifier='sol' AND reference='sol' ''') == [(0.0,)]
     assert read_rows(output, '''SELECT count(*), sum(fraction), count(*) FILTER (WHERE sample_count=0)
-        FROM confusion_matrices WHERE classifier='jev' AND reference='COMMANDS' AND scope='overall'
+        FROM confusion_matrices WHERE classifier='jev' AND reference='dataset_label' AND scope='overall'
     ''') == [(12, 1.0, 7)]
     assert read_rows(output, '''SELECT fraction FROM confusion_matrices WHERE classifier='jev'
-        AND reference='COMMANDS' AND scope='overall' AND reference_label='benign'
+        AND reference='dataset_label' AND scope='overall' AND reference_label='benign'
         AND prediction='malicious' ''') == [(0.2,)]
     assert read_rows(output, '''SELECT count(*), sum(fraction) FROM confusion_matrices
         WHERE classifier='jev' AND reference='sol' AND scope='overall' ''') == [(9, 1.0)]
@@ -191,7 +202,7 @@ def test_live_provider_contract_and_resume(tmp_path):
         ('3', 'live-argv', 'benign', None, 'printf', ['hello world']),
     ])
     flags = ['--source', source, '--per-group', '1']
-    run_cli(output, *flags, timeout=900)
+    run_cli(output, *flags, timeout=900, table="PROCESS_LAUNCHES")
     rows = read_rows(output, '''SELECT classifier, prediction, p_malicious, p_benign,
         p_unknown, score_kind, status FROM results ORDER BY classifier''')
     assert len(rows) == 15, 'An API/model contract changed: three results per provider are required'
@@ -217,7 +228,7 @@ def test_live_provider_contract_and_resume(tmp_path):
     assert responses
     assert all(json.loads(response).get('usage') for (response,) in responses), 'Provider usage contract changed'
     count = read_rows(output, 'SELECT count(*) FROM requests')
-    run_cli(output, *flags, '--resume')
+    run_cli(output, *flags, '--resume', table="PROCESS_LAUNCHES")
     assert read_rows(output, 'SELECT count(*) FROM requests') == count
 
 
@@ -301,3 +312,32 @@ def test_replay_recorded_responses_and_reject_invalid_scores(tmp_path, corruptio
     if corruption == 'none':
         run_cli(output, '--source', source, '--keys', keys, '--resume')
         assert read_rows(output, 'SELECT count(*) FROM requests') == [(5,)]
+
+
+def test_observation_table_selection_and_resume(tmp_path):
+    """DuckDB must sample exactly one observation type and preserve list identity."""
+    source = tmp_path / 'source.duckdb'
+    create_source(source, [
+        ('1', 'shell', 'benign', '/bin/echo a; /bin/echo b', 'echo', ['a']),
+        ('2', 'native', 'unknown', None, 'printf', ['a b', 'c']),
+    ])
+    with duckdb.connect(str(source)) as db:
+        db.execute("""INSERT INTO PROCESS_LAUNCHES VALUES
+            ('1:1', 'shell', 'benign', '/bin/echo', 'echo', ['b'], NULL, NULL, 'Linux')""")
+    process_output, shell_output = tmp_path / 'process.duckdb', tmp_path / 'shell.duckdb'
+    run_cli(process_output, '--source', source, '--sample-only', table=None)
+    run_cli(shell_output, '--source', source, '--sample-only')
+    assert read_rows(process_output, 'SELECT shell_input, pgm_base, args FROM samples ORDER BY dataset, args') == [
+        (None, 'printf', ['a b', 'c']), (None, 'echo', ['a']), (None, 'echo', ['b'])
+    ], 'Process sampling must preserve DuckDB LIST values and exclude shell observations'
+    assert read_rows(shell_output, 'SELECT shell_input, pgm_base, args FROM samples') == [
+        ('/bin/echo a; /bin/echo b', None, None)
+    ], 'Shell sampling must not include the process launches derived from that input'
+    assert read_rows(process_output, 'SELECT DISTINCT dataset_label FROM samples ORDER BY 1') == [
+        ('benign',), ('unknown',)
+    ]
+    run_cli(process_output, '--source', source, '--sample-only', '--resume', table=None)
+    result = run_cli(process_output, '--source', source, '--sample-only', '--resume', success=False)
+    assert 'Resume configuration differs' in result.stderr
+    run_cli(tmp_path / 'invalid-table.duckdb', '--source', source, '--sample-only',
+            table='COMMANDS', success=False)

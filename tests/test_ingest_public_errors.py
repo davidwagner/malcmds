@@ -80,7 +80,7 @@ def test_quasarnix_background_controls_and_escape_semantics(tmp_path):
     result = invoke(root, database, 'from _ingest_quasarnix import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute('SELECT shell_input,label FROM COMMANDS ORDER BY record_id').fetchall() == [
+        assert connection.execute('SELECT shell_input,dataset_label FROM SHELL_INPUTS ORDER BY record_id').fetchall() == [
             ('printf "quoted"', 'benign'), ('printf ☺', 'benign'),
             ('printf \\u12xz', 'benign'), ('printf \\q', 'benign'), ("printf 'a\tb'", 'benign'),
         ], 'JSON valid escapes must decode; malformed escapes must retain their literal backslash'
@@ -113,14 +113,16 @@ def test_quasarnix_command_labels_and_bounded_reading(tmp_path):
     result = invoke(root, database, 'from _ingest_quasarnix import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        actual = dict(connection.execute('SELECT shell_input,label FROM COMMANDS').fetchall())
-        assert actual == {text: label for text, label in cases if label is not None}
-        assert connection.execute("SELECT count(*) FROM COMMANDS WHERE (label='malicious-group') != (group_id IS NOT NULL)").fetchone() == (0,)
+        actual = dict(connection.execute('SELECT shell_input,dataset_label FROM SHELL_INPUTS').fetchall())
+        assert actual == {text: 'malicious' for text, _ in cases}, 'The source labels each submitted input, including comments, as malicious'
+        process_labels = dict(connection.execute('SELECT record_id,dataset_label FROM PROCESS_LAUNCHES').fetchall())
+        assert process_labels == {f'{FILES[0]}:{index}:0': label for index, (_, label) in enumerate(cases) if label is not None}, 'Parsed invocations must retain their command-specific labels'
+        assert connection.execute("SELECT count(*) FROM SHELL_INPUTS WHERE (dataset_label='malicious-group') != (group_id IS NOT NULL)").fetchone() == (0,)
     bounded = tmp_path / 'bounded.duckdb'
     result = invoke(root, bounded, 'from _ingest_quasarnix import records\n', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(bounded), read_only=True) as connection:
-        assert connection.execute('SELECT shell_input FROM COMMANDS').fetchall() == [(cases[0][0],)]
+        assert connection.execute('SELECT shell_input FROM SHELL_INPUTS').fetchall() == [(cases[0][0],)]
     assert_incomplete(bounded)
 
 
@@ -148,12 +150,12 @@ def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
     result = invoke(root, database, 'from _ingest_shell_honeypot import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        rows = connection.execute('SELECT pgm,label,group_id,session_id,shell_input FROM COMMANDS ORDER BY record_id').fetchall()
-        assert len(rows) == 4
-        assert rows[0] == ('id', 'malicious', None, 'shell-honeypot:2024:native-one', 'id')
-        assert all(row[1:4] == ('malicious-group', 'shell-honeypot:2024:group:ip-group', 'shell-honeypot:2024:native-two') for row in rows[1:3])
-        assert rows[3][0:3] == ('uname', 'malicious-group', 'shell-honeypot:2024:ip:192.0.2.2')
-        assert rows[3][3].endswith('2024/cowrie/capture.jsonl:6')
+        rows = connection.execute('SELECT pgms,dataset_label,group_id,session_id,shell_input FROM SHELL_INPUTS ORDER BY record_id').fetchall()
+        by_input = {row[4]: row for row in rows}
+        assert by_input['id'] == (['id'], 'malicious', None, 'shell-honeypot:2024:native-one', 'id')
+        assert by_input['id; whoami'][:4] == (['id', 'whoami'], 'malicious', None, 'shell-honeypot:2024:native-two')
+        assert by_input['uname -a'][:3] == (['uname'], 'malicious-group', 'shell-honeypot:2024:ip:192.0.2.2')
+        assert by_input['uname -a'][3].endswith('2024/cowrie/capture.jsonl:6')
     bounded = tmp_path / 'bounded.duckdb'
     result = invoke(root, bounded, 'from _ingest_shell_honeypot import records\n', '--max-records', '2')
     assert result.returncode == 0, result.stderr

@@ -66,4 +66,4 @@ def test_malformed_command_observations(collector, case, tmp_path):
     )
     assert json.loads(result.stdout)['stored'] == len(expected)
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute('SELECT pgm,args FROM COMMANDS ORDER BY pgm,args').fetchall() == expected
+        assert connection.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY pgm,args').fetchall() == expected

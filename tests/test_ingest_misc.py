@@ -4,6 +4,7 @@ Unavailable archives skip their corresponding checks. External I/O failures are
 not simulated: tests exercise actual archive readers and DuckDB transactions.
 """
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -41,32 +42,46 @@ def test_real_dataset_idempotent(dataset, tmp_path):
         "--seed",
         "83",
     ]
-    subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
+    result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
+    stats = json.loads(result.stdout)
+    assert stats["processed"] == 50
     with duckdb.connect(str(database), read_only=True) as connection:
         first = connection.execute(
-            "SELECT * FROM COMMANDS ORDER BY record_id"
+            "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
         ).fetchall()
-        assert len(first) == 50
+        shells = connection.execute(
+            "SELECT * FROM SHELL_INPUTS ORDER BY record_id"
+        ).fetchall()
+        parsed_count = connection.execute(
+            "SELECT coalesce(sum(len(pgms)), 0) FROM SHELL_INPUTS"
+        ).fetchone()[0]
+        assert len(first) + len(shells) - parsed_count == 50, (
+            "The limit counts each native process or complete shell input once; "
+            "parsed invocations belong to their shell observation"
+        )
+        assert stats["process_launches"] == len(first)
+        assert stats["shell_inputs"] == len(shells)
+        assert stats["stored"] == len(first) + len(shells)
         assert (
             connection.execute(
-                "SELECT count(*) FROM COMMANDS WHERE pgm = '' OR session_id = '' "
+                "SELECT count(*) FROM PROCESS_LAUNCHES WHERE pgm = '' OR session_id = '' "
                 "OR record_id = '' OR args IS NULL "
-                "OR (label = 'malicious-group' AND group_id IS NULL)"
+                "OR (dataset_label = 'malicious-group' AND group_id IS NULL)"
             ).fetchall()[0][0]
             == 0
         )
         assert (
             connection.execute(
-                "SELECT count(DISTINCT record_id) FROM COMMANDS"
+                "SELECT count(DISTINCT record_id) FROM PROCESS_LAUNCHES"
             ).fetchall()[0][0]
-            == 50
+            == len(first)
         )
         if dataset == "windows-apt-2025":
             assert all("\\\\" not in row[0] for row in first)
         if dataset in ("cyberlab", "microsoft-iot"):
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS WHERE label != 'malicious'"
+                    "SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label != 'malicious'"
                 ).fetchall()[0][0]
                 == 0
             )
@@ -75,9 +90,12 @@ def test_real_dataset_idempotent(dataset, tmp_path):
         assert (
             first
             == connection.execute(
-                "SELECT * FROM COMMANDS ORDER BY record_id"
+                "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
             ).fetchall()
         )
+        assert connection.execute(
+            "SELECT * FROM SHELL_INPUTS ORDER BY record_id"
+        ).fetchall() == shells
 
 
 def test_linux_audit_headers_and_excel_escapes(tmp_path):
@@ -93,7 +111,7 @@ def test_linux_audit_headers_and_excel_escapes(tmp_path):
     )
     with duckdb.connect(str(database), read_only=True) as connection:
         rows = connection.execute(
-            "SELECT pgm,args,label FROM COMMANDS WHERE record_id LIKE '%1704304027.612:3126'"
+            "SELECT pgm,args,dataset_label FROM PROCESS_LAUNCHES WHERE record_id LIKE '%1704304027.612:3126'"
         ).fetchall()
         assert len(rows) == 1  # Two Wazuh alerts describe one kernel execution.
         assert all(
@@ -107,7 +125,7 @@ def test_linux_audit_headers_and_excel_escapes(tmp_path):
         )
         assert (
             connection.execute(
-                "SELECT count(*) FROM COMMANDS WHERE label = 'benign'"
+                "SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label = 'benign'"
             ).fetchall()[0][0]
             > 1000
         )
@@ -126,7 +144,7 @@ def test_sudo_list_is_privilege_query(tmp_path):
     )
     with duckdb.connect(str(database), read_only=True) as connection:
         rows = connection.execute(
-            "SELECT pgm,args FROM COMMANDS WHERE "
+            "SELECT pgm,args FROM PROCESS_LAUNCHES WHERE "
             "record_id = 'fox_no-pcaps.zip:gather/intranet_server/logs/auth.log:354:0'"
         ).fetchall()
         assert rows == [("sudo", ["-l"])]

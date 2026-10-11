@@ -35,8 +35,8 @@ def test_otrf_incomplete_and_unrelated_syslog_preserves_local_cli(tmp_path):
     result = ingest(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,args,os,label,shell_input FROM COMMANDS").fetchall() == [
-            ("/usr/bin/aws", ["sts", "get-caller-identity"], "linux", "unknown", None),
+        assert con.execute("SELECT pgm,args,os,dataset_label FROM PROCESS_LAUNCHES").fetchall() == [
+            ("/usr/bin/aws", ["sts", "get-caller-identity"], "linux", "unknown"),
         ]
 
 
@@ -57,7 +57,7 @@ type=EOE msg=audit(1604994497.155:92734):
     result = ingest(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone() == (0,)
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone() == (0,)
         assert con.execute("SELECT * FROM INGESTED").fetchall() == [(root.name, True)]
 
 
@@ -86,12 +86,12 @@ def test_otrf_record_limit_and_complete_retry_across_archive_formats(tmp_path, c
     result = ingest(root, database, READER, "--max-records", "1")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT args FROM COMMANDS").fetchall() == [(["/c", "whoami"],)]
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES").fetchall() == [(["/c", "whoami"],)]
         assert con.execute("SELECT * FROM INGESTED").fetchall() == [(root.name, False)]
     result = ingest(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT args FROM COMMANDS ORDER BY record_id").fetchall() == [(["/c", "whoami"],), (["/c", "hostname"],)]
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall() == [(["/c", "whoami"],), (["/c", "hostname"],)]
         assert con.execute("SELECT * FROM INGESTED").fetchall() == [(root.name, True)]
 
 

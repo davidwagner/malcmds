@@ -15,7 +15,6 @@ from pathlib import Path
 
 import duckdb
 import pytest
-
 from _ingest import COLUMNS
 from test_ingest_optc_parallel import ingest, rows, write_stream
 
@@ -45,11 +44,11 @@ def install_labels(root, tasks, exported=(), inria=(), intervals=()):
 def labels(database):
     """Read final labels while enforcing the existing persistent schema."""
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert [row[0] for row in connection.execute('DESCRIBE COMMANDS').fetchall()] == list(COLUMNS), (
-            'OpTC labels must use existing COMMANDS columns; no evidence columns are needed')
-        assert connection.execute('SHOW TABLES').fetchall() == [('COMMANDS',), ('INGESTED',)]
+        assert [row[0] for row in connection.execute('DESCRIBE PROCESS_LAUNCHES').fetchall()] == list(COLUMNS), (
+            'OpTC labels must use existing PROCESS_LAUNCHES columns; no evidence columns are needed')
+        assert connection.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
         return {record.removesuffix(':0'): (label, group) for record, label, group in
-                connection.execute('SELECT record_id,label,group_id FROM COMMANDS').fetchall()}
+                connection.execute('SELECT record_id,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()}
 
 
 def test_released_reviewed_and_inria_examples(tmp_path):

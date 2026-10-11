@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Iterator
 from pathlib import Path
 
-from _ingest import Command, select_files, shell_commands
+from _ingest import Command, ShellInput, select_files, shell_commands
 
 FILES = (
     'X_train_malicious_cmd_orig.json', 'X_train_malicious_cmd_adv.json',
@@ -87,7 +87,7 @@ def _label(pgm, args, text):
     return 'malicious-group'
 
 
-def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
+def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
     """Import all five arrays with source-occurrence IDs and command-level labels."""
     paths = [root / name for name in FILES]
     for path in paths:
@@ -102,10 +102,12 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
         for index, text in enumerate(strings):
             if options.max_records is not None and index >= options.max_records:
                 break
-            for command_index, (pgm, args, other) in enumerate(shell_commands(text)):
+            commands = []
+            for command_index, (pgm, args, _) in enumerate(shell_commands(text)):
                 label = 'benign' if background else _label(pgm, args, text)
-                yield Command(
+                commands.append(Command(
                     pgm, args, f'{path.name}:{index}:{command_index}', label=label,
                     group_id=f'quasarnix:{path.name}:{index}' if label == 'malicious-group' else None,
-                    shell_input=text, other_tokens=other,
-                )
+                ))
+            yield ShellInput(text, f'{path.name}:{index}', commands,
+                             label='benign' if background else 'malicious')

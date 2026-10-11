@@ -25,7 +25,7 @@ def test_native_annotations_and_unannotated_inventory(tmp_path):
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        saved = con.execute('SELECT record_id,label,group_id,session_id FROM COMMANDS').fetchall()
+        saved = con.execute('SELECT record_id,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES').fetchall()
     by_id = {row[0]: row[1:] for row in saved}
     expected = {'tagged': 'benign', 'rule-11': 'unknown', 'rule-92031': 'benign',
                 'rule-92039': 'benign', 'rule-92066': 'benign', 'rule-92052': 'unknown'}
@@ -37,7 +37,7 @@ def test_native_annotations_and_unannotated_inventory(tmp_path):
     again = invoke(tmp_path, database, source)
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(rows)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == len(rows)
 
 
 def test_observation_infrastructure_and_attack_tools(tmp_path):
@@ -53,7 +53,7 @@ def test_observation_infrastructure_and_attack_tools(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_misc import windows_apt as records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        saved = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
+        saved = dict(con.execute('SELECT record_id,dataset_label FROM PROCESS_LAUNCHES').fetchall())
     for name, row in examples.items():
         # These earlier 'attack' fixtures perform discovery or download a license.
         # A scenario/parent name alone does not establish attack behavior.
@@ -120,7 +120,7 @@ def test_infrastructure_requires_matching_process_evidence(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_misc import windows_apt as records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        saved = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
+        saved = dict(con.execute('SELECT record_id,dataset_label FROM PROCESS_LAUNCHES').fetchall())
     unknown = {
         'different-command', 'different-vmware-script', 'extra-vmware-command',
         'wrong-vmware-parent', 'different-vmware-helper', 'wrong-vmware-helper-image',
@@ -148,4 +148,4 @@ def test_helper_without_parent_in_selected_records_uses_command_policy(tmp_path)
     result = invoke(tmp_path, database, 'from _ingest_misc import windows_apt as records\n', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT label FROM COMMANDS').fetchall() == [('benign',)]
+        assert con.execute('SELECT dataset_label FROM PROCESS_LAUNCHES').fetchall() == [('benign',)]

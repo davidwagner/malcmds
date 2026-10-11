@@ -22,22 +22,26 @@ The PowerShell parser uses `Parser.ParseInput` and inspects command AST nodes;
 strings, comments and operators never become commands. Arguments remain static:
 variables and expressions are preserved without expansion. cmd.exe redirections
 are separated from program arguments. For example,
-`"adfind.exe" -f (objectcategory=person) > ad_users.txt` has two arguments and
-`other_tokens = [">", "ad_users.txt"]`. Snippets whose nominal cmd platform
-contains explicit PowerShell syntax use the PowerShell parser. Unknown platform
+`"adfind.exe" -f (objectcategory=person) > ad_users.txt` produces a
+`PROCESS_LAUNCHES` row with two arguments. Its `SHELL_INPUTS` row preserves
+the complete snippet in `shell_input`, lists `adfind.exe` in `pgms`, and retains
+all source words and syntax, including `>` and `ad_users.txt`, in `tokens`.
+Snippets whose nominal cmd platform contains explicit PowerShell syntax use the PowerShell parser. Unknown platform
 tags in this release also contain PowerShell syntax. Unrecognized platform tags
 with an unambiguous Unix executable path or shell name use Linux shell parsing.
 
-Only original Caldera shell snippets fill `shell_input`. Process command lines
-and AVIATOR Event 4104 script-block text leave it null. The processed sequence
-format removes original snippet delimiters: recognizable executable command
+Only original Caldera shell snippets produce `SHELL_INPUTS` rows. Their parsed
+invocations also populate `PROCESS_LAUNCHES`. Process command lines and AVIATOR
+Event 4104 script-block text populate only `PROCESS_LAUNCHES`. The processed
+sequence format removes original snippet delimiters: recognizable executable command
 lines use process quoting, while remaining multiline script text is parsed
 together. Individual AST commands receive distinct occurrence IDs, including
 repeated identical commands. The source format cannot establish which branches
 of an expanded script actually ran; these rows describe commands present in
 the published snippets.
 
-GroundTruth distinguishes malicious snippets from inserted benign snippets.
+GroundTruth distinguishes malicious snippets from inserted benign snippets;
+that decision becomes the shell row's `dataset_label`.
 Harmless delay, directory-change and output-discard operations within an attack
 snippet receive benign labels. Normal browser launches and routine browser
 helpers are also benign. AVIATOR attack sequences initially use
