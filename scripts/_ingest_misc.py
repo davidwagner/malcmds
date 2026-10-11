@@ -22,6 +22,7 @@ from pathlib import Path
 
 import ijson
 import openpyxl
+from _ingest_windows_apt_labels import decode_windows_apt_field
 from _ingest import (
     Command,
     normalize,
@@ -564,18 +565,11 @@ def linux_apt_audit_lines(root, options, labels, attacks):
                 yield f"node={row.get('_source.agent.name', 'unknown-host')} dataset_label={label} " + fragment
 
 
-def decode_windows_apt_field(raw: str, *, json_contents: bool, html_entities: bool) -> str:
-    """Decode the CSV field's known export layers once, preserving malformed JSON."""
-    if json_contents:
-        try:
-            raw = json.loads('"' + raw + '"')
-        except json.JSONDecodeError:
-            pass
-    return html.unescape(raw) if html_entities else raw
-
-
 def windows_apt(root, options):
     """Read native process launch command lines and process inventory arguments."""
+    from _ingest_windows_apt_labels import infrastructure_parents, is_infrastructure
+
+    parents = infrastructure_parents(root / "source/combined.csv", options.max_records)
     with (root / "source/combined.csv").open(
         encoding="utf-8-sig", newline=""
     ) as stream:
@@ -591,6 +585,8 @@ def windows_apt(root, options):
                     label = "malicious"
                 command = decode_windows_apt_field(command, json_contents=True, html_entities=True)
                 image = decode_windows_apt_field(image, json_contents=True, html_entities=True)
+                if is_infrastructure(row, parents):
+                    label = "benign"
             else:
                 # Inventory fields are ordinary CSV text, without the Sysmon JSON layer.
                 image = row.get("_source.data.process.cmd", "").strip()
