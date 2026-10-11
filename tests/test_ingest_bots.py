@@ -10,7 +10,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+DATASETS = Path(__file__).resolve().parents[1] / "datasets"
 TMP = DATASETS.parent / "tmp"
 
 

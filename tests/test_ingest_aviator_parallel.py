@@ -10,7 +10,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 ARCHIVE = "10.35097-8s5b0u5yqgfs2y0d.tar"
 
 
@@ -41,7 +41,7 @@ def archive_root(tmp_path, members):
 def ingest(root, database, workers, *extra, check=True):
     """Run the production driver in a separate interpreter with real workers."""
     driver = ("import sys; from pathlib import Path; "
-              f"sys.path.insert(0, {str(DATASETS)!r}); "
+              f"sys.path.insert(0, {str(SCRIPTS)!r}); "
               "from _ingest import run; from _ingest_aviator import records; "
               f"run(Path({str(root)!r}), records)")
     return subprocess.run(
@@ -150,7 +150,7 @@ def test_early_close_terminates_workers_and_removes_spools(tmp_path):
     ])])
     driver = ("import sys, multiprocessing; from pathlib import Path; "
               "from types import SimpleNamespace; "
-              f"sys.path.insert(0, {str(DATASETS)!r}); "
+              f"sys.path.insert(0, {str(SCRIPTS)!r}); "
               "from _ingest_aviator import records; "
               "options=SimpleNamespace(workers=2,max_records=None,limit=None,"
               "batch_size=2,sample_files=None,seed=0); "

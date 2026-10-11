@@ -15,7 +15,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
 def event(number, **changes):
@@ -56,7 +56,7 @@ def archive_root(tmp_path, members, name='scenario.tar', compressed=False):
 def ingest(root, database, workers, *extra, check=True):
     """Run the actual ingestion driver and worker processes in a fresh Python."""
     driver = ('import sys; from pathlib import Path; '
-              f'sys.path.insert(0, {str(DATASETS)!r}); '
+              f'sys.path.insert(0, {str(SCRIPTS)!r}); '
               'from _ingest import run; from _ingest_autolabel import records; '
               f'run(Path({str(root)!r}), records)')
     return subprocess.run(
@@ -251,7 +251,7 @@ import multiprocessing
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-sys.path.insert(0, {str(DATASETS)!r})
+sys.path.insert(0, {str(SCRIPTS)!r})
 from _ingest_autolabel import records
 options = SimpleNamespace(workers=2, max_records=None, limit=None,
                           batch_size=2, sample_files=None, seed=0)
@@ -299,7 +299,7 @@ def test_arrow_batches_and_early_close_stop_worker_processes(tmp_path):
     ])
     driver = ('import sys, multiprocessing; from pathlib import Path; '
               'from types import SimpleNamespace; import pyarrow as pa; '
-              f'sys.path.insert(0, {str(DATASETS)!r}); '
+              f'sys.path.insert(0, {str(SCRIPTS)!r}); '
               'from _ingest_autolabel import records; '
               'options=SimpleNamespace(workers=2,max_records=None,limit=None,'
               'batch_size=2,sample_files=None,seed=0); '

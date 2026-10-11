@@ -12,7 +12,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+DATASETS = Path(__file__).resolve().parents[1] / "datasets"
 NAMES = sorted(p.name for p in DATASETS.glob('tc-*') if p.is_dir())
 
 

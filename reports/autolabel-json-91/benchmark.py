@@ -25,7 +25,7 @@ import duckdb
 import orjson
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / 'datasets'))
+sys.path.insert(0, str(REPO / 'scripts'))
 
 
 def _trial(reader, sample, database):
@@ -69,7 +69,7 @@ def main():
         for trial in range(3):
             for variant, reader in [
                 ('baseline', args.baseline),
-                ('updated', REPO / 'datasets/_ingest_autolabel.py'),
+                ('updated', REPO / 'scripts/_ingest_autolabel.py'),
             ]:
                 database = args.output / f'{index}-{variant}-{trial}.duckdb'
                 command = [sys.executable, str(Path(__file__).resolve()), '--trial',

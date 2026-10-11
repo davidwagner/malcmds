@@ -40,7 +40,7 @@ def pwsh():
         return executable
     # The normal dataset fetch installs a versioned portable runtime on Linux.
     # These tests run after ./datasets/lade/fetch, as the README documents.
-    archive = HERE / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
+    archive = HERE.parent / "datasets" / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
     assert archive.exists(), "LADE's PowerShell AST tests require ./datasets/lade/fetch or LADE_PWSH"
     return None
 
@@ -49,12 +49,12 @@ def test_lade_authentic_groundtruth_and_processed_selection(tmp_path, pwsh):
     """GroundTruth wins over Processed; cmd redirection and PS literals survive."""
     root = tmp_path / "lade"
     root.mkdir()
-    runtime = HERE / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
+    runtime = HERE.parent / "datasets" / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
     if runtime.exists():
         (root / runtime.name).symlink_to(runtime)
     with tarfile.open(root / "aviator-ground-truth-and-tools.tar.gz", "w:gz"):
         pass
-    text = (HERE / "lade_groundtruth_fixture.txt").read_text()
+    text = (HERE / "fixtures/lade_groundtruth_fixture.txt").read_text()
     with tarfile.open(root / "lade.tar.gz", "w:gz") as archive:
         add_member(archive, "LADE/Caldera-derived/APT_labeled_sequences/GroundTruth/sequence.txt", text)
         add_member(archive, "LADE/Caldera-derived/APT_labeled_sequences/Processed/sequence.txt", text)
@@ -81,7 +81,7 @@ def test_otrf_authentic_dumpert_sources_merge(tmp_path):
     """The released 4688 and Sysmon records describe one Dumpert execution."""
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
-    data = (HERE / "otrf_dumpert_fixture.jsonl").read_text()
+    data = (HERE / "fixtures/otrf_dumpert_fixture.jsonl").read_text()
     release = [json.loads(line) for line in data.splitlines()]
     assert {row["EventID"] for row in release} == {1, 4688}
     with tarfile.open(root / "security-datasets.tar.gz", "w:gz") as archive:
@@ -110,7 +110,7 @@ def test_otrf_reused_pid_distinct_capture_and_time(tmp_path):
     """PID reuse and repeated executions remain separate from alternate exports."""
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
-    events = [json.loads(line) for line in (HERE / "otrf_dumpert_fixture.jsonl").read_text().splitlines()]
+    events = [json.loads(line) for line in (HERE / "fixtures/otrf_dumpert_fixture.jsonl").read_text().splitlines()]
     later = dict(events[0], TimeCreated="2020-10-18 10:57:14.283")
     data = "\n".join(json.dumps(e) for e in [*events, later])
     with tarfile.open(root / "security-datasets.tar.gz", "w:gz") as archive:
@@ -127,7 +127,7 @@ def test_otrf_azure_failed_exec_and_truncated_sysmon(tmp_path):
     """Authentic Azure records preserve attempted images and complete XML fields."""
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
-    data = (HERE / "otrf_azure_fixture.jsonl").read_bytes()
+    data = (HERE / "fixtures/otrf_azure_fixture.jsonl").read_bytes()
     with tarfile.open(root / "security-datasets.tar.gz", "w:gz") as archive:
         add_member(archive, "OTRF/datasets/compound/Log4Shell/events.zip", zipped("events.json", data))
     database = tmp_path / "azure.duckdb"
@@ -145,7 +145,7 @@ def test_lade_static_script_invocations_and_scenario_labels(tmp_path, pwsh):
     """PowerShell parses real commands without executing them or inventing string commands."""
     root = tmp_path / "lade"
     root.mkdir()
-    runtime = HERE / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
+    runtime = HERE.parent / "datasets" / "lade" / "powershell-7.6.6-linux-x64.tar.gz"
     if runtime.exists():
         (root / runtime.name).symlink_to(runtime)
     with tarfile.open(root / "aviator-ground-truth-and-tools.tar.gz", "w:gz") as archive:
@@ -211,7 +211,7 @@ def test_otrf_linux_audit_exec_filter_and_sessions(tmp_path):
     """Real audit launch fields survive; non-exec observations and parent-PID sessions do not."""
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
-    data = (HERE / "otrf_audit_fixture.log").read_text()
+    data = (HERE / "fixtures/otrf_audit_fixture.log").read_text()
     data += '\ntype=SYSCALL msg=audit(1604994497.155:99901): arch=c000003e syscall=0 success=yes pid=1631 ppid=29002 ses=104 exe="/usr/sbin/arp"\n'
     data += 'type=PROCTITLE msg=audit(1604994497.155:99901): proctitle=617270002D61\n'
     data += 'type=EOE msg=audit(1604994497.155:99901):\n'
@@ -239,7 +239,7 @@ def test_otrf_raw_audit_ancestry_reuse_and_target_only_failure(tmp_path):
     """Raw audit attribution follows parent lifetimes and retains failed targets without argv."""
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
-    lines = (HERE / "otrf_audit_fixture.log").read_text().splitlines()
+    lines = (HERE / "fixtures/otrf_audit_fixture.log").read_text().splitlines()
     first = "\n".join(lines[:6]) + "\ntype=EOE msg=audit(1604994496.155:92733):\n"
     second = "\n".join(lines[6:]).replace("ppid=29002", "ppid=1631")
     second += "\ntype=EOE msg=audit(1604994496.155:92734):\n"
@@ -282,8 +282,8 @@ def test_otrf_authentic_unprompted_dd_attack_metadata(tmp_path):
     root = tmp_path / "otrf-security-datasets"
     root.mkdir()
     with tarfile.open(root / "security-datasets.tar.gz", "w:gz") as archive:
-        add_member(archive, "OTRF/datasets/atomic/_metadata/SDLIN-201110081941.yaml", (HERE / "otrf_dd_fixture.yaml").read_bytes())
-        add_member(archive, "OTRF/datasets/atomic/linux/defense_evasion/host/sh_binary_padding_dd.zip", zipped("audit.log", (HERE / "otrf_dd_fixture.log").read_bytes()))
+        add_member(archive, "OTRF/datasets/atomic/_metadata/SDLIN-201110081941.yaml", (HERE / "fixtures/otrf_dd_fixture.yaml").read_bytes())
+        add_member(archive, "OTRF/datasets/atomic/linux/defense_evasion/host/sh_binary_padding_dd.zip", zipped("audit.log", (HERE / "fixtures/otrf_dd_fixture.log").read_bytes()))
     database = tmp_path / "dd.duckdb"
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr

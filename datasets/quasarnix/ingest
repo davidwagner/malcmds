@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
 from _ingest import run
 from _ingest_quasarnix import records
 

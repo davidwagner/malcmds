@@ -1,6 +1,6 @@
 """Integration tests using real curl/file transfers and public source APIs.
 
-Run: python -m unittest discover -s datasets -p test_fetch.py -v
+Run: python -m unittest discover -s tests -p test_fetch.py -v
 Network interruption, disk exhaustion, publisher outages, and large private-host
 quota failures are not simulated. No mocks or replacement downloaders are used.
 Temporary artifacts stay in the repository's tmp directory.
@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 class DownloadTests(unittest.TestCase):
@@ -223,8 +223,10 @@ github('splunk/attack_data', selected, 'a28608b53aa3d8222052e8f3ada59e2d9a4adfff
         """The real KYPO entry point downloads a valid archive and skips it later."""
         target = self.base / "datasets"
         (target / "kypo").mkdir(parents=True)
-        shutil.copy2(ROOT / "_fetch.py", target)
-        shutil.copy2(ROOT / "kypo" / "fetch", target / "kypo")
+        scripts = self.base / "scripts"
+        scripts.mkdir()
+        shutil.copy2(ROOT / "_fetch.py", scripts)
+        shutil.copy2(ROOT.parent / "datasets" / "kypo" / "fetch", target / "kypo")
         env = dict(os.environ)
         env.pop("FETCH_LIST", None)
         script = target / "kypo" / "fetch"

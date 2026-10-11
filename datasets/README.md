@@ -5,21 +5,25 @@ which contain Unix/Microsoft commands.
 
 To use this, first download all datasets:
 see Download/fetch below.
-Then, run `./ingestall` to populate `../cmds.duckdb`.
+Then, run `../scripts/ingestall` to populate `../cmds.duckdb`.
+
+The commands below assume your working directory is `datasets/`, unless
+a dataset directory is specified. Shared scripts and their requirements are
+in `../scripts/`; tests and their fixtures are in `../tests/`.
 
 # Contents
 
 One directory per dataset.  Each directory contains:
 - README.md - description of the dataset
 - `fetch` - a script to download the dataset
-- `ingest` - a script to parse the dataset and add to `../cmds.duckdb`
+- `ingest` - a script to parse the dataset and add to `cmds.duckdb` at the repository root
 
 # Download/fetch
 
 To download all datasets, run
 
 ```
-while ! ./fetchall; do sleep 1200; done
+while ! ../scripts/fetchall; do sleep 1200; done
 ```
 
 until it completes without errors.
@@ -28,7 +32,7 @@ To make this go quicker, log into your Google account
 from your web browser, and set the environment variable
 `FETCH_GOOGLE_BROWSER` to `firefox` [default], `chrome`,
 or `safari`. This will authenticate to Google when downloading.
-Run `python _google.py check` to make sure it is working.
+Run `python ../scripts/_google.py check` to make sure it is working.
 Then, run the `fetchall` command above. This helps avoid
 some rate limits with Google Drive.
 
@@ -47,12 +51,12 @@ to help avoid the need to re-download it.
 
 ## Ingest commands
 
-Run `./ingestall` to populate `../cmds.duckdb`.
+Run `../scripts/ingestall` to populate `../cmds.duckdb`.
 
 Or, if you want only a single dataset, run `./ingest` from
 the dataset directory.
 
-It is safe to run `./ingestall` or `./ingest` multiple times.
+It is safe to run `../scripts/ingestall` or `./ingest` multiple times.
 The scripts will prevent duplicates.
 
 For datasets containing shell input, `ingest` uses a Bash syntax

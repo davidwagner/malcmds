@@ -48,7 +48,7 @@ DATASET_ORDER = (
 
 def main():
     """Forward sample/database options and report every unsuccessful dataset."""
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1] / "datasets"
     scripts = {p.parent.name: p for p in sorted(root.glob("*/ingest"))}
     default_names = [name for name in DATASET_ORDER if name in scripts]
     default_names.extend(name for name in scripts if name not in DATASET_ORDER)

@@ -1,10 +1,10 @@
 name: Public dataset ingestion
 on:
   pull_request:
-    paths: ['datasets/**', 'schema.md', '.github/workflows/public-dataset-tests.yml']
+    paths: ['datasets/**', 'scripts/**', 'tests/**', 'schema.md', '.github/workflows/public-dataset-tests.yml']
   push:
     branches: [main]
-    paths: ['datasets/**', 'schema.md', '.github/workflows/public-dataset-tests.yml']
+    paths: ['datasets/**', 'scripts/**', 'tests/**', 'schema.md', '.github/workflows/public-dataset-tests.yml']
 permissions:
   contents: read
 jobs:
@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install Python ingestion dependencies
-        run: python -m pip install -r datasets/ingest-requirements.txt pytest
+        run: python -m pip install -r scripts/ingest-requirements.txt pytest
       - name: Install PostgreSQL 17 archive reader
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -32,4 +32,4 @@ jobs:
         run: |
           "$PG_RESTORE" --version
           pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
-          python -m pytest -q datasets/test_ingest_audit_sessions.py datasets/test_ingest_audit_titles.py datasets/test_ingest_executions.py datasets/test_ingest_bots_labels.py datasets/test_ingest_bots_osquery.py datasets/test_ingest_sudo.py datasets/test_ingest_bots_ps.py datasets/test_ingest_shell_fields.py datasets/test_ingest_quasarnix_honeypot.py datasets/test_ingest_public_errors.py datasets/test_ingest_acme_autolabel.py datasets/test_ingest_autolabel_json.py datasets/test_ingest_autolabel_shell.py datasets/test_ingest_autolabel_parallel.py datasets/test_ingest_carbanak.py datasets/test_ingest_lade_otrf.py datasets/test_ingest_lade_formats.py datasets/test_ingest_otrf_formats.py datasets/test_ingest_tracking.py datasets/test_ingest_optc_parallel.py datasets/test_ingest_optc.py datasets/test_atlas_browser_labels.py datasets/test_windows_apt_decoding.py datasets/test_windows_apt_labels.py datasets/test_honeypot_labels.py datasets/test_bots_shell_fields.py datasets/test_complete_shell_input.py datasets/test_comiset_annotations.py datasets/test_adgen.py
+          python -m pytest -q tests/test_ingest_audit_sessions.py tests/test_ingest_audit_titles.py tests/test_ingest_executions.py tests/test_ingest_bots_labels.py tests/test_ingest_bots_osquery.py tests/test_ingest_sudo.py tests/test_ingest_bots_ps.py tests/test_ingest_shell_fields.py tests/test_ingest_quasarnix_honeypot.py tests/test_ingest_public_errors.py tests/test_ingest_acme_autolabel.py tests/test_ingest_autolabel_json.py tests/test_ingest_autolabel_shell.py tests/test_ingest_autolabel_parallel.py tests/test_ingest_carbanak.py tests/test_ingest_lade_otrf.py tests/test_ingest_lade_formats.py tests/test_ingest_otrf_formats.py tests/test_ingest_tracking.py tests/test_ingest_optc_parallel.py tests/test_ingest_optc.py tests/test_atlas_browser_labels.py tests/test_windows_apt_decoding.py tests/test_windows_apt_labels.py tests/test_honeypot_labels.py tests/test_bots_shell_fields.py tests/test_complete_shell_input.py tests/test_comiset_annotations.py tests/test_adgen.py

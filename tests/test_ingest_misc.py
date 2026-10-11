@@ -11,7 +11,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "datasets"
 INPUTS = {
     "ait": "fox_no-pcaps.zip",
     "cyberlab": "cyberlab_2019-08-01.json.gz",

@@ -1,7 +1,7 @@
 name: Command parsing regressions
 on:
   pull_request:
-    paths: ['datasets/**', '.github/workflows/command-regressions.yml']
+    paths: ['datasets/**', 'scripts/**', 'tests/**', '.github/workflows/command-regressions.yml']
 permissions:
   contents: read
 jobs:
@@ -12,8 +12,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - run: python -m pip install -r datasets/ingest-requirements.txt pytest
+      - run: python -m pip install -r scripts/ingest-requirements.txt pytest uv
       - run: sudo apt-get update -qq && sudo apt-get install -y p7zip-full
-      - run: python -m pytest -q datasets/test_carbon_black_escaping.py datasets/test_rendered_records.py datasets/test_osquery_sessions.py datasets/test_aviator_encoding.py datasets/test_documented_attacks.py
+      - run: python -m pytest -q tests/test_carbon_black_escaping.py tests/test_rendered_records.py tests/test_osquery_sessions.py tests/test_aviator_encoding.py tests/test_documented_attacks.py
       - name: Preserve PublicArena network paths and PAExec attack labels
-        run: python -m pytest -q datasets/test_publicarena_paths.py
+        run: python -m pytest -q tests/test_publicarena_paths.py
+      - name: Check script locations and dataset entry points
+        run: python -m pytest -q tests/test_directory_layout.py

@@ -25,7 +25,7 @@ def powershell(root=None):
     """Start a parser-only PowerShell worker, installing the fetched runtime locally."""
     executable = os.environ.get("LADE_PWSH") or shutil.which("pwsh")
     if not executable:
-        root = root or Path(__file__).parent / "lade"
+        root = root or Path(__file__).resolve().parents[1] / "datasets" / "lade"
         scratch = root.parent.parent / "tmp" / "lade-powershell-7.6.6"
         executable = str(scratch / "pwsh")
         if not Path(executable).exists():

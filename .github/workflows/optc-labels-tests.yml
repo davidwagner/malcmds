@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - 'datasets/**'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/optc-labels-tests.yml'
   push:
     branches: [main]
     paths:
       - 'datasets/**'
+      - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/optc-labels-tests.yml'
 
 permissions:
@@ -22,11 +26,11 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
-      - run: python -m pip install -r datasets/ingest-requirements.txt pytest
+      - run: python -m pip install -r scripts/ingest-requirements.txt pytest
       - name: Verify published labels and Arrow/DuckDB ingestion assumptions
         run: >-
           python -m pytest -q
-          datasets/test_optc_labels.py
-          datasets/test_ingest_optc.py
-          datasets/test_ingest_optc_parallel.py
-          datasets/test_ingest_optc_speed.py
+          tests/test_optc_labels.py
+          tests/test_ingest_optc.py
+          tests/test_ingest_optc_parallel.py
+          tests/test_ingest_optc_speed.py

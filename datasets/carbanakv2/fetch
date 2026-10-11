@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 os.chdir(Path(__file__).resolve().parent)
-sys.path.insert(0, str(Path.cwd().parent))
+sys.path.insert(0, str(Path.cwd().parent.parent / "scripts"))
 from _fetch import download
 
 download("https://raw.githubusercontent.com/ubc-provenance/PIDSMaker/438a05a7c55256f639e5b5945cf4828fe3ee078e/Ground_Truth/orthrus/carbanakv2_edr/carbanakv2_edr.csv", "ground_truth.csv")

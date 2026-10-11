@@ -44,7 +44,7 @@ DATASET_ORDER = (
 
 def main():
     """Fetch every dataset, continuing past errors so other downloads can finish."""
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1] / "datasets"
     scripts = {script.parent.name: script for script in sorted(root.glob("*/fetch"))}
     default_names = [name for name in DATASET_ORDER if name in scripts]
     default_names.extend(name for name in scripts if name not in DATASET_ORDER)

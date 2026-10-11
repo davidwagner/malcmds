@@ -3,7 +3,7 @@
 By default try Firefox, Chrome, Chromium, then other supported browsers.
 FETCH_GOOGLE_BROWSER=firefox selects a browser (none opts out).
 FETCH_GOOGLE_COOKIES=/absolute/path/cookies.txt uses a Netscape export instead.
-Run `python datasets/_google.py check` to check local cookie access.
+Run `python scripts/_google.py check` to check local cookie access.
 An unlocked desktop keyring may be needed for Chromium browsers. Sign in to
 Google in the chosen browser if automatic extraction cannot find a session.
 Cookies help with anonymous throttling; Google may still enforce file quotas.
@@ -34,7 +34,7 @@ HELP = (
 
 def run_google(arguments):
     """Run a cookie-aware worker in a lazily installed, pinned environment."""
-    scratch = ROOT / "tmp"
+    scratch = ROOT.parent / "tmp"
     scratch.mkdir(exist_ok=True)
     environment = scratch / "google-venv"
     python = environment / "bin/python"
@@ -99,7 +99,7 @@ def google_cookies():
         return
     if not source and browser not in (*BROWSERS, "auto"):
         raise RuntimeError("Unsupported browser. " + HELP)
-    scratch = ROOT / "tmp"
+    scratch = ROOT.parent / "tmp"
     scratch.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="google-cookies-", dir=scratch) as directory:
         # The browser extractor also copies its database; keep that copy private.

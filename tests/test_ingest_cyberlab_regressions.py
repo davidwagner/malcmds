@@ -8,7 +8,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 def run_archive(
@@ -97,7 +97,7 @@ def test_record_limit_does_not_pull_next_record(tmp_path):
 
 def test_published_truncated_archive(tmp_path):
     """Read the actual damaged publisher archive to EOF without losing objects."""
-    archive = ROOT / "cyberlab" / "cyberlab_2020-01-29.json.gz"
+    archive = ROOT.parent / "datasets" / "cyberlab" / "cyberlab_2020-01-29.json.gz"
     if not archive.exists():
         pytest.skip("Publisher data not downloaded")
     driver = tmp_path / "publisher.py"
