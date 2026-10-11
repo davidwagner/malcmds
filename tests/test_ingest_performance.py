@@ -47,9 +47,9 @@ def test_command_poor_xml_reports_progress_and_preserves_ids(tmp_path):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     assert "100,000 XML events scanned in events.xml" in result.stderr
-    assert "committing 1 commands" in result.stderr
+    assert "committing 1 observations" in result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,args,record_id FROM COMMANDS").fetchall() == [
+        assert con.execute("SELECT pgm,args,record_id FROM PROCESS_LAUNCHES").fetchall() == [
             ("cmd", ["/c", "whoami"], "events.xml:100001:100001:0")
         ]
     limited = ingest(
@@ -99,7 +99,7 @@ def test_xml_filter_retains_supported_fields_and_malformed_exports(tmp_path, enc
     result = ingest(root, tmp_path / "commands.duckdb", XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(tmp_path / "commands.duckdb")) as con:
-        rows = con.execute("SELECT args FROM COMMANDS ORDER BY record_id").fetchall()
+        rows = con.execute("SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall()
         assert len(rows) == 10
         assert sorted(row[0][-1] for row in rows) == sorted(
             [str(i) for i in range(8)] + ["large", "a&b"]
@@ -116,7 +116,7 @@ def test_truncated_xml_rolls_back_and_empty_xml_finishes(tmp_path):
     assert result.returncode != 0
     assert "Truncated XML Event" in result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone() == (0,)
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone() == (0,)
     (root / "events.xml").write_text("<Events></Events>")
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
@@ -143,13 +143,13 @@ def records(root, options):
     assert json.loads(second.stdout)["skipped"] is True
     with duckdb.connect(str(database)) as con:
         assert con.execute(
-            "SELECT pgm FROM COMMANDS WHERE record_id='0' ORDER BY pgm"
+            "SELECT pgm FROM PROCESS_LAUNCHES WHERE record_id='0' ORDER BY pgm"
         ).fetchall() == [("first",), ("later",)]
         assert con.execute(
-            "SELECT pgm FROM COMMANDS WHERE record_id='1' ORDER BY pgm"
+            "SELECT pgm FROM PROCESS_LAUNCHES WHERE record_id='1' ORDER BY pgm"
         ).fetchall() == [("duplicate",), ("later",)]
         assert con.execute(
-            "SELECT count(*)-count(DISTINCT record_id) FROM COMMANDS"
+            "SELECT count(*)-count(DISTINCT record_id) FROM PROCESS_LAUNCHES"
         ).fetchone() == (2,)
 
 
@@ -168,6 +168,6 @@ def test_short_xml_event_is_counted_once_at_read_boundary(tmp_path, with_command
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT record_id FROM COMMANDS").fetchall() == (
+        assert con.execute("SELECT record_id FROM PROCESS_LAUNCHES").fetchall() == (
             [("events.xml:3:3:0",)] if with_command else []
         )

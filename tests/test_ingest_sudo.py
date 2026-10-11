@@ -48,8 +48,8 @@ def test_published_linux_apt_sudo_commands(tmp_path):
     with duckdb.connect(str(tmp_path / 'commands.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'linux-apt-2024'))
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == 1212
-        assert con.execute('SELECT count(*) FROM COMMANDS WHERE shell_input IS NOT NULL OR other_tokens != []').fetchone()[0] == 0
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == 1212
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone()[0] == 0
 
 
 def test_sudo_serialization_roundtrip_storage(tmp_path):
@@ -71,4 +71,4 @@ def test_sudo_serialization_roundtrip_storage(tmp_path):
     with duckdb.connect(str(tmp_path / 'controls.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'linux-apt-2024'))
-        assert con.execute('SELECT args FROM COMMANDS ORDER BY record_id').fetchall() == [(e[1:],) for _, e in examples if e]
+        assert con.execute('SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [(e[1:],) for _, e in examples if e]

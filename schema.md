@@ -1,20 +1,43 @@
-A duckdb-native database with a main table, COMMANDS, which has one row per command line listed in one of the datasets.  Each row has the following columns:
-- `pgm` - the program being executed (full path to executable; or if it's not available, one of argv[0] or first word of the command line or proctitle)
-- `pgm_base` - `pgm`, but with leading directory components removed (e.g., if `pgm` = `/a/b/c/d`, then `pgm_base` = `d`)
-- `args` - the arguments to the command (argv[1..]), as a list of strings (LIST(VARCHAR))
-- `shell_input` - for datasets that record full shell input, this is the entire line typed into the command shell; NULL if the dataset doesn't record full shell input (e.g., if it only records kernel execve calls)
-- `other_tokens` - list of other words/tokens from `shell_input` that aren't included in `args` or `pgm` (LIST(VARCHAR)), or an empty list if there is no full shell input
-- `dataset` - the original dataset this command line appeared in came from, e.g., `optc`
-- `record_id` - an identifier of the specific record/entry within the dataset (e.g., might be a UUID, a combination of a filename and line number, or other id that can be used to find the source record in the original dataset)
-- `label` - `malicious`, `benign`, `unknown`, or `malicious-group` (`malicious-group` means that it is one command in an entire label group/session/connection, and the session/group/connection is believed to be malicious; it's not known whether this particular command is malicious or benign, but likely some/many of the commands in the session are malicious; i.e., individual commands are not labelled but a group of commands has been labelled as malicious, and this is one command in that group) (ENUM)
-- `group_id` - a unique identifier for the label group (session/connection/time range) this command is part of, if `label` = `malicious-group`; otherwise NULL
-- `session_id` - a unique identifier for the login session / SSH connection / etc. this command is part of
-- `os` - `windows` or `linux` (inferred best-effort) (ENUM)
+The native DuckDB database contains two observation tables. `PROCESS_LAUNCHES` records individual program executions, as an in-kernel logger could observe them. `SHELL_INPUTS` records complete inputs submitted to a command shell. A dataset that observes shell input populates both tables: one shell row per observed input and one process row per parsed program invocation.
 
-For uniformity, the `pgm`, `pgm_base`, `args` columns in this table are intended to simulate what an in-kernel audit log would/could see. Some datasets record command lines typed into the shell or sent over the network; those should be parsed and normalized into this format to populate `pgm`, `pgm_base`, `args`. For example, if a dataset contains a line typed into a shell, which might contain multiple commands (`cd ..; ls docs > /dev/null`), that will be expanded into multiple rows in this table (`cd ..` and `ls docs`) and only program names/args will be preserved. If the dataset does record full command lines typed into a shell, then the full line should be recorded in `shell_input` and `other_tokens` populated; otherwise those are NULL and the empty list.
+Both tables have these columns:
 
-All entries should be populated in a best-effort fashion. Don't document all the caveats about why they might be imperfect. Don't document the evidence for them. We don't try to preserve anything from the original dataset beyond the information above. We're trying to keep things simple for the consumer of this data.
+- `dataset` - the original dataset, e.g., `optc` (VARCHAR).
+- `record_id` - an identifier that locates the original record in the dataset (VARCHAR). Shell-derived process identifiers can include an additional invocation index.
+- `dataset_label` - `malicious`, `benign`, `unknown`, or `malicious-group` (ENUM). `malicious-group` means the session or group is believed to contain malicious activity, but the particular observation is not individually labelled.
+- `group_id` - the label group's identifier when `dataset_label` is `malicious-group`; otherwise NULL (VARCHAR).
+- `session_id` - the login session, SSH connection, or other session identifier (VARCHAR). When unavailable, this defaults to an identifier derived from the dataset and record.
+- `os` - `windows` or `linux`, inferred best-effort (ENUM).
 
-Also, the table INGESTED will record which datasets have been fully ingested into COMMANDS.  It has two columns:
-- `dataset` - the original dataset this command line appeared in came from, e.g., `optc`
-- `ingested` - boolean, true if the `ingest` script has finished fully ingesting the database and adding it all to COMMANDS
+`PROCESS_LAUNCHES` also has:
+
+- `pgm` - the executable's full path, or its observed program name when the path is unavailable (VARCHAR).
+- `pgm_base` - `pgm` with leading directory components removed (VARCHAR).
+- `args` - the program's arguments, excluding `argv[0]` (LIST(VARCHAR)).
+
+`SHELL_INPUTS` also has:
+
+- `shell_input` - the complete observed input, preserved verbatim (VARCHAR).
+- `pgms` - the basenames of the programs parsed from that input, in parser order, including repeated invocations (LIST(VARCHAR)).
+- `tokens` - all source words and syntax tokens in source order, including program names, arguments, assignments, redirections, and command separators (LIST(VARCHAR)). Quotes and escapes are retained as written; whitespace separating tokens is omitted.
+
+For example, `/bin/ls dir; ./go > out` produces one shell row with `pgms = ['ls', 'go']` and `tokens = ['/bin/ls', 'dir', ';', './go', '>', 'out']`. It also produces two process rows: `pgm = '/bin/ls', args = ['dir']` and `pgm = './go', args = []`. An observed assignment or other input with no parsed invocation still has a shell row with an empty `pgms` list. Repeated observations are retained, even when their input text is identical.
+
+Native process telemetry populates only `PROCESS_LAUNCHES`. Shell strings passed as arguments to a native process remain arguments; they do not establish a separately observed shell submission. Parsing and normalization are best-effort and never execute captured input. A shell observation and the process rows derived from it are inserted in the same transaction.
+
+The `INGESTED` table tracks completion across both observation tables:
+
+- `dataset` - the dataset name (VARCHAR).
+- `ingested` - true only after a complete ingestion run (BOOLEAN).
+
+A failed or bounded run leaves `ingested = false`. Retrying replaces that dataset's rows in both tables. `--limit` counts emitted observations: one native process record or one complete shell input with all its parsed invocations. Parallel process batches retain one observation per process.
+
+To migrate an existing `COMMANDS` database, run:
+
+```sh
+scripts/migrate_observations --db /path/to/cmds.duckdb
+```
+
+The script removes the old rows for `cyberlab`, `kypo`, `lade`, `microsoft-iot`, `quasarnix`, `shell-honeypot`, and `splunk-bots`; renames the remaining table to `PROCESS_LAUNCHES`; removes `shell_input` and `other_tokens`; and renames `label` to `dataset_label`. It creates `SHELL_INPUTS` and resets those seven datasets' completion markers in the same transaction, then reruns their ingest scripts against locally downloaded data. If reingestion fails, rerun the migration command to resume. `--schema-only` performs the conversion and leaves reingestion for a later run. The script refuses to discard shell data found in any other dataset.
+
+Classifier evaluation selects an observation type explicitly: `scripts/eval_ai_classifiers --table PROCESS_LAUNCHES` (the default) or `--table SHELL_INPUTS`. Each run samples only the selected table.

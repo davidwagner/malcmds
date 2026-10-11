@@ -6,7 +6,7 @@ BOTS v3 contains Windows and Unix/Linux logs from a fictional organization, asse
 
 Commands come from Windows process events, WinHostMon and osquery process records, Bash and package history, sudo messages, and joined Linux audit events. Repeated observations of an identified process are combined, preferring its creation event. Unidentified process snapshots, including the release's `ps` listings, are omitted.
 
-Process arguments become `pgm` and `args`. Bash history also retains its full input in `shell_input` and remaining shell syntax in `other_tokens`.
+Process arguments become `pgm` and `args` in `PROCESS_LAUNCHES`. Each Bash history input also produces one `SHELL_INPUTS` row: `shell_input` retains the complete input, `pgms` lists parsed program basenames, and `tokens` retains all source words and shell syntax.
 
 - `record_id` identifies the archive, native bucket, exported event position and command within the event. Audit records also retain their native event identifier.
 - `session_id` starts with `splunk-bots:` and uses the available source identity: host and Windows logon ID; host, user and parent process for osquery; host and history path for shell history; host, process ID and start time for WinHostMon; or the Linux audit session and source, with parent process as fallback.
@@ -20,7 +20,7 @@ The release has no per-command truth column. The reader derives best-effort `mal
 - The confirmed FYODOR-L registry-backed PowerShell payload and its `Updater` scheduled task, using the recorded command and event/process identity.
 - Literal, case-insensitive indicator strings in the command's own program or arguments, from the 16-entry list in the pinned [`bots_rich.py`](https://github.com/kmkholm/moe-mamba-soc-triage/blob/44ef4e047c5dbff13f52bc3856b8060f0524f192/src/data/bots_rich.py). Parent-process text and other commands sharing a history line do not transfer a match.
 
-Commands without a match remain `unknown`. Indicator matches are imperfect: inspecting `hdoor.exe` also matches. Conversely, the recorded `/tmp/colonel` and `colonelnew` attack activity is absent from the list. Neither all PowerShell commands nor all activity on FYODOR-L receives an attack label.
+These decisions populate `dataset_label`. A Bash history input is `malicious` when any of its parsed commands matches; other inputs and commands remain `unknown`. Indicator matches are imperfect: inspecting `hdoor.exe` also matches. Conversely, the recorded `/tmp/colonel` and `colonelnew` attack activity is absent from the list. Neither all PowerShell commands nor all activity on FYODOR-L receives an attack label.
 
 The rules are in [`scripts/_ingest_bots.py`](../../scripts/_ingest_bots.py) and [`scripts/_ingest_bots_iocs.py`](../../scripts/_ingest_bots_iocs.py).
 

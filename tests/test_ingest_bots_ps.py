@@ -14,10 +14,11 @@ def test_native_ps_preserves_only_recoverable_arguments(tmp_path):
     with duckdb.connect(str(tmp_path / "commands.duckdb")) as con:
         _initialize(con)
         _insert(con, command_table(commands, "splunk-bots"))
-        rows = con.execute("SELECT pgm,args,shell_input,other_tokens FROM COMMANDS").fetchall()
+        rows = con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES").fetchall()
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS").fetchone() == (0,)
     assert rows
     assert not any(pgm == "awk" for pgm, *_ in rows)
-    assert all(len(args) <= 1 and shell is None and tokens == [] for _, args, shell, tokens in rows)
+    assert all(len(args) <= 1 for _, args in rows)
     assert any(args == [] for _, args, *_ in rows)
 
 
@@ -33,6 +34,6 @@ def test_ps_ambiguous_and_plain_arguments(tmp_path):
     with duckdb.connect(str(tmp_path / "commands.duckdb")) as con:
         _initialize(con)
         _insert(con, command_table(commands, "splunk-bots"))
-        rows = con.execute("SELECT args,session_id FROM COMMANDS ORDER BY record_id").fetchall()
+        rows = con.execute("SELECT args,session_id FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall()
     assert [args for args, _ in rows] == [["plain"], [], ["plain"]]
     assert len({session for _, session in rows}) == 3

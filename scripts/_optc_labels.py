@@ -1,10 +1,10 @@
-"""Transient published OpTC labels; no label evidence is stored in COMMANDS."""
+"""Transient published OpTC labels; no label evidence is stored in PROCESS_LAUNCHES."""
 
 import csv
 import json
 import zipfile
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from isal import igzip as gzip
@@ -15,10 +15,10 @@ EASTERN = ZoneInfo('America/New_York')
 def timestamp(value):
     """Read eCAR ISO timestamps or epoch milliseconds."""
     if isinstance(value, (int, float)) or isinstance(value, str) and value.isdecimal():
-        return datetime.fromtimestamp(float(value) / 1000, timezone.utc)
+        return datetime.fromtimestamp(float(value) / 1000, UTC)
     if not value:
         return None
-    result = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    result = datetime.fromisoformat(str(value))
     return result.replace(tzinfo=EASTERN) if result.tzinfo is None else result
 
 

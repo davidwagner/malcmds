@@ -19,7 +19,7 @@ def test_carbon_black_pipe_and_unc_arguments(tmp_path):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
         assert rows[0][0] == r"c:\program files\mozilla firefox\firefox.exe"
         assert r"\\.\pipe\gecko-crash-server-pipe.3900" in rows[0][1], (
             "JSON already decodes Carbon Black backslashes; a second decode corrupts pipes"
@@ -29,4 +29,4 @@ def test_carbon_black_pipe_and_unc_arguments(tmp_path):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,args FROM COMMANDS ORDER BY rowid").fetchall() == rows
+        assert con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall() == rows

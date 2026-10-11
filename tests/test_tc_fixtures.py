@@ -24,13 +24,13 @@ def test_trace_executable_only_subjects(tmp_path):
     argv = [sys.executable, str(executable), '--db', str(database)]
     subprocess.run(argv, capture_output=True, text=True, check=True)
     with duckdb.connect(str(database)) as con:
-        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY pgm').fetchall() == [('-bash', []), ('groups', [])], 'Native CDM18 Subjects must retain executable-only argv'
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE contains(record_id, '5325f54a-77b4-2309-3aa8-2df747293484')").fetchone()[0] == 1
-        assert con.execute('SELECT count(*) FROM COMMANDS WHERE shell_input IS NOT NULL OR len(other_tokens)>0').fetchone()[0] == 0
+        before = con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY pgm').fetchall() == [('-bash', []), ('groups', [])], 'Native CDM18 Subjects must retain executable-only argv'
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE contains(record_id, '5325f54a-77b4-2309-3aa8-2df747293484')").fetchone()[0] == 1
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone()[0] == 0
     subprocess.run(argv, capture_output=True, text=True, check=True)
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+        assert con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == before
 
 
 def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
@@ -63,7 +63,7 @@ def test_trace_literal_numeric_words_and_nul_vector(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall()
+        rows = con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall()
         assert rows == [('gdb', ['--ex', 'set', 'backtrace', 'limit', '2000']),
                         ('printf', ['%s', '2020', '612062']), ('printf', ['%s', 'a b'])], 'TRACE text must never infer hex encoding from token spelling'
         assert all('\0' not in arg for _, args in rows for arg in args)
@@ -87,7 +87,7 @@ def test_raw_audit_hex_argument_still_decodes(tmp_path):
     result = ingest(root, database, 'from _ingest_otrf import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args FROM COMMANDS').fetchall() == [('/usr/sbin/arp', ['a b'])]
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES').fetchall() == [('/usr/sbin/arp', ['a b'])]
 
 
 def test_fivedirections_native_images(tmp_path):
@@ -101,17 +101,17 @@ def test_fivedirections_native_images(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
-        rows = con.execute('SELECT pgm,args FROM COMMANDS').fetchall()
+        before = con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        rows = con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES').fetchall()
         assert ('TabTip32.exe', ['/loadhooks', '/Parent:0000000000001e98']) in rows, 'FiveDirections CommandLine can contain only arguments; ImageFileName supplies the executable'
         assert ('TabTip.exe', ['/QuitInfo:00000000000001C4;00000000000001B4;']) in rows
         assert (r'C:\WINDOWS\system32\DllHost.exe', ['/Processid:{7966B4D8-4FDC-4126-A10B-39A3209AD251}']) in rows
         assert (r'C:\Program Files\Windows Defender\MSASCuiL.exe', []) in rows
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE (label='malicious-group') <> (group_id IS NOT NULL) OR shell_input IS NOT NULL OR len(other_tokens)>0").fetchone()[0] == 0
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE (dataset_label='malicious-group') <> (group_id IS NOT NULL)").fetchone()[0] == 0
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
+        assert con.execute('SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == before
 
 
 def test_fivedirections_process_images_and_prefixes(tmp_path):
@@ -178,7 +178,7 @@ def test_fivedirections_process_images_and_prefixes(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT pgm,args FROM COMMANDS ORDER BY rowid').fetchall() == expected, 'Process UUIDs must remain qualified by host and collector restart; FORK images belong to the child'
+        assert con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall() == expected, 'Process UUIDs must remain qualified by host and collector restart; FORK images belong to the child'
 
 
 def test_tc_creation_snapshots_and_distinct_execs(tmp_path):
@@ -228,7 +228,7 @@ def test_tc_creation_snapshots_and_distinct_execs(tmp_path):
     result = ingest(root, database, 'from _ingest_tc import records\n')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        result_rows = con.execute('SELECT pgm,args,record_id FROM COMMANDS').fetchall()
+        result_rows = con.execute('SELECT pgm,args,record_id FROM PROCESS_LAUNCHES').fetchall()
         assert len(result_rows) == 4, 'One creation per process plus both distinct EXECUTE IDs; EXIT time is not another launch'
         assert len({row[2] for row in result_rows}) == 4
         assert len({(row[0], tuple(row[1])) for row in result_rows}) == 1, 'Identical argv must not merge distinct process identities'

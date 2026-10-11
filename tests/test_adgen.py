@@ -22,18 +22,19 @@ def test_native_narratives_and_execution_identity(tmp_path):
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT record_id,pgm,args,label,group_id,session_id,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = con.execute('SELECT record_id,pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS").fetchone() == (0,)
     assert not any('0000001' in r[0] for r in rows), 'File and pipe events must never create launches'
     assert any(r[0].startswith('REAL:ADGEN_0000003:') and 'REAL:' in r[5] for r in rows)
     assert any(r[0].startswith('LAB:ADGEN_0000003:') for r in rows)
     assert len([r for r in rows if ':multiple:' in r[0]]) == 2
     assert all(r[3]=='malicious' for r in rows if ':multiple:' in r[0])
-    assert all(r[4] is None and r[6] is None and r[7]==[] for r in rows)
+    assert all(r[4] is None for r in rows)
     assert all(not r[1].lower().endswith('svchost.exe') for r in rows), 'ParentCommandLine is context, never another launch'
     again = invoke(tmp_path, database, source)
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(rows)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == len(rows)
 
 
 def test_adgen_verdicts_and_native_fields(tmp_path):
@@ -50,7 +51,7 @@ def test_adgen_verdicts_and_native_fields(tmp_path):
     result=invoke(tmp_path,database,'from _ingest_adgen import records\n')
     assert result.returncode==0,result.stderr
     with duckdb.connect(str(database)) as con:
-        rows=con.execute('SELECT record_id,args,label FROM COMMANDS ORDER BY record_id').fetchall()
+        rows=con.execute('SELECT record_id,args,dataset_label FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
     assert len(rows)==10
     assert all(args==['/c','echo','hello'] for _,args,_ in rows), 'Narrative field parsing must not include ParentCommandLine or drop native arguments'
     assert [label for _,_,label in rows]==['benign','malicious','unknown','benign','malicious']*2
@@ -68,4 +69,4 @@ def test_native_normal_browser_judgment(tmp_path):
     result=invoke(tmp_path,database,'from _ingest_adgen import records\n')
     assert result.returncode==0,result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT args,label FROM COMMANDS').fetchall()==[([], 'benign'),([], 'benign')]
+        assert con.execute('SELECT args,dataset_label FROM PROCESS_LAUNCHES').fetchall()==[([], 'benign'),([], 'benign')]

@@ -22,7 +22,7 @@ def test_complete_search_export_is_not_execution(tmp_path, wrapped):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone()[0] == 0, (
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone()[0] == 0, (
             "Splunk search predicates describe queries, not process executions"
         )
 
@@ -40,6 +40,6 @@ def test_rendered_process_requires_header_provider_and_event(tmp_path):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,record_id FROM COMMANDS").fetchall()
+        rows = con.execute("SELECT pgm,args,record_id FROM PROCESS_LAUNCHES").fetchall()
         assert rows == [(r"C:\Program Files\SplunkUniversalForwarder\bin\splunk-MonitorNoHandle.exe",
                          [], "events.xml:1329691:1:0")]

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import duckdb
-from _ingest import _initialize, _insert, command_table
+from _ingest import _initialize, _insert, observation_tables
 from _ingest_bots import bots_event_commands
 from _ingest_windows import text_fields, xml_events
 
@@ -30,8 +30,8 @@ def test_native_exploit_invocations_and_order(tmp_path):
         commands = [command for fields, record, number in sequence for command in bots_event_commands(fields, record, number)]
         with duckdb.connect(str(tmp_path / f'labels-{index}.duckdb')) as con:
             _initialize(con)
-            _insert(con, command_table(commands, 'splunk-bots'))
-            rows = con.execute('SELECT record_id,pgm,args,label,group_id FROM COMMANDS ORDER BY record_id').fetchall()
+            _insert(con, observation_tables(commands, 'splunk-bots'))
+            rows = con.execute('SELECT record_id,pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
             observed.append(rows)
     assert observed[0] == observed[1]
     positives = [row for row in observed[0] if row[3] == 'malicious']
@@ -61,9 +61,9 @@ def test_wrong_host_time_path_and_file_inspection(tmp_path):
         commands.extend(bots_event_commands(variant, 'comparison', number))
     with duckdb.connect(str(tmp_path / 'negative.duckdb')) as con:
         _initialize(con)
-        _insert(con, command_table(commands, 'splunk-bots'))
-        assert con.execute("SELECT count(*) FROM COMMANDS WHERE label != 'unknown'").fetchone()[0] == 0
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(cases)
+        _insert(con, observation_tables(commands, 'splunk-bots'))
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label != 'unknown'").fetchone()[0] == 0
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == len(cases)
 
 
 def test_native_ioc_commands_through_database(tmp_path):
@@ -90,13 +90,14 @@ def test_native_ioc_commands_through_database(tmp_path):
             commands.extend(event_commands(text_fields(raw), 'splunk-bots', record, 1))
     with duckdb.connect(str(tmp_path / 'iocs.duckdb')) as con:
         _initialize(con)
-        _insert(con, command_table(label_ioc_commands(commands), 'splunk-bots'))
-        rows = con.execute('SELECT pgm,args,label,group_id FROM COMMANDS').fetchall()
+        _insert(con, observation_tables(label_ioc_commands(commands), 'splunk-bots'))
+        rows = con.execute('SELECT pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()
+        shells = con.execute('SELECT pgms,shell_input,dataset_label,group_id FROM SHELL_INPUTS').fetchall()
     malicious = [(pgm, args) for pgm, args, label, _ in rows if label == 'malicious']
     assert len(malicious) == 22, 'Native parser changes must preserve all 22 newly identified IOC commands'
     assert any(pgm.endswith('hdoor.exe') for pgm, _ in malicious)
     assert any('45.77.53.176' in ' '.join(args) for _, args in malicious)
-    assert any('frothlywebcode' in ' '.join(args) for _, args in malicious)
+    assert any('frothlywebcode' in text for _, text, label, _ in shells if label == 'malicious')
     assert all(group is None for _, _, _, group in rows)
     assert any(pgm == '/tmp/colonelnew' and label == 'unknown' for pgm, _, label, _ in rows), 'An unmatched exploit command must not become benign'
 
@@ -126,10 +127,11 @@ def test_ioc_policy_through_shell_parser_and_database(tmp_path):
     commands.append(Command('echo', ['hdoor.exe'], 'benign', label='benign'))
     with duckdb.connect(str(tmp_path / 'policy.duckdb')) as con:
         _initialize(con)
-        _insert(con, command_table(label_ioc_commands(commands), 'splunk-bots'))
-        labels = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
-    assert all(labels[f'{index}:shell:0'] == 'malicious' for index in range(len(indicators))), 'All 16 pinned indicators must survive shell parsing and storage'
-    assert labels['negative:shell:0'] == labels['negative:shell:1'] == 'unknown'
+        _insert(con, observation_tables(label_ioc_commands(commands), 'splunk-bots'))
+        labels = dict(con.execute('SELECT record_id,dataset_label FROM PROCESS_LAUNCHES UNION ALL SELECT record_id,dataset_label FROM SHELL_INPUTS').fetchall())
+    assert all(labels[f'{index}:shell'] == 'malicious' for index in range(len(indicators))), 'All 16 pinned indicators must survive shell parsing and storage'
+    assert labels['negative:shell'] == labels['negative:shell:0'] == labels['negative:shell:1'] == 'unknown'
+    assert labels['siblings:shell'] == 'malicious'
     assert labels['siblings:shell:0'] == 'malicious'
     assert labels['siblings:shell:1'] == 'unknown', 'Another command in the same shell input must not spread its IOC label'
     assert labels['known'] == 'malicious'

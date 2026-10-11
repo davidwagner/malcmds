@@ -15,7 +15,7 @@ from collections import defaultdict
 from itertools import chain
 from pathlib import Path
 
-from _ingest import Command, normalize, select_files, shell_commands
+from _ingest import Command, ShellInput, normalize, select_files, shell_commands
 from _ingest_bots_iocs import label_ioc_commands
 from _ingest_misc import audit_events, audit_value, sudo_command_argv
 from _ingest_windows import event_commands, json_fields, text_fields, xml_events
@@ -264,11 +264,11 @@ def bots_event_commands(fields, record, number):
 
 
 def history_commands(raw, record, session):
-    """Retain recorded Bash input and unused syntax from one history event."""
+    """Retain one recorded Bash history input and its normalized executions."""
     text = re.sub(r"^\s*\d+\s+", "", raw)
-    for index, (pgm, args, other) in enumerate(shell_commands(text)):
-        yield Command(pgm, args, f"{record}:shell:{index}", session_id=session,
-                      shell_input=text, other_tokens=other)
+    commands = [Command(pgm, args, f"{record}:shell:{index}", session_id=session)
+                for index, (pgm, args, _) in enumerate(shell_commands(text))]
+    yield ShellInput(text, f"{record}:shell", commands, session_id=session)
 
 
 def records(root, options):

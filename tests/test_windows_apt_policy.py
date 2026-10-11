@@ -24,7 +24,7 @@ def ingest_rows(tmp_path, rows):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as connection:
         records = connection.execute(
-            'SELECT record_id, label, pgm, args, group_id, session_id FROM COMMANDS'
+            'SELECT record_id, dataset_label, pgm, args, group_id, session_id FROM PROCESS_LAUNCHES'
         ).fetchall()
     assert len(records) == len(rows), 'Each process event must retain one stored command.'
     return {record[0]: record[1:] for record in records}

@@ -28,20 +28,23 @@ def test_published_honeypot_commands(tmp_path, dataset):
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT pgm,args,label,group_id,session_id,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
-    assert rows and all(r[2]=='malicious' and r[3] is None and r[4] for r in rows)
-    assert {r[5] for r in rows if r[5] is not None} == set(inputs)
-    assert any(';' in r[6] for r in rows), 'Bash parser lost multi-command input syntax'
+        shells = con.execute('SELECT pgms,dataset_label,group_id,session_id,shell_input,tokens FROM SHELL_INPUTS ORDER BY record_id').fetchall()
+        processes = con.execute('SELECT pgm,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+    assert shells and all(r[1] == 'malicious' and r[2] is None and r[3] for r in shells)
+    assert processes and all(r[1] == 'malicious' and r[2] is None and r[3] for r in processes)
+    assert {r[4] for r in shells} == set(inputs)
+    assert any(';' in r[5] for r in shells), 'Bash parser lost multi-command input syntax'
     if dataset == 'cyberlab':
-        assert sum(r[0]=='system' for r in rows) == 1, 'A failed handler echo must not duplicate original input'
-        assert [(r[0],r[5],r[6]) for r in rows if r[0]=='missing'] == [('missing',None,[])]
-        assert len({r[4] for r in rows if r[0]!='missing'}) == 1
+        assert sum(r[0].count('system') for r in shells) == 1, 'A failed handler echo must not duplicate original input'
+        assert [(r[0], r[1], r[2]) for r in processes if r[0] == 'missing'] == [('missing', 'malicious', None)]
     else:
-        assert len({r[4] for r in rows}) == 1
+        assert all(r[1] == 'malicious' for r in processes)
+    assert len({r[3] for r in shells}) == 1
     again = invoke(tmp_path, database, source)
     assert again.returncode == 0, again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(rows)
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone()[0] == len(shells)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0] == len(processes)
 
 
 @pytest.mark.parametrize('source', ['microsoft', 'input', 'success', 'failed'])
@@ -75,10 +78,16 @@ def test_attacker_commands_keep_connection_or_sequence_without_label_group(tmp_p
     result = invoke(tmp_path, database, reader)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute('SELECT pgm,args,label,group_id,session_id FROM COMMANDS').fetchall()
-    assert len(rows) == 4, 'Sequence repetition counts and Cowrie handler echoes must not multiply commands'
-    assert {row[4] for row in rows} == expected_sessions, 'Source connection/sequence IDs must survive without a label group'
-    for session in expected_sessions:
-        assert sorted((pgm, args, label, group) for pgm, args, label, group, sid in rows if sid == session) == [
-            ('id', [], 'malicious', None), ('uname', ['-a'], 'malicious', None),
-        ], 'Honeypot attribution must not depend on command syntax or Cowrie success/failure'
+        if source in ('microsoft', 'input'):
+            rows = con.execute('SELECT pgms,dataset_label,group_id,session_id FROM SHELL_INPUTS').fetchall()
+            assert len(rows) == 2, 'Each observed submission must remain one row'
+            assert {row[3] for row in rows} == expected_sessions
+            assert all(row[:3] == (['uname', 'id'], 'malicious', None) for row in rows)
+            assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (4,)
+        rows = con.execute('SELECT pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES').fetchall()
+        assert len(rows) == 4, 'Sequence repetition counts and Cowrie handler echoes must not multiply commands'
+        assert {row[4] for row in rows} == expected_sessions
+        for session in expected_sessions:
+            assert sorted((pgm, args, label, group) for pgm, args, label, group, sid in rows if sid == session) == [
+                ('id', [], 'malicious', None), ('uname', ['-a'], 'malicious', None),
+            ], 'Honeypot attribution must not depend on command syntax or Cowrie success/failure'

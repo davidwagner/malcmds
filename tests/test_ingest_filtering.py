@@ -44,7 +44,7 @@ def records(root, options):
     result = ingest(root, db, reader)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
-        rows = con.execute("SELECT args,record_id FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT args,record_id FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
         assert [r[0][-1] for r in rows] == aliases + [
             "EventData", "event_data", "columns", "event", "data", "Event", "nested",
             "parent", "child", "raw", "escaped",
@@ -82,6 +82,6 @@ def test_xml_large_event_and_split_delimiters(tmp_path, size):
     result = ingest(root, db, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
-        rows = con.execute("SELECT pgm,args,record_id FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT pgm,args,record_id FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall()
         assert rows == [("cmd", ["/c", "x" * size], "events.xml:1:1:0"),
                         ("whoami", [], "events.xml:3:3:0")]

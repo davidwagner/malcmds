@@ -4,7 +4,7 @@ Windows-APT 2025 records 36 APT-inspired attack scenarios run with Caldera on Wi
 
 ## Mapping to the database
 
-The reader takes commands from `source/combined.csv`. It uses Windows `commandLine` and `image` fields, or inventory `cmd` and `args`. Windows quoting is parsed into `pgm` and `args`, after decoding the CSV's additional escaping. These are process arguments, so `shell_input` is NULL and `other_tokens` is empty. An inventory executable beginning with `/` is recorded as Linux.
+The reader takes commands from `source/combined.csv`. It uses Windows `commandLine` and `image` fields, or inventory `cmd` and `args`. Windows quoting is parsed into `pgm` and `args`, after decoding the CSV's additional escaping. These process observations populate `PROCESS_LAUNCHES`; they produce no `SHELL_INPUTS` rows. An inventory executable beginning with `/` is recorded as Linux.
 
 - `record_id` combines the source index, event ID and parsed-command position; missing IDs fall back to the CSV row.
 - `session_id` combines `windows-apt-2025:`, computer and logon GUID. Missing/all-zero GUIDs fall back to observation day plus logon ID, process session, parent PID or source row.

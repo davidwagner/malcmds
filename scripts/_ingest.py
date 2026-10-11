@@ -8,7 +8,7 @@ import re
 import shlex
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
@@ -31,8 +31,52 @@ class Command:
     group_id: str | None = None
     session_id: str = ""
     os: str = "linux"
-    shell_input: str | None = None
-    other_tokens: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ShellInput:
+    """One observed shell submission and its best-effort normalized launches."""
+
+    shell_input: str
+    record_id: str
+    commands: list[Command]
+    label: str = "unknown"
+    group_id: str | None = None
+    session_id: str = ""
+    os: str = "linux"
+
+
+def shell_tokens(text, os="linux"):
+    """Return source-order lexical tokens, retaining quoting and shell operators."""
+    if os == "windows":
+        # Preserve quoted strings and PowerShell/cmd escaping as written.
+        return re.findall(r'''(?:[^\s;|&<>(){}'"`^]|[`^].|'(?:''|[^'])*'|"(?:`.|[^"`])*")+|&&|\|\||[;|&<>(){}]|\S''', text)
+    from _shell_input import heredoc_spans
+
+    data = text.encode("utf-8", "replace")
+    spans, complete = heredoc_spans(text)
+    tokens = []
+    if complete and spans:
+        masked = bytearray(data)
+        for start, end in spans:
+            left, right = len(text[:start].encode()), len(text[:end].encode())
+            tokens.append((left, text[start:end]))
+            masked[left:right] = bytes(10 if byte == 10 else 32 for byte in data[left:right])
+        data = bytes(masked)
+    tree = SHELL.parse(data)
+    pending = [tree.root_node]
+    while pending:
+        node = pending.pop()
+        if not node.children or node.type in {
+            "word", "string", "raw_string", "ansi_c_string", "concatenation",
+            "variable_assignment", "heredoc_body", "simple_expansion", "expansion",
+        }:
+            value = node.text.decode("utf-8", "replace")
+            if value.strip():
+                tokens.append((node.start_byte, value))
+        else:
+            pending.extend(reversed(node.children))
+    return [value for _, value in sorted(tokens)]
 
 
 def windows_split(text):
@@ -331,7 +375,7 @@ def arguments(dataset_dir):
         "--db", type=Path, default=dataset_dir.parent.parent / "cmds.duckdb"
     )
     parser.add_argument(
-        "--limit", type=_positive, help="maximum emitted commands (default: all)"
+        "--limit", type=_positive, help="maximum emitted observations (default: all); a shell input is indivisible"
     )
     parser.add_argument(
         "--max-records", type=_positive, help="maximum source records per input stream"
@@ -342,7 +386,7 @@ def arguments(dataset_dir):
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--batch-size", type=_positive, default=100000,
-        help="commands per durable transaction (default: 100000)",
+        help="observations per durable transaction (default: 100000)",
     )
     parser.add_argument(
         "--tc-workers", type=_positive, default=min(8, os.cpu_count() or 1),
@@ -366,68 +410,92 @@ def _initialize(con):
         ("command_os", "'windows', 'linux'"),
     ):
         con.execute(f"CREATE TYPE IF NOT EXISTS {name} AS ENUM ({values})")
-    con.execute("""CREATE TABLE IF NOT EXISTS COMMANDS (
+    con.execute("""CREATE TABLE IF NOT EXISTS PROCESS_LAUNCHES (
         pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
-        shell_input VARCHAR, other_tokens VARCHAR[] NOT NULL,
-        dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, label command_label NOT NULL,
+        dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-        CHECK ((label = 'malicious-group') = (group_id IS NOT NULL)))""")
+        CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS SHELL_INPUTS (
+        shell_input VARCHAR NOT NULL, pgms VARCHAR[] NOT NULL, tokens VARCHAR[] NOT NULL,
+        dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
+        group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
+        CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
 
 
 COLUMNS = (
-    "pgm",
-    "pgm_base",
-    "args",
-    "shell_input",
-    "other_tokens",
-    "dataset",
-    "record_id",
-    "label",
-    "group_id",
-    "session_id",
-    "os",
+    "pgm", "pgm_base", "args", "dataset", "record_id", "dataset_label",
+    "group_id", "session_id", "os",
 )
 SCHEMA = pa.schema(
-    [(name, pa.list_(pa.string()) if name in ("args", "other_tokens") else pa.string()) for name in COLUMNS]
+    [(name, pa.list_(pa.string()) if name == "args" else pa.string()) for name in COLUMNS]
 )
+SHELL_COLUMNS = ("shell_input", "pgms", "tokens", *COLUMNS[3:])
+SHELL_SCHEMA = pa.schema(
+    [(name, pa.list_(pa.string()) if name in ("pgms", "tokens") else pa.string())
+     for name in SHELL_COLUMNS]
+)
+
+
+def program_basename(pgm, os):
+    """Remove directory components using the observed operating system's syntax."""
+    return re.split(r"[/\\]" if os == "windows" else "/", pgm)[-1]
+
+
+def _metadata(command, dataset):
+    return [dataset, command.record_id, command.label, command.group_id,
+            command.session_id or f"{dataset}:record:{command.record_id}", command.os]
 
 
 def command_table(commands, dataset):
-    """Convert Commands into an Arrow table holding one batch of COMMANDS rows.
-
-    Adds `dataset`, `pgm_base` and a per-record default `session_id`. Raises
-    ValueError for a Command with an empty pgm or record_id. Input records are
-    assumed to be unique; no deduplication is performed.
-    """
+    """Convert process launches to an Arrow batch without deduplicating records."""
     columns: dict[str, list] = {name: [] for name in COLUMNS}
     for command in commands:
         if not command.pgm or not command.record_id:
             raise ValueError("Command requires nonempty pgm and record_id")
-        separators = r"[/\\]" if command.os == "windows" else "/"
-        columns["pgm"].append(command.pgm)
-        columns["pgm_base"].append(re.split(separators, command.pgm)[-1])
-        columns["args"].append(command.args)
-        columns["shell_input"].append(command.shell_input)
-        columns["other_tokens"].append(command.other_tokens)
-        columns["dataset"].append(dataset)
-        columns["record_id"].append(command.record_id)
-        columns["label"].append(command.label)
-        columns["group_id"].append(command.group_id)
-        columns["session_id"].append(
-            command.session_id or f"{dataset}:record:{command.record_id}"
-        )
-        columns["os"].append(command.os)
+        values = [command.pgm, program_basename(command.pgm, command.os), command.args,
+                  *_metadata(command, dataset)]
+        for name, value in zip(COLUMNS, values):
+            columns[name].append(value)
     return pa.table(columns, schema=SCHEMA)
 
 
+def observation_tables(observations, dataset):
+    """Build both table batches while keeping every observed shell input once."""
+    commands = []
+    columns: dict[str, list] = {name: [] for name in SHELL_COLUMNS}
+    for observation in observations:
+        if isinstance(observation, ShellInput):
+            if not observation.record_id:
+                raise ValueError("ShellInput requires nonempty record_id")
+            commands.extend(observation.commands)
+            values = [observation.shell_input,
+                      [program_basename(c.pgm, c.os) for c in observation.commands],
+                      shell_tokens(observation.shell_input, observation.os),
+                      *_metadata(observation, dataset)]
+            for name, value in zip(SHELL_COLUMNS, values):
+                columns[name].append(value)
+        else:
+            commands.append(observation)
+    return command_table(commands, dataset), pa.table(columns, schema=SHELL_SCHEMA)
+
+
 def _insert(con, batch):
-    con.register("ingest_batch", batch)
+    if isinstance(batch, pa.Table):
+        batches = (("PROCESS_LAUNCHES", batch),)
+    else:
+        batches = zip(("PROCESS_LAUNCHES", "SHELL_INPUTS"), batch)
+    con.execute("BEGIN")
     try:
-        # Autocommit makes each batch atomic, including constraint/commit failures.
-        con.execute("INSERT INTO COMMANDS (" + ", ".join(COLUMNS) + ") SELECT "
-                    + ", ".join(COLUMNS) + " FROM ingest_batch")
-    finally:
-        con.unregister("ingest_batch")
+        for table, rows in batches:
+            con.register("ingest_batch", rows)
+            try:
+                con.execute(f"INSERT INTO {table} BY NAME SELECT * FROM ingest_batch")
+            finally:
+                con.unregister("ingest_batch")
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
+    con.execute("COMMIT")
 
 
 def _connect(options, scratch):
@@ -446,8 +514,8 @@ def _commit(con, batch, dataset, count, started, write_seconds):
     write_seconds += batch_seconds
     elapsed = monotonic() - started
     print(
-        f"{dataset}: {count:,} commands processed (batches committed); "
-        f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} commands/s; "
+        f"{dataset}: {count:,} observations processed (batches committed); "
+        f"{elapsed:.1f}s elapsed, {count / elapsed:,.0f} observations/s; "
         f"batch write {batch_seconds:.2f}s, "
         f"total write {write_seconds:.2f}s",
         file=sys.stderr,
@@ -459,7 +527,7 @@ def _commit(con, batch, dataset, count, started, write_seconds):
 def run(dataset_dir, records_callable):
     """Commit bounded batches and track successful runs per dataset.
 
-    records_callable(root, options) yields Commands, or pyarrow Tables built
+    records_callable(root, options) yields Commands, ShellInputs, or pyarrow Tables built
     by command_table(); each Table is committed as one batch, in order.
     Completed datasets are skipped. Otherwise, discard the previous attempt
     before reading. Failures leave ingested=false; a retry starts over. A
@@ -475,17 +543,26 @@ def run(dataset_dir, records_callable):
         started = monotonic()
         write_seconds = 0.0
         count = 0
-        commands: list[Command] = []
+        process_count = 0
+        shell_count = 0
+        commands: list[Command | ShellInput] = []
         try:
             con.execute("CREATE TABLE IF NOT EXISTS INGESTED (dataset VARCHAR, ingested BOOLEAN)")
-            existing = con.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='COMMANDS' ORDER BY ordinal_position"
-            ).fetchall()
-            if existing and [row[0] for row in existing] != list(COLUMNS):
+            if con.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_name='COMMANDS'"
+            ).fetchone():
                 raise ValueError(
                     "COMMANDS uses an older schema. Use --db with a new database "
-                    "and reingest the datasets to populate shell_input and other_tokens."
+                    "or run scripts/migrate_observations to migrate it."
                 )
+            _initialize(con)
+            for table, expected in (("PROCESS_LAUNCHES", COLUMNS), ("SHELL_INPUTS", SHELL_COLUMNS)):
+                existing = con.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name=? ORDER BY ordinal_position", [table]
+                ).fetchall()
+                if [row[0] for row in existing] != list(expected):
+                    raise ValueError(f"{table} uses an incompatible schema. Use --db with a new database")
             if con.execute(
                 "SELECT 1 FROM INGESTED WHERE dataset=? AND ingested=true LIMIT 1", [root.name]
             ).fetchone():
@@ -494,10 +571,10 @@ def run(dataset_dir, records_callable):
                     flush=True,
                 )
                 return
-            _initialize(con)
             con.execute("BEGIN TRANSACTION")
             try:
-                con.execute("DELETE FROM COMMANDS WHERE dataset=?", [root.name])
+                con.execute("DELETE FROM PROCESS_LAUNCHES WHERE dataset=?", [root.name])
+                con.execute("DELETE FROM SHELL_INPUTS WHERE dataset=?", [root.name])
                 con.execute("DELETE FROM INGESTED WHERE dataset=?", [root.name])
                 con.execute("INSERT INTO INGESTED VALUES (?, false)", [root.name])
                 con.execute("COMMIT")
@@ -511,7 +588,7 @@ def run(dataset_dir, records_callable):
                         # Readers that build batches in worker processes yield
                         # command_table() results; earlier Commands go first.
                         if commands:
-                            batch = command_table(commands, root.name)
+                            batch = observation_tables(commands, root.name)
                             write_seconds = _commit(
                                 con, batch, root.name, count, started, write_seconds
                             )
@@ -519,14 +596,20 @@ def run(dataset_dir, records_callable):
                         if options.limit is not None:
                             item = item.slice(0, options.limit - count)
                         count += item.num_rows
+                        process_count += item.num_rows
                         write_seconds = _commit(
                             con, item, root.name, count, started, write_seconds
                         )
                     else:
                         commands.append(item)
                         count += 1
+                        if isinstance(item, ShellInput):
+                            process_count += len(item.commands)
+                            shell_count += 1
+                        else:
+                            process_count += 1
                         if len(commands) >= options.batch_size:
-                            batch = command_table(commands, root.name)
+                            batch = observation_tables(commands, root.name)
                             write_seconds = _commit(
                                 con, batch, root.name, count, started, write_seconds
                             )
@@ -538,10 +621,10 @@ def run(dataset_dir, records_callable):
                 if close is not None:
                     close()
             print(
-                f"{root.name}: committing {count:,} commands", file=sys.stderr, flush=True
+                f"{root.name}: committing {count:,} observations", file=sys.stderr, flush=True
             )
             if commands:
-                batch = command_table(commands, root.name)
+                batch = observation_tables(commands, root.name)
                 batch_started = monotonic()
                 _insert(con, batch)
                 write_seconds += monotonic() - batch_started
@@ -559,7 +642,9 @@ def run(dataset_dir, records_callable):
                     {
                         "dataset": root.name,
                         "processed": count,
-                        "stored": count,
+                        "stored": process_count + shell_count,
+                        "process_launches": process_count,
+                        "shell_inputs": shell_count,
                         "db": str(options.db),
                     }
                 ),

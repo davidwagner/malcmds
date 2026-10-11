@@ -20,7 +20,7 @@ def test_native_iot_heredoc_and_later_commands(tmp_path):
     result = invoke(tmp_path, database, "from _ingest_misc import microsoft_iot as records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,shell_input,other_tokens,record_id FROM COMMANDS").fetchall()
+        rows = con.execute("SELECT pgm,args,shell_input,tokens,p.record_id FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s ON starts_with(p.record_id, s.record_id || ':')").fetchall()
     assert not any(pgm in {"~", "end", "begin"} for pgm, *_ in rows), "Here-document contents are input data, never executions"
     decoded = [r for r in rows if r[0] == "uudecode"]
     assert decoded and all("\n" in r[2] and "<<" in r[2] for r in decoded)
@@ -39,7 +39,7 @@ def test_native_cyberlab_python_is_not_bash(tmp_path):
     result = invoke(tmp_path, database, "from _ingest_misc import cyberlab as records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT pgm,args FROM COMMANDS ORDER BY rowid").fetchall() == [("echo", ["before"]), ("echo", ["after"])]
+        assert con.execute("SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY rowid").fetchall() == [("echo", ["before"]), ("echo", ["after"])]
 
 
 def test_fragments_substitutions_exec_and_multiple_documents(tmp_path):
@@ -54,21 +54,24 @@ def test_fragments_substitutions_exec_and_multiple_documents(tmp_path):
              '3<<END cat', 'input on descriptor three', 'END',
              "cat <<NEVER", "unclosed body"]
     source = f'''
-from _ingest import shell_command_fragments
+from _ingest import ShellInput, shell_commands
+from _shell_input import complete_inputs
 def records(root, options):
-    for occurrence, (index, text, program, args, other) in enumerate(shell_command_fragments({parts!r})):
-        yield Command(program, args, f"{{index}}:{{occurrence}}", shell_input=text, other_tokens=other)
+    for index, text in complete_inputs({parts!r}):
+        commands = [Command(program, args, f"{{index}}:{{occurrence}}")
+                    for occurrence, (program, args, _) in enumerate(shell_commands(text))]
+        yield ShellInput(text, str(index), commands)
 '''
     database = tmp_path / "commands.duckdb"
     result = invoke(tmp_path, database, source)
     assert result.returncode == 0, result.stderr
     assert not sentinel.exists(), "Syntax validation must never evaluate the recorded shell input"
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT pgm,args,shell_input,other_tokens FROM COMMANDS ORDER BY rowid").fetchall()
+        rows = con.execute("SELECT pgm,args,shell_input,tokens FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s ON starts_with(p.record_id, s.record_id || ':') ORDER BY p.rowid").fetchall()
     assert [r[0] for r in rows] == ["echo", "/bin/id", "$(name)", "$(name)", "echo", "cat", "echo", "touch", "echo", "echo", "echo", "echo", "echo", "echo", "inner", "cat"]
     assert rows[-5][1] == ["foobar"]
     assert rows[-2][1] == []
-    assert rows[-1][3] == ["3", "<<", "END", "input on descriptor three\n", "END"]
+    assert rows[-1][3] == ["3", "<<", "END", "cat", "input on descriptor three\n", "END"]
     assert rows[4][1] == ["multi\nline"]
     assert rows[5][1] == []
-    assert rows[5][3] == ["<<", "A", "<<-", "'B'", "first body\n", "A", "\tsecond body\n", "\tB"]
+    assert rows[5][3] == ["cat", "<<", "A", "<<-", "'B'", "first body\n", "A", "\tsecond body\n", "\tB"]

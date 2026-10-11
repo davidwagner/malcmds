@@ -98,7 +98,7 @@ def ingest(root, workers, *options):
         capture_output=True, text=True, check=True, timeout=60,
     )
     with duckdb.connect(str(database), read_only=True) as connection:
-        rows = connection.execute('SELECT pgm,pgm_base,args,dataset,record_id,label,group_id,session_id,os,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
+        rows = connection.execute('SELECT pgm,pgm_base,args,dataset,record_id,dataset_label,group_id,session_id,os FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
     assert json.loads(result.stdout)['stored'] == len(rows)
     assert not list((root.parents[1] / 'tmp').glob('tc-ingest-*'))
     return rows, result.stderr
@@ -205,7 +205,7 @@ def test_failed_scan_cleans_workers_and_preserves_committed_batch(tmp_path, work
     assert result.returncode != 0
     assert 'Traceback' in result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute('SELECT args FROM COMMANDS ORDER BY args').fetchall() == [
+        assert connection.execute('SELECT args FROM PROCESS_LAUNCHES ORDER BY args').fetchall() == [
             (['first'],), (['second'],),
         ]
     assert not list((root.parents[1] / 'tmp').glob('tc-ingest-*'))

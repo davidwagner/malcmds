@@ -33,12 +33,13 @@ def test_native_comiset_environments_and_process_annotations(tmp_path):
     result=invoke(tmp_path,database,'from _ingest_comiset import records\n')
     assert result.returncode==0,result.stderr
     with duckdb.connect(str(database)) as con:
-        rows=con.execute('SELECT record_id,pgm,args,label,group_id,shell_input,other_tokens FROM COMMANDS').fetchall()
+        rows=con.execute('SELECT record_id,pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS").fetchone() == (0,)
     assert len(rows)==sum(len(r) for r in examples.values())+3
     assert any('fallback-only' in r[0] for r in rows)
     assert any('actual-creation' in r[0] for r in rows)
     assert not any('earlier-observation' in r[0] for r in rows)
-    assert all(r[4] is None and r[5] is None and r[6]==[] for r in rows)
+    assert all(r[4] is None for r in rows)
     assert next(r[3] for r in rows if 'attack-process' in r[0])=='malicious'
     assert any(r[3]=='benign' and r[1].lower().endswith('onedrive.exe') for r in rows)
     assert any(r[3]=='benign' and r[1].lower().endswith('vmtoolsd.exe') for r in rows)
@@ -48,4 +49,4 @@ def test_native_comiset_environments_and_process_annotations(tmp_path):
     again=invoke(tmp_path,database,'from _ingest_comiset import records\n')
     assert again.returncode==0,again.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0]==len(rows)
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone()[0]==len(rows)

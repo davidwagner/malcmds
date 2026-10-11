@@ -17,7 +17,7 @@ def test_native_osquery_audit_encoding(tmp_path):
     with duckdb.connect(str(tmp_path / 'native.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'splunk-bots'))
-        rows = con.execute('SELECT pgm,args FROM COMMANDS').fetchall()
+        rows = con.execute('SELECT pgm,args FROM PROCESS_LAUNCHES').fetchall()
     assert rows and ('/bin/sed', ['s/:/ /g']) in rows
     assert not any('732F3A2F202F67' in args for _, args in rows), 'Historical audit serialization must be decoded exactly once'
 
@@ -40,4 +40,4 @@ def test_osquery_literal_empty_and_decoded_arguments(tmp_path):
     with duckdb.connect(str(tmp_path / 'args.duckdb')) as con:
         _initialize(con)
         _insert(con, command_table(commands, 'splunk-bots'))
-        assert con.execute('SELECT args FROM COMMANDS ORDER BY record_id').fetchall() == [(expected,) for _, _, expected in inputs]
+        assert con.execute('SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [(expected,) for _, _, expected in inputs]

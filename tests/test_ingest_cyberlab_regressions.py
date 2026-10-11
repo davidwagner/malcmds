@@ -60,7 +60,7 @@ def test_complete_records_survive(tmp_path, truncate, salvage, incomplete_json):
     )
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute("SELECT args FROM COMMANDS ORDER BY record_id").fetchall() == [(["first"],), (["last"],)]
+        assert connection.execute("SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall() == [(["first"],), (["last"],)]
     if truncate:
         assert archive.name in result.stderr and "incomplete" in result.stderr.lower()
 
@@ -143,7 +143,7 @@ def test_empty_array(tmp_path):
     result, database, _ = run_archive(tmp_path, b'[]')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute("SELECT count(*) FROM COMMANDS").fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone() == (0,)
 
 
 def test_short_command_limit_closes_reader(tmp_path):
@@ -154,7 +154,7 @@ def test_short_command_limit_closes_reader(tmp_path):
     assert "WARNING" not in result.stderr and "Traceback" not in result.stderr
     assert "Exception ignored" not in result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute("SELECT args FROM COMMANDS").fetchall() == [(["first"],)]
+        assert connection.execute("SELECT args FROM PROCESS_LAUNCHES").fetchall() == [(["first"],)]
 
 
 def test_cyberlab_continues_across_files(tmp_path):
@@ -165,4 +165,4 @@ def test_cyberlab_continues_across_files(tmp_path):
     assert result.returncode == 0, result.stderr
     assert 'WARNING' not in result.stderr
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute('SELECT pgm,args FROM COMMANDS ORDER BY record_id').fetchall() == [('echo', ['ok']), ('echo', ['ok'])]
+        assert connection.execute('SELECT pgm,args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [('echo', ['ok']), ('echo', ['ok'])]

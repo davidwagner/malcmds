@@ -3,7 +3,7 @@
 import re
 from collections.abc import Iterable, Iterator
 
-from _ingest import Command
+from _ingest import Command, ShellInput
 
 # Source: https://github.com/kmkholm/moe-mamba-soc-triage/blob/
 # 44ef4e047c5dbff13f52bc3856b8060f0524f192/src/data/bots_rich.py
@@ -20,13 +20,18 @@ IOCS = (
 IOC_RE = re.compile("|".join(re.escape(value) for value in IOCS), re.IGNORECASE)
 
 
-def label_ioc_commands(commands: Iterable[Command]) -> Iterator[Command]:
+def label_ioc_commands(commands: Iterable[Command | ShellInput]) -> Iterator[Command | ShellInput]:
     """Mark unknown commands with an IOC malicious, preserving existing labels.
 
     This heuristic can flag harmless inspection of an indicator. Its absence
     does not establish benign activity, so unmatched commands stay unknown.
     """
     for command in commands:
-        if command.label == "unknown" and IOC_RE.search(" ".join([command.pgm, *command.args])):
+        launches = command.commands if isinstance(command, ShellInput) else [command]
+        for launch in launches:
+            if launch.label == "unknown" and IOC_RE.search(" ".join([launch.pgm, *launch.args])):
+                launch.label = "malicious"
+        if (isinstance(command, ShellInput) and command.label == "unknown"
+                and any(launch.label == "malicious" for launch in launches)):
             command.label = "malicious"
         yield command

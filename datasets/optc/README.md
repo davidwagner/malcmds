@@ -46,7 +46,7 @@ so the command's argv[0] supplies `pgm`. Device paths are preserved when used.
 - `record_id`: event `id` UUID plus normalized-command index; if UUID is missing,
   relative gzip path plus one-based line number and command index. Duplicate
   source IDs across files collapse; different event UUIDs remain separate.
-- `label`: reviewed event decisions from Nikulshin and Talhi take precedence.
+- `dataset_label`: reviewed event decisions from Nikulshin and Talhi take precedence.
   Reviewed benign process corrections and the ordinary benign launch of an
   event-only process follow. Remaining valid process or exact event matches,
   then Inria host/PID lifetime matches, produce `malicious`. Commands with no
@@ -89,7 +89,7 @@ its arguments when `image_path` names the accessor `MsMpEng.exe`.
 The reviewed release distinguishes an entire malicious process from a malicious
 individual event of an otherwise benign process. For example, its RPCSS network
 connection is malicious, while the service's ordinary startup remains benign.
-FLOW events do not produce COMMANDS rows. An actual execution event with a valid
+FLOW events do not produce `PROCESS_LAUNCHES` rows. An actual execution event with a valid
 reviewed malicious decision still receives that decision. Invalid correlations
 are excluded from the generated malicious export; they do not veto independent
 reviewed or Inria evidence. Valid explicit benign decisions take precedence over
@@ -107,9 +107,9 @@ reboots also end intervals. Missing telemetry cannot establish an unobserved
 reuse or reboot. `--max-records` bounds this preliminary pass per file;
 `--limit` limits stored commands but still requires the lifetime pass.
 
-All lookups are temporary. COMMANDS columns and database tables are unchanged,
-and `group_id` is NULL for every label except `malicious-group`. Installations
-without label artifacts retain the previous fallback labels; rerun `./fetch`
+All label lookups are temporary. The reader stores observations in
+`PROCESS_LAUNCHES`; it adds no dataset-specific columns. `group_id` is NULL
+for every label except `malicious-group`. Installations without label artifacts retain the previous fallback labels; rerun `./fetch`
 to install the published labels. A generated malicious export without its
 reviewed tasks fails explicitly because invalid correlations cannot be removed.
 

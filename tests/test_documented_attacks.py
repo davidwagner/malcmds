@@ -35,7 +35,7 @@ def test_five_aviator_deletions_and_context_controls(tmp_path):
     database = tmp_path / "commands.duckdb"
     aviator_ingest(root, database, 2)
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT record_id,label,group_id,session_id FROM COMMANDS").fetchall()
+        rows = con.execute("SELECT record_id,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES").fetchall()
     assert len(rows) == 10
     assert sum(r[1] == "malicious" for r in rows) == 6, "Five native deletions and one distinct repeat match attack steps"
     assert sum(r[1] == "malicious-group" for r in rows) == 3
@@ -43,7 +43,7 @@ def test_five_aviator_deletions_and_context_controls(tmp_path):
     assert all((r[1] == "malicious-group") == (r[2] is not None) and r[3] for r in rows)
     aviator_ingest(root, database, 2)
     with duckdb.connect(str(database)) as con:
-        assert con.execute("SELECT count(*) FROM COMMANDS").fetchone()[0] == 10
+        assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES").fetchone()[0] == 10
 
 
 def test_splunk_old_catalog_headless_and_current_precedence(tmp_path):
@@ -64,7 +64,7 @@ def test_splunk_old_catalog_headless_and_current_precedence(tmp_path):
     result = ingest(root, database, "from _ingest_windows import splunkad as records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        rows = con.execute("SELECT label,group_id,args FROM COMMANDS").fetchall()
+        rows = con.execute("SELECT dataset_label,group_id,args FROM PROCESS_LAUNCHES").fetchall()
     assert sum(label == "malicious" for label, _, _ in rows) == 4
     assert sum(group == "splunkad:current" for _, group, _ in rows) == 4
     assert sum(label == "malicious-group" and "--visible" in args for label, _, args in rows) == 4
@@ -87,7 +87,7 @@ def test_publicarena_attack_windows_and_background(tmp_path):
     result = ingest(root, database, "from _ingest_misc import publicarena as records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        saved = con.execute("SELECT record_id,label,group_id,pgm_base FROM COMMANDS").fetchall()
+        saved = con.execute("SELECT record_id,dataset_label,group_id,pgm_base FROM PROCESS_LAUNCHES").fetchall()
     labels = {r[0].split(":")[-2]: r[1] for r in saved}
     assert labels[native["uuid"]] == "malicious"
     assert labels["outside"] == labels["wrong-host"] == "unknown"

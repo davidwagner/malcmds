@@ -60,26 +60,26 @@ def test_actual_archive_ingestion_is_idempotent(dataset, options):
         invoke(dataset, db, *options)
         with duckdb.connect(str(db)) as connection:
             first = connection.execute(
-                "SELECT * FROM COMMANDS ORDER BY record_id"
+                "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
             ).fetchall()
             assert first
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS "
+                    "SELECT count(*) FROM PROCESS_LAUNCHES "
                     "WHERE pgm = '' OR session_id = '' OR args IS NULL"
                 ).fetchall()[0][0]
                 == 0
             )
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM COMMANDS "
-                    "WHERE (label = 'malicious-group') != (group_id IS NOT NULL)"
+                    "SELECT count(*) FROM PROCESS_LAUNCHES "
+                    "WHERE (dataset_label = 'malicious-group') != (group_id IS NOT NULL)"
                 ).fetchall()[0][0]
                 == 0
             )
             assert (
                 connection.execute(
-                    "SELECT count(*) - count(DISTINCT record_id) FROM COMMANDS"
+                    "SELECT count(*) - count(DISTINCT record_id) FROM PROCESS_LAUNCHES"
                 ).fetchall()[0][0]
                 == 0
             )
@@ -87,7 +87,7 @@ def test_actual_archive_ingestion_is_idempotent(dataset, options):
         with duckdb.connect(str(db)) as connection:
             assert (
                 connection.execute(
-                    "SELECT * FROM COMMANDS ORDER BY record_id"
+                    "SELECT * FROM PROCESS_LAUNCHES ORDER BY record_id"
                 ).fetchall()
                 == first
             )
@@ -107,12 +107,12 @@ def test_malformed_publisher_xml_retains_command_arguments():
         db = Path(directory) / "commands.duckdb"
         invoke("splunkad", db, "--limit", "1", root=root)
         with duckdb.connect(str(db)) as connection:
-            pgm, args = connection.execute("SELECT pgm,args FROM COMMANDS").fetchall()[
+            pgm, args = connection.execute("SELECT pgm,args FROM PROCESS_LAUNCHES").fetchall()[
                 0
             ]
             assert pgm.lower().endswith("\\cmd.exe")
             assert "2>&1" in args
-            session = connection.execute("SELECT session_id FROM COMMANDS").fetchall()[
+            session = connection.execute("SELECT session_id FROM PROCESS_LAUNCHES").fetchall()[
                 0
             ][0]
             assert session.endswith(":0x3e7")
@@ -200,9 +200,9 @@ def test_carbon_black_exact_reapr_process_join():
         db = Path(directory) / "commands.duckdb"
         invoke("atlasv2", db, root=root)
         with duckdb.connect(str(db)) as connection:
-            rows = connection.execute("SELECT pgm,args,label FROM COMMANDS").fetchall()
+            rows = connection.execute("SELECT pgm,args,dataset_label FROM PROCESS_LAUNCHES").fetchall()
             assert len(rows) == len(process_ids), "Repeated alerts must not create repeated process executions"
-            assert connection.execute("SELECT count(DISTINCT record_id) FROM COMMANDS").fetchone()[0] == len(rows)
+            assert connection.execute("SELECT count(DISTINCT record_id) FROM PROCESS_LAUNCHES").fetchone()[0] == len(rows)
             # Backslash fidelity is checked with native pipe/UNC fixtures. Some
             # source alerts themselves contain doubled separators after JSON decoding.
             assert any(
@@ -233,7 +233,7 @@ def test_interpreted_audit_preserves_unquoted_argument_spaces():
         invoke("splunkad", db, "--limit", "1", root=root)
         with duckdb.connect(str(db)) as connection:
             pgm, args, osname = connection.execute(
-                "SELECT pgm,args,os FROM COMMANDS"
+                "SELECT pgm,args,os FROM PROCESS_LAUNCHES"
             ).fetchall()[0]
             assert pgm == "grep"
             assert osname == "linux"

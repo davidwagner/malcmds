@@ -4,7 +4,7 @@ MARPLE records Windows activity from DARPA's E5 exercise in May 2019, including 
 
 ## Mapping to the database
 
-The reader takes command lines from process `Subject` records and execution/process events. The inner Avro record identifies its type; some outer records are mislabeled `RECORD_HOST`. Program names and arguments are parsed using Windows quoting. These are process observations, so `shell_input` is NULL and `other_tokens` is empty. Repeated observations of the same process creation are combined; distinct executions remain separate.
+The reader takes command lines from process `Subject` records and execution/process events. The inner Avro record identifies its type; some outer records are mislabeled `RECORD_HOST`. Program names and arguments are parsed using Windows quoting. These process observations populate `PROCESS_LAUNCHES`; they produce no `SHELL_INPUTS` rows. Repeated observations of the same process creation are combined; distinct executions remain separate.
 
 - `record_id` combines host, record type, source UUID and a suffix distinguishing observations. Source UUIDs allow lookup in the original files.
 - `session_id` combines dataset, host and collector session, followed by a native Windows session ID when present. Otherwise it uses the parent process UUID, falling back to the process UUID. A collector session is not a login session.

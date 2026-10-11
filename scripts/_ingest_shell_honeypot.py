@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 
-from _ingest import Command, shell_commands
+from _ingest import Command, ShellInput, shell_commands
 
 
 def _lines(archive, member, limit):
@@ -32,15 +32,19 @@ def _period(name, row):
 
 def _commands(text, identity, group, session, positive):
     parsed = shell_commands(text)
-    for index, (pgm, args, other) in enumerate(parsed):
+    commands = []
+    for index, (pgm, args, _) in enumerate(parsed):
         # Severity annotates the submitted input, not each constituent command.
         label = 'malicious' if positive and len(parsed) == 1 else 'malicious-group'
-        yield Command(pgm, args, f'{identity}:{index}', label=label,
-                      group_id=group if label == 'malicious-group' else None,
-                      session_id=session, shell_input=text, other_tokens=other)
+        commands.append(Command(pgm, args, f'{identity}:{index}', label=label,
+                                group_id=group if label == 'malicious-group' else None,
+                                session_id=session))
+    yield ShellInput(text, identity, commands,
+                     label='malicious' if positive else 'malicious-group',
+                     group_id=None if positive else group, session_id=session)
 
 
-def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
+def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
     """Read complete raw captures and fill cleaned gaps using occurrence counts."""
     path = root / 'release.tar.gz'
     if not path.is_file():
@@ -71,8 +75,8 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
     if not cleaned:
         raise ValueError(f'{path}: missing published cleaned session files')
     connections = {}
-    raw_counts = Counter()
-    previous_events = Counter()
+    raw_counts: Counter[tuple[str, str, str]] = Counter()
+    previous_events: Counter[tuple] = Counter()
     raw_count = 0
     retained_cleaned = 0
     with tarfile.open(path, 'r:gz') as archive:
@@ -82,7 +86,7 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[Command]:
                 '/cowrie/' in name or name.startswith('dataset/raw_samples/')
             ) or PurePosixPath(name).suffix not in ('.json', '.jsonl'):
                 continue
-            file_events = Counter()
+            file_events: Counter[tuple] = Counter()
             for line, row in _lines(archive, member, options.max_records):
                 period = _period(name, row)
                 ip = str(row.get('src_ip', row.get('src_host', '')))

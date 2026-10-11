@@ -41,7 +41,7 @@ def test_publicarena_paths_and_paexec_labels(tmp_path):
     result = invoke(root, database, "from _ingest_misc import publicarena as records\n")
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database), read_only=True) as con:
-        saved = con.execute("SELECT record_id, args, label, group_id FROM COMMANDS").fetchall()
+        saved = con.execute("SELECT record_id, args, dataset_label, group_id FROM PROCESS_LAUNCHES").fetchall()
         assert con.execute("SELECT dataset, ingested FROM INGESTED").fetchall() == [("publicarena", True)]
     by_id = {rid.split(":")[-2]: (args, label, group) for rid, args, label, group in saved}
     assert len(saved) == len(controls) + 4, "Archive parsing must preserve every source event"

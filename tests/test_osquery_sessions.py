@@ -19,7 +19,7 @@ def test_native_osquery_hosts_dates_and_sessions(tmp_path):
         result = ingest(root, database, XML_READER)
         assert result.returncode == 0, result.stderr
         with duckdb.connect(str(database)) as con:
-            rows = con.execute("SELECT pgm,args,session_id,os FROM COMMANDS ORDER BY session_id,pgm,args").fetchall()
+            rows = con.execute("SELECT pgm,args,session_id,os FROM PROCESS_LAUNCHES ORDER BY session_id,pgm,args").fetchall()
         assert len(rows) == 7
         assert len({r[2] for r in rows}) == 4, "osquery sessions need host and capture-day scope"
         assert all(r[3] == "linux" for r in rows)
@@ -49,6 +49,6 @@ def test_boot_and_missing_session_fallbacks(tmp_path):
     result = ingest(root, database, XML_READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        sessions = [r[0] for r in con.execute("SELECT session_id FROM COMMANDS").fetchall()]
+        sessions = [r[0] for r in con.execute("SELECT session_id FROM PROCESS_LAUNCHES").fetchall()]
     assert len(set(sessions)) == 6
     assert all("unknown" not in session for session in sessions)

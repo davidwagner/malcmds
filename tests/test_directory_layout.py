@@ -68,4 +68,4 @@ def test_bulk_ingest_default_database(tmp_path):
     database = checkout / "cmds.duckdb"
     assert database.is_file(), "Moving scripts must not move the default database"
     with duckdb.connect(str(database), read_only=True) as connection:
-        assert connection.execute("SELECT pgm,args FROM COMMANDS").fetchall() == [("printf", ["hello"])]
+        assert connection.execute("SELECT pgms,shell_input FROM SHELL_INPUTS").fetchall() == [(["printf"], "printf hello")]

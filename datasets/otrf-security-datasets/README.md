@@ -30,7 +30,7 @@ unfinished field is discarded. Failed AUOMS exec records identify the attempted
 image in `name`, while `exe` and `proctitle` describe the caller. The attempted
 path becomes the program; unavailable arguments are left empty. Successful
 AUOMS `cmdline` retains its embedded quoting. Command strings from process
-telemetry leave `shell_input` null and `other_tokens` empty.
+telemetry populate `PROCESS_LAUNCHES` and produce no `SHELL_INPUTS` rows.
 
 Attack mappings identify the capture group. Commands explicitly submitted in
 the metadata's adversary terminal transcript (including plain command lines

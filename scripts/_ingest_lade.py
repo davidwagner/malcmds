@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 
-from _ingest import Command, normalize, select_files, shell_commands
+from _ingest import Command, ShellInput, normalize, select_files, shell_commands
 from _ingest_acme import ordinary_launch
 from _ingest_windows import Budget
 
@@ -252,10 +252,16 @@ def records(root, options):
                 if not budget.take():
                     return
                 platform = inferred_platform(code, platform)
-                for index, (program, args, other) in enumerate(snippet_commands(code, platform, parser=parser, other=submitted)):
+                commands = []
+                os_name = "linux" if "linux" in platform.lower() else "windows"
+                for index, (program, args, _) in enumerate(snippet_commands(code, platform, parser=parser, other=submitted)):
                     final = best_label(program, args, label, annotations.get(scenario_key(source), set()))
                     group = f"lade:{source}" if final == "malicious-group" else None
-                    yield Command(program, args, f"{source}:{number}:{index}", label=final,
-                                  group_id=group, os="linux" if "linux" in platform.lower() else "windows",
-                                  shell_input=code if submitted and ".proc." not in platform else None,
-                                  other_tokens=other if submitted and ".proc." not in platform else [])
+                    commands.append(Command(program, args, f"{source}:{number}:{index}",
+                                            label=final, group_id=group, os=os_name))
+                if submitted and ".proc." not in platform:
+                    yield ShellInput(code, f"{source}:{number}", commands, label=label,
+                                     group_id=f"lade:{source}" if label == "malicious-group" else None,
+                                     os=os_name)
+                else:
+                    yield from commands

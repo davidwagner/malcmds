@@ -127,7 +127,7 @@ def heredoc_spans(text):
 
 
 def complete_inputs(parts):
-    """Yield source fragment indexes and complete inputs, resuming after bad input."""
+    """Assemble input fragments, retaining an unfinished final submission too."""
     index = 0
     while index < len(parts):
         text = parts[index]
@@ -141,6 +141,7 @@ def complete_inputs(parts):
             end += 1
             _, complete = heredoc_spans(text)
         if not complete:
+            yield index, text
             return
         # Only incomplete quotes/compound statements need additional fragments.
         # A rejected standalone construct must not consume the next input.

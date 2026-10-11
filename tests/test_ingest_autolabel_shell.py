@@ -51,12 +51,13 @@ def test_published_shell_commands_keep_payload_and_labels(tmp_path):
                 continue
             identity = f"{scenario}.tar/{scenario}/dataset-17.tar.gz:{event['container.id']}:{event['evt.num']}"
             expected.append((identity, event['proc.exepath'], arguments[event['evt.num']],
-                             'malicious' if event['malicious'] else 'benign', None, []))
+                             'malicious' if event['malicious'] else 'benign'))
     database = tmp_path / 'commands.duckdb'
     result = invoke(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        actual = con.execute('SELECT record_id,pgm,args,label,shell_input,other_tokens FROM COMMANDS ORDER BY record_id').fetchall()
+        actual = con.execute('SELECT record_id,pgm,args,dataset_label FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS").fetchone() == (0,)
         assert actual == sorted(expected), 'Flat Sysdig shell payloads must remain one argument with original quotes and labels'
         assert con.execute('SELECT ingested FROM INGESTED').fetchall() == [(True,)]
 
@@ -111,4 +112,4 @@ def test_flat_heuristic_and_unsupported_forms(tmp_path):
     result = invoke(root, database, READER)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT record_id,pgm,args FROM COMMANDS ORDER BY record_id').fetchall() == sorted(expected)
+        assert con.execute('SELECT record_id,pgm,args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == sorted(expected)

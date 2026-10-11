@@ -34,7 +34,7 @@ def test_native_exports_and_declared_encodings(tmp_path, workers):
     result = ingest(root, database, workers)
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        args = [r[0] for r in con.execute("SELECT args FROM COMMANDS ORDER BY record_id").fetchall()]
+        args = [r[0] for r in con.execute("SELECT args FROM PROCESS_LAUNCHES ORDER BY record_id").fetchall()]
     assert [a[1] for a in args] == ["/category:Richtlinien+ñnderung", "/category:Richtlinienänderung",
                                      "/category:Richtlinien+ñnderung", "/category:Richtlinienänderung",
                                      "/category:Richtlinien+ñnderung", "/category:Richtlinien�nderung"], (
