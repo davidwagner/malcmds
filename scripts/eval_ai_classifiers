@@ -16,13 +16,13 @@ classifier_costs, disagreements, confusion_matrices. Overall and dataset rows
 are distinguished by scope, including when a source dataset itself is NULL.
 Confusion fractions are joint fractions, not row-normalized percentages.
 Errors have NULL predictions; non-label model output becomes unknown.
-Incomplete runs expose coverage and return nonzero. Provider scores and
-self-reported confidence are distinguished in results.score_kind.
+Incomplete runs expose coverage and return nonzero. Jev and Perplexity return
+native probabilities; Luna, Haiku, and Sol have NULL scores and score_kind.
 
 The default is 200 unique commands per (dataset,label), 50 concurrent requests,
 medium reasoning effort where supported, and a three-hour classification limit.
-Each classifier completes before the next starts. Generative models use two
-requests per sample: a one-word classification and subjective class confidence.
+Each classifier completes before the next starts. Every classifier uses one
+request per sample, excluding retries.
 No dataset labels/identifiers are sent to the APIs. Input commands are never run.
 """
 
@@ -40,7 +40,6 @@ import httpx
 from _eval_ai_providers import (
     LABEL_PROMPT,
     MODELS,
-    SCORE_PROMPT,
     Provider,
     load_keys,
     probabilities,
@@ -58,7 +57,7 @@ def positive_int(value):
 
 
 async def classify_sample(db, provider, sample):
-    """Persist a prediction independently of confidence request success."""
+    """Persist a label and native probabilities when the provider supplies them."""
     sample_id = sample[0]
     name = provider.name
     prediction, raw, scores, kind = None, None, (None, None, None), None
@@ -72,11 +71,6 @@ async def classify_sample(db, provider, sample):
             kind = 'native_probability'
             scores = probabilities(reply.get('answers', {}).get('classification', {})
                                    .get('probabilities'))
-        else:
-            kind = 'self_reported_confidence'
-            stage = 'scores'
-            reply = await provider.request(sample_id, command_text(sample), 'scores')
-            scores = probabilities(json.loads(response_text(name, reply)))
         status = 'ok'
     except (ValueError, KeyError, TypeError) as exc:
         error = str(exc)
@@ -174,7 +168,7 @@ def main():
         config = {'source': str(options.source.resolve()), 'per_group': options.per_group,
                   'seed': options.seed, 'classifiers': options.classifiers,
                   'max_output_tokens': options.max_output_tokens, 'models': MODELS,
-                  'label_prompt': LABEL_PROMPT, 'score_prompt': SCORE_PROMPT,
+                  'label_prompt': LABEL_PROMPT, 'confidence_classifiers': ['jev', 'pplx'],
                   'schema_version': 1}
         keys = {} if options.sample_only else load_keys(options.keys, options.classifiers)
         db = initialize(options.output, options.source, config, options.resume)
@@ -191,7 +185,7 @@ def main():
             incomplete = db.execute('''SELECT count(*) FROM results WHERE status <> 'ok' ''').fetchone()[0]
             actual = db.execute('SELECT count(*) FROM results').fetchone()[0]
             if incomplete or actual != count * len(options.classifiers):
-                status, error = 'incomplete', 'Some samples lack classifications or valid confidence scores'
+                status, error = 'incomplete', 'Some samples lack classifications or required native probabilities'
         except (Exception, KeyboardInterrupt) as exc:
             logging.getLogger(__name__).exception('Evaluation interrupted; saving progress')
             status, error = 'interrupted', f'{type(exc).__name__}: {exc}'

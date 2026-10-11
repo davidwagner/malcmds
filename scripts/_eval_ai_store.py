@@ -155,7 +155,8 @@ def analyze(db):
                 FROM requests GROUP BY classifier
             ), evaluated AS (
                 SELECT classifier, count(*) FILTER (WHERE prediction IS NOT NULL) AS evaluated_samples,
-                       count(*) FILTER (WHERE status = 'ok') AS scored_samples,
+                       count(*) FILTER (WHERE status = 'ok' AND p_malicious IS NOT NULL
+                           AND p_benign IS NOT NULL AND p_unknown IS NOT NULL) AS scored_samples,
                        count(*) FILTER (WHERE prediction IS NULL) AS failed_samples
                 FROM results GROUP BY classifier
             ), timing AS (

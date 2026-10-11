@@ -193,18 +193,26 @@ def test_live_provider_contract_and_resume(tmp_path):
     flags = ['--source', source, '--per-group', '1']
     run_cli(output, *flags, timeout=900)
     rows = read_rows(output, '''SELECT classifier, prediction, p_malicious, p_benign,
-        p_unknown, status FROM results ORDER BY classifier''')
+        p_unknown, score_kind, status FROM results ORDER BY classifier''')
     assert len(rows) == 15, 'An API/model contract changed: three results per provider are required'
     assert read_rows(output, 'SELECT classifier, count(*) FROM results GROUP BY ALL ORDER BY classifier') == [
         (name, 3) for name in sorted(CLASSIFIERS)
     ]
     assert {row[0] for row in rows} == set(CLASSIFIERS)
     for classifier, prediction, *remaining in rows:
-        *scores, status = remaining
+        *scores, kind, status = remaining
         assert prediction in ('malicious', 'benign', 'unknown'), classifier
-        assert status == 'ok', f'{classifier}: current provider must supply valid confidence scores'
-        assert all(score is not None and 0 <= score <= 1 for score in scores), classifier
-        assert sum(scores) == pytest.approx(1.0, abs=1e-5), classifier
+        assert status == 'ok', classifier
+        if classifier in ('jev', 'pplx'):
+            assert kind == 'native_probability'
+            assert all(score is not None and 0 <= score <= 1 for score in scores), classifier
+            assert sum(scores) == pytest.approx(1.0, abs=1e-5), classifier
+        else:
+            assert scores == [None, None, None], classifier
+            assert kind is None, classifier
+    assert read_rows(output, 'SELECT classifier, stage, count(DISTINCT sample_id) FROM requests GROUP BY ALL ORDER BY classifier') == [
+        (name, 'label', 3) for name in sorted(CLASSIFIERS)
+    ], 'Each sample must use only classification requests; retries may add attempts'
     responses = read_rows(output, 'SELECT response FROM requests WHERE http_status=200')
     assert responses
     assert all(json.loads(response).get('usage') for (response,) in responses), 'Provider usage contract changed'
@@ -259,23 +267,37 @@ def test_replay_recorded_responses_and_reject_invalid_scores(tmp_path, corruptio
             name, stage, response = (observation[key] for key in ('classifier', 'stage', 'response'))
             if corruption == 'label' and name == 'jev':
                 response['answers']['classification']['choice'] = 'BENIGN with an explanation'
-            if corruption == 'scores' and name == 'sol' and stage == 'scores':
-                for item in response['output']:
-                    if item['type'] == 'message':
-                        item['content'][0]['text'] = '{"malicious": -1, "benign": 2, "unknown": 0}'
+            if stage == 'scores':
+                continue
+            if corruption == 'scores' and name == 'jev':
+                response['answers']['classification']['probabilities'] = {
+                    'malicious': -1, 'benign': 2, 'unknown': 0}
             db.execute('''INSERT INTO requests(sample_id,classifier,stage,http_status,
                 response,cost_usd,cost_kind) VALUES (1,?,?,200,?,?,?)''', [
                     name, stage, json.dumps(response), observation['cost_usd'], observation['cost_kind']])
     run_cli(output, '--source', source, '--keys', keys, '--resume', success=corruption != 'scores')
-    assert read_rows(output, 'SELECT count(*) FROM requests') == [(8,)], 'Replay must not call the APIs'
+    assert read_rows(output, 'SELECT count(*) FROM requests') == [(5,)], 'Replay must not call the APIs'
     assert read_rows(output, 'SELECT count(*) FROM results') == [(5,)]
     if corruption == 'label':
         assert read_rows(output, "SELECT prediction,status FROM results WHERE classifier='jev'") == [('unknown', 'ok')]
     elif corruption == 'scores':
-        assert read_rows(output, "SELECT status,p_malicious FROM results WHERE classifier='sol'") == [('score_error', None)]
+        assert read_rows(output, "SELECT status,p_malicious FROM results WHERE classifier='jev'") == [('score_error', None)]
         assert read_rows(output, """SELECT error IS NOT NULL, cost_usd > 0 FROM requests
-            WHERE classifier='sol' AND stage='scores'""") == [(True, True)], 'Invalid cached scores must be retriable without losing cost'
+            WHERE classifier='jev' AND stage='label'""") == [(True, True)], 'Invalid cached scores must be retriable without losing cost'
         assert read_rows(output, 'SELECT status FROM evaluation_run') == [('incomplete',)]
     else:
         assert read_rows(output, "SELECT count(*) FROM results WHERE status='ok'") == [(5,)]
         assert read_rows(output, 'SELECT status FROM evaluation_run') == [('complete',)]
+
+    assert read_rows(output, """SELECT classifier, p_malicious, p_benign, p_unknown, score_kind, status
+        FROM results WHERE classifier IN ('sol', 'luna', 'haiku') ORDER BY classifier""") == [
+        (name, None, None, None, None, 'ok') for name in ('haiku', 'luna', 'sol')
+    ]
+    assert read_rows(output, """SELECT classifier, scored_samples FROM classifier_costs
+        ORDER BY classifier""") == [
+        ('haiku', 0), ('jev', 0 if corruption == 'scores' else 1),
+        ('luna', 0), ('pplx', 1), ('sol', 0)
+    ]
+    if corruption == 'none':
+        run_cli(output, '--source', source, '--keys', keys, '--resume')
+        assert read_rows(output, 'SELECT count(*) FROM requests') == [(5,)]
