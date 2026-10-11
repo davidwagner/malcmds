@@ -36,3 +36,4 @@ jobs:
           tests/test_ingest_optc.py
           tests/test_ingest_optc_parallel.py
           tests/test_ingest_optc_speed.py
+          tests/test_benchmark_optc.py
