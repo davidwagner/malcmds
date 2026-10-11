@@ -110,11 +110,13 @@ def _word(node):
     if kind == "raw_string":
         return text[1:-1]
     if kind == "ansi_c_string":
-        return re.sub(
+        decoded = re.sub(
             r"\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|.)",
             _ansi_escape,
             text[2:-1],
         )
+        # Bash truncates this quoted segment at NUL, before joining adjacent text.
+        return decoded.split("\x00", 1)[0]
     if kind in ("string", "concatenation", "command_name"):
         # Tree-sitter omits literal newlines between string_content children.
         # Keep those source gaps while removing only the surrounding quotes.
