@@ -6,6 +6,7 @@ on:
       - 'datasets/**'
       - 'scripts/**'
       - 'tests/**'
+      - 'schema.md'
       - '.github/workflows/optc-labels-tests.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'datasets/**'
       - 'scripts/**'
       - 'tests/**'
+      - 'schema.md'
       - '.github/workflows/optc-labels-tests.yml'
 
 permissions:
