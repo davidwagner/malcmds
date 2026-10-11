@@ -1,0 +1,219 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6", "httpx==0.28.1", "python-dotenv==1.2.2"]
+# ///
+"""Sample COMMANDS, evaluate five classifiers, and materialize DuckDB analytics.
+
+Usage: scripts/eval_ai_classifiers results.duckdb --source cmds.duckdb
+Repeat the same command with --resume after interruption; successful requests
+are reused. --sample-only creates the sample without API calls. --analyze-only
+rebuilds analytics without API keys or the source. Output is one run per file.
+
+Tables: samples, results, requests (raw responses, usage, costs, rate headers),
+evaluation_run (configuration and total time), classifier_timing,
+classifier_costs, disagreements, confusion_matrices. Overall and dataset rows
+are distinguished by scope, including when a source dataset itself is NULL.
+Confusion fractions are joint fractions, not row-normalized percentages.
+Errors have NULL predictions; non-label model output becomes unknown.
+Incomplete runs expose coverage and return nonzero. Provider scores and
+self-reported confidence are distinguished in results.score_kind.
+
+The default is 200 unique commands per (dataset,label), 50 concurrent requests,
+medium reasoning effort where supported, and a three-hour classification limit.
+Each classifier completes before the next starts. Generative models use two
+requests per sample: a one-word classification and subjective class confidence.
+No dataset labels/identifiers are sent to the APIs. Input commands are never run.
+"""
+
+import argparse
+import asyncio
+import json
+import logging
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+import duckdb
+import httpx
+from _eval_ai_providers import (
+    LABEL_PROMPT,
+    MODELS,
+    SCORE_PROMPT,
+    Provider,
+    load_keys,
+    probabilities,
+    response_text,
+)
+from _eval_ai_store import LABELS, analyze, command_text, initialize
+
+
+def positive_int(value):
+    """Reject nonpositive limits before opening an output file."""
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError('must be positive')
+    return number
+
+
+async def classify_sample(db, provider, sample):
+    """Persist a prediction independently of confidence request success."""
+    sample_id = sample[0]
+    name = provider.name
+    prediction, raw, scores, kind = None, None, (None, None, None), None
+    status, error, stage = 'classification_error', None, 'label'
+    try:
+        reply = await provider.request(sample_id, command_text(sample), 'label')
+        raw = response_text(name, reply)
+        prediction = raw.strip() if raw.strip() in LABELS else 'unknown'
+        status = 'score_error'
+        if MODELS[name]['provider'] == 'openrouter':
+            kind = 'native_probability'
+            scores = probabilities(reply.get('answers', {}).get('classification', {})
+                                   .get('probabilities'))
+        else:
+            kind = 'self_reported_confidence'
+            stage = 'scores'
+            reply = await provider.request(sample_id, command_text(sample), 'scores')
+            scores = probabilities(json.loads(response_text(name, reply)))
+        status = 'ok'
+    except (ValueError, KeyError, TypeError) as exc:
+        error = str(exc)
+        # Keep billed usage but do not reuse malformed responses on --resume.
+        db.execute('''UPDATE requests SET error=? WHERE sample_id=? AND classifier=?
+            AND stage=? AND error IS NULL''', [error, sample_id, name, stage])
+    finally:
+        db.execute('''INSERT OR REPLACE INTO results VALUES (?,?,?,?,?,?,?,?,?,?,?)''', [
+            sample_id, name, MODELS[name]['model'], prediction, raw,
+            *scores, kind, status, error])
+
+
+async def evaluate(db, options, keys):
+    """Run each classifier's bounded worker pool, preserving progress on cancellation."""
+    limits = httpx.Limits(max_connections=options.concurrency,
+                          max_keepalive_connections=options.concurrency)
+    async with httpx.AsyncClient(limits=limits, timeout=options.request_timeout) as client:
+        for name in options.classifiers:
+            pending = db.execute('''SELECT sample_id,shell_input,pgm_base,args FROM samples
+                WHERE sample_id NOT IN (SELECT sample_id FROM results
+                    WHERE classifier=? AND status='ok') ORDER BY sample_id''', [name]).fetchall()
+            if not pending:
+                continue
+            provider = Provider(db, client, name, keys[MODELS[name]['provider']],
+                                options.max_output_tokens, options.retries)
+            started, clock = datetime.now(UTC), time.monotonic()
+            print(f'{name}: {len(pending)} samples, concurrency {options.concurrency}', flush=True)
+            try:
+                # One complete request first catches bad model/access configuration
+                # before opening the worker pool; it also warms any eligible cache.
+                await classify_sample(db, provider, pending[0])
+                queue = asyncio.Queue()
+                for sample in pending[1:]:
+                    queue.put_nowait(sample)
+                async with asyncio.TaskGroup() as group:
+                    for _ in range(min(options.concurrency, queue.qsize())):
+                        group.create_task(worker(db, provider, queue))
+            finally:
+                db.execute('''INSERT INTO classifier_timing(classifier,seconds,started_at)
+                    VALUES (?,?,?)''', [name, time.monotonic() - clock, started])
+                analyze(db)
+            print(f'{name}: finished in {time.monotonic()-clock:.1f}s', flush=True)
+
+
+async def worker(db, provider, queue):
+    """Consume samples without creating one task per command in a large dataset."""
+    while not queue.empty():
+        sample = queue.get_nowait()
+        if queue.qsize() > 0 and queue.qsize() % 100 == 0:
+            print(f'{provider.name}: {queue.qsize()} samples waiting', flush=True)
+        await classify_sample(db, provider, sample)
+        queue.task_done()
+
+
+async def run_with_deadline(db, options, keys):
+    """Limit total classification wall time, including retries and provider waits."""
+    async with asyncio.timeout(options.max_hours * 3600):
+        await evaluate(db, options, keys)
+
+
+def main():
+    """Validate CLI arguments, run the evaluation, and always refresh analytics."""
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('output', type=Path, help='new DuckDB results database')
+    parser.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1] / 'cmds.duckdb')
+    parser.add_argument('--keys', type=Path, default=Path('~/.api_keys'))
+    parser.add_argument('--per-group', type=positive_int, default=200)
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--classifiers', nargs='+', choices=list(MODELS), default=list(MODELS))
+    parser.add_argument('--concurrency', type=positive_int, default=50)
+    parser.add_argument('--max-hours', type=float, default=3)
+    parser.add_argument('--request-timeout', type=float, default=120)
+    parser.add_argument('--max-output-tokens', type=positive_int, default=4096)
+    parser.add_argument('--retries', type=int, default=5)
+    parser.add_argument('--resume', action='store_true')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--sample-only', action='store_true')
+    modes.add_argument('--analyze-only', action='store_true')
+    options = parser.parse_args()
+    if not 0 < options.max_hours < float('inf') or not 0 < options.request_timeout < float('inf'):
+        parser.error('time limits must be finite and positive')
+    if options.retries < 0 or len(options.classifiers) != len(set(options.classifiers)):
+        parser.error('retries must be nonnegative and classifiers must be unique')
+    if options.output.resolve() == options.source.resolve():
+        parser.error('Output must differ from the source database')
+    clock = time.monotonic()
+    db = None
+    try:
+        if options.analyze_only:
+            if not options.output.is_file():
+                raise ValueError('--analyze-only requires an existing evaluation database')
+            db = duckdb.connect(str(options.output))
+            analyze(db)
+            return 0
+        config = {'source': str(options.source.resolve()), 'per_group': options.per_group,
+                  'seed': options.seed, 'classifiers': options.classifiers,
+                  'max_output_tokens': options.max_output_tokens, 'models': MODELS,
+                  'label_prompt': LABEL_PROMPT, 'score_prompt': SCORE_PROMPT,
+                  'schema_version': 1}
+        keys = {} if options.sample_only else load_keys(options.keys, options.classifiers)
+        db = initialize(options.output, options.source, config, options.resume)
+        count = db.execute('SELECT count(*) FROM samples').fetchone()[0]
+        print(f'Sampled {count} unique commands; output: {options.output}', flush=True)
+        if options.sample_only:
+            analyze(db)
+            return 0
+        db.execute("UPDATE evaluation_run SET status='running', finished_at=NULL, error=NULL")
+        classification_clock = time.monotonic()
+        status, error = 'complete', None
+        try:
+            asyncio.run(run_with_deadline(db, options, keys))
+            incomplete = db.execute('''SELECT count(*) FROM results WHERE status <> 'ok' ''').fetchone()[0]
+            actual = db.execute('SELECT count(*) FROM results').fetchone()[0]
+            if incomplete or actual != count * len(options.classifiers):
+                status, error = 'incomplete', 'Some samples lack classifications or valid confidence scores'
+        except (Exception, KeyboardInterrupt) as exc:
+            logging.getLogger(__name__).exception('Evaluation interrupted; saving progress')
+            status, error = 'interrupted', f'{type(exc).__name__}: {exc}'
+        finally:
+            db.execute('''UPDATE evaluation_run SET status=?, error=?, finished_at=current_timestamp,
+                classification_seconds=classification_seconds+?''',
+                [status, error, time.monotonic()-classification_clock])
+            analyze(db)
+        if error:
+            print(f'{error}. Progress saved; use --resume.', file=sys.stderr)
+            return 1
+        print(json.dumps(db.execute('SELECT * FROM classifier_costs').fetchall()))
+        return 0
+    except (ValueError, duckdb.Error, OSError) as exc:
+        print(f'Error: {exc}', file=sys.stderr)
+        return 1
+    finally:
+        if db is not None:
+            if not options.analyze_only:
+                db.execute('UPDATE evaluation_run SET total_seconds=total_seconds+?', [time.monotonic()-clock])
+            db.close()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
