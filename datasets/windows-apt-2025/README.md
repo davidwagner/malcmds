@@ -14,7 +14,19 @@ The reader takes commands from `source/combined.csv`. It uses Windows `commandLi
 
 The reader labels specifically matched collection and defense commands `benign`: Wazuh account checks and their linked `net1.exe` helpers, Defender's recorded `svchost.exe` launches, and VMware's default lifecycle scripts and linked `ipconfig.exe` helpers. Matches use the actual parent program, command and, for helpers, the parent's process GUID on the same computer. Merely being a child of one of these programs is insufficient.
 
-For other command-line events, an ATT&CK technique ID or Wazuh rule 92031, 92039, 92052 or 92066 gives a best-effort `malicious` label. Remaining commands, including inventory observations, are `unknown`. Alert tags alone are imperfect evidence: Wazuh's own `net user administrator` check can carry T1087 and is handled by the benign rule above.
+Other command events follow the policy in [issue #115](https://github.com/davidwagner/malcmds/issues/115):
+
+1. Inspect the complete visible operation and the documented UAC-bypass parent context. Specific command decisions take priority over rule and tag defaults, including an explicit `unknown` decision.
+2. Use the rule's entry in `RULE_DEFAULTS` when present. A mapped `unknown` ends the decision.
+3. For an absent rule, use exact ATT&CK IDs from `TAG_DEFAULTS`. Any malicious tag gives `malicious`; a nonempty list of only benign tags gives `benign`; other combinations give `unknown`.
+
+`malicious` means visible attack behavior, identifiable attack preparation, or a verified attack-related parent relationship. It includes authorized attack exercises. `benign` means the observed operation is routine, harmless, or restores an ordinary setting. `unknown` means the command is ambiguous or its relevant payload is unavailable. Inventory observations remain `unknown`.
+
+For example, SAM extraction and Temp-directory system-process impersonators are malicious. Ordinary account queries, the observed local log export, and restoration of RDP authentication are benign. Enabling Guest, changing RDP to port 4489, and invoking unavailable scripts are unknown. Specific benign or unknown decisions survive conflicting broad tags.
+
+A shell launched by `fodhelper`, or an auto-elevated utility launched after the observed `ms-settings` registry hijack, receives a malicious event label before considering a harmless-looking child operation. Other parent names alone do not establish maliciousness. Compound shell commands are malicious when an identifiable attack operation is visible, benign when all operations are understood and benign, and unknown otherwise.
+
+Encoded PowerShell is decoded as data for inspection; undecodable payloads are unknown. The stored command arguments retain the source encoding. Recognizers cover the observed syntax and conservatively retain unknown decisions for unsupported shell expressions. The tables describe this collection: they are best-effort judgments, not general classifications of ATT&CK techniques.
 
 The scenario manifest describes the exercises but has no event IDs or run times that join individual commands to scenarios. These labels are derived by the reader, not a publisher-supplied per-command truth column. The rules are in [`scripts/_ingest_misc.py`](../../scripts/_ingest_misc.py) and [`scripts/_ingest_windows_apt_labels.py`](../../scripts/_ingest_windows_apt_labels.py).
 

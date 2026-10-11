@@ -22,7 +22,6 @@ from pathlib import Path
 
 import ijson
 import openpyxl
-from _ingest_windows_apt_labels import decode_windows_apt_field
 from _ingest import (
     Command,
     normalize,
@@ -30,6 +29,7 @@ from _ingest import (
     shell_command_fragments,
     shell_commands,
 )
+from _ingest_windows_apt_labels import decode_windows_apt_field
 
 
 def emitted(
@@ -567,7 +567,7 @@ def linux_apt_audit_lines(root, options, labels, attacks):
 
 def windows_apt(root, options):
     """Read native process launch command lines and process inventory arguments."""
-    from _ingest_windows_apt_labels import infrastructure_parents, is_infrastructure
+    from _ingest_windows_apt_labels import infrastructure_parents, windows_apt_label
 
     parents = infrastructure_parents(root / "source/combined.csv", options.max_records)
     with (root / "source/combined.csv").open(
@@ -580,13 +580,9 @@ def windows_apt(root, options):
             image = row.get(prefix + "image", "").strip()
             label = "unknown"
             if command:
-                techniques = row.get("_source.rule.mitre.id", "").strip()
-                if re.search(r"\bT\d{4}(?:\.\d{3})?\b", techniques) or row.get("_source.rule.id", "").strip() in {"92031", "92039", "92052", "92066"}:
-                    label = "malicious"
                 command = decode_windows_apt_field(command, json_contents=True, html_entities=True)
                 image = decode_windows_apt_field(image, json_contents=True, html_entities=True)
-                if is_infrastructure(row, parents):
-                    label = "benign"
+                label = windows_apt_label(row, command, parents)
             else:
                 # Inventory fields are ordinary CSV text, without the Sysmon JSON layer.
                 image = row.get("_source.data.process.cmd", "").strip()

@@ -27,9 +27,11 @@ def test_native_annotations_and_unannotated_inventory(tmp_path):
     with duckdb.connect(str(database)) as con:
         saved = con.execute('SELECT record_id,label,group_id,session_id FROM COMMANDS').fetchall()
     by_id = {row[0]: row[1:] for row in saved}
+    expected = {'tagged': 'benign', 'rule-11': 'unknown', 'rule-92031': 'benign',
+                'rule-92039': 'benign', 'rule-92066': 'benign', 'rule-92052': 'unknown'}
     for name, row in examples.items():
         rid = row['_index']+':'+row['_id']+':0'
-        assert by_id[rid][0] == ('unknown' if name == 'rule-11' else 'malicious')
+        assert by_id[rid][0] == expected[name]
     assert all(label == 'unknown' for rid, label, _, _ in saved if rid.startswith(':'))
     assert all(group is None and session for _, _, group, session in saved)
     again = invoke(tmp_path, database, source)
@@ -53,7 +55,10 @@ def test_observation_infrastructure_and_attack_tools(tmp_path):
     with duckdb.connect(str(database)) as con:
         saved = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
     for name, row in examples.items():
-        expected = 'malicious' if name.startswith('attack-') else 'benign'
+        # These earlier 'attack' fixtures perform discovery or download a license.
+        # A scenario/parent name alone does not establish attack behavior.
+        expected = {'attack-splunkd': 'benign', 'attack-defender-download': 'unknown',
+                    'attack-caldera': 'unknown'}.get(name, 'benign')
         assert saved[row['_index'] + ':' + row['_id'] + ':0'] == expected, (
             f'{name}: CSV decoding, Windows argument parsing, or process provenance '
             'changed; observation infrastructure must stay separate from attack tools'
@@ -61,7 +66,7 @@ def test_observation_infrastructure_and_attack_tools(tmp_path):
 
 
 def test_infrastructure_requires_matching_process_evidence(tmp_path):
-    """Changed arguments, missing provenance and executable lookalikes stay suspicious."""
+    """Unverified infrastructure proceeds through command and rule decisions."""
     examples = json.loads((Path(__file__).parent / 'fixtures/windows-apt/infrastructure.json').read_text())
     prefix = '_source.data.win.eventdata.'
     wazuh = next(row for name, row in examples.items() if name.startswith('parent-helper-') and 'net1 accounts' in name)
@@ -116,14 +121,20 @@ def test_infrastructure_requires_matching_process_evidence(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
         saved = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
+    unknown = {
+        'different-command', 'different-vmware-script', 'extra-vmware-command',
+        'wrong-vmware-parent', 'different-vmware-helper', 'wrong-vmware-helper-image',
+        'wrong-vmware-helper-program', 'defender-arguments',
+    }
     for name, original, _, _ in cases:
-        assert saved[original['_index'] + ':' + name + ':0'] == 'malicious', (
-            f'{name}: an infrastructure label requires both the expected command and its provenance'
+        expected = 'unknown' if name in unknown else 'benign'
+        assert saved[original['_index'] + ':' + name + ':0'] == expected, (
+            f'{name}: after infrastructure matching fails, apply the command/rule policy'
         )
 
 
-def test_helper_without_parent_in_selected_records_stays_malicious(tmp_path):
-    """A record limit cannot borrow a parent from outside the selected input."""
+def test_helper_without_parent_in_selected_records_uses_command_policy(tmp_path):
+    """A limited net1 account query remains benign from its visible operation."""
     examples = json.loads((Path(__file__).parent / 'fixtures/windows-apt/infrastructure.json').read_text())
     helper = next(row for name, row in examples.items() if name.startswith('helper-') and 'net1 accounts' in name)
     prefix = '_source.data.win.eventdata.'
@@ -137,4 +148,4 @@ def test_helper_without_parent_in_selected_records_stays_malicious(tmp_path):
     result = invoke(tmp_path, database, 'from _ingest_misc import windows_apt as records\n', '--max-records', '1')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(database)) as con:
-        assert con.execute('SELECT label FROM COMMANDS').fetchall() == [('malicious',)]
+        assert con.execute('SELECT label FROM COMMANDS').fetchall() == [('benign',)]
