@@ -93,6 +93,17 @@ class TCAnnotations:
         """Return the strongest final command label, with a group only when needed."""
         if timestamp is None:
             return 'unknown', None
+        if self.dataset == 'tc-e5-marple':
+            instance = context.get('instance')
+            if instance not in {'marple-1', 'marple-2', 'marple-3'}:
+                return 'unknown', None
+            # Report-based benign periods take precedence over annotations of
+            # a browser that was compromised later in the exercise.
+            if instance != 'marple-1' or not any(
+                rule['first'] <= timestamp <= rule['last']
+                for rule in self.episodes.values()
+            ):
+                return 'benign', None
         if self.hosts and host not in self.hosts:
             return 'unknown', None
         process = process.lower()
