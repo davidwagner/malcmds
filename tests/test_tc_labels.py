@@ -166,3 +166,69 @@ def test_failed_execution_and_report_benign_setup(tmp_path):
         assert result.returncode == 0, result.stderr
         with duckdb.connect(str(database)) as con:
             assert con.execute('SELECT label,group_id FROM COMMANDS').fetchall() == [(expected, None)], f'Report annotation must match the correct target instance for {filename}'
+
+
+def test_marple_benign_hosts_and_attack_endpoints(tmp_path):
+    """Native CDM20, filename hosts and nanosecond endpoints preserve the policy.
+
+    The fixture is the first Subject in the official
+    ta1-marple-1-e5-official-1.bin.gz (pinned in scripts/_tc_manifest.tsv).
+    It retains MARPLE's zero host UUID and incorrect outer RECORD_HOST type.
+    Missing Subject timestamps are allowed by the original CDM20 schema.
+    """
+    root = tmp_path / 'tc-e5-marple'
+    (root / 'data').mkdir(parents=True)
+    (root / 'annotations').mkdir()
+    with gzip.open(HERE / 'fixtures/marple-subject.bin.gz', 'rb') as stream:
+        reader = fastavro.reader(stream, return_record_name=True)
+        template = next(reader)
+        schema = reader.writer_schema
+    # Independent UTC values: May 9 17:57 through 18:02:59.999999999,
+    # and May 17 17:00 through 17:29:59.999999999 (EDT is UTC minus four).
+    intervals = [(1557424620000000000, 1557424979999999999),
+                 (1558112400000000000, 1558114199999999999)]
+    expected = {}
+    annotations = ['uuid,label,attack_chain']
+    number = 0
+    for instance in ['marple-1', 'marple-2', 'marple-3', 'marple-4', None]:
+        filename = f'ta1-{instance}-e5-official-1.bin' if instance else 'unidentified.bin'
+        rows = []
+        for annotated in [False, True]:
+            for episode, (first, last) in enumerate(intervals):
+                for timestamp in [first - 1, first, last, last + 1, None]:
+                    number += 1
+                    marker = f'case-{number}'
+                    row = copy.deepcopy(template)
+                    process = uuid.UUID(int=number)
+                    row['datum'][1].update(uuid=process.bytes,
+                                            cmdLine='firefox.exe ' + marker,
+                                            startTimestampNanos=timestamp)
+                    rows.append(row)
+                    if annotated:
+                        section = '4.4' if episode == 0 else '10.8'
+                        annotations.append(f'{process},attack,attack_{section}_browser')
+                    label = 'benign'
+                    if instance not in {'marple-1', 'marple-2', 'marple-3'} or timestamp is None:
+                        label = 'unknown'
+                    elif instance == 'marple-1' and first <= timestamp <= last:
+                        label = 'malicious' if annotated else 'malicious-group'
+                    expected[marker] = label
+        with (root / 'data' / filename).open('wb') as stream:
+            fastavro.writer(stream, schema, rows)
+    (root / 'annotations/original-reapr.csv').write_text('\n'.join(annotations) + '\n')
+    database = tmp_path / 'marple.duckdb'
+    result = ingest(root, database, 'from _ingest_tc import records\n', '--tc-workers', '1')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        actual = con.execute('SELECT args[1],label,group_id FROM COMMANDS').fetchall()
+        assert {marker: label for marker, label, _ in actual} == expected, (
+            'MARPLE filename identity, CDM20 nullable timestamps, complete EDT ending '
+            'minutes and process annotation precedence must survive native ingestion')
+        assert len(actual) == len(expected), 'Native Subject snapshots must remain distinct'
+        assert all((group is not None) == (label == 'malicious-group')
+                   for _, label, group in actual), 'Benign commands must never retain attack group IDs'
+        before = con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall()
+    result = ingest(root, database, 'from _ingest_tc import records\n', '--tc-workers', '1')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        assert con.execute('SELECT * FROM COMMANDS ORDER BY record_id').fetchall() == before
