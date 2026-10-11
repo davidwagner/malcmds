@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import shutil
@@ -19,6 +20,21 @@ from _ingest_windows import event_commands, json_fields, text_fields, xml_events
 
 SPLUNK_URL = "https://download.splunk.com/products/splunk/releases/9.1.3/linux/splunk-9.1.3-d95b3299fa65-Linux-x86_64.tgz"
 SPLUNK_SHA256 = "bc57ed6197ea5dc411378b46377641d41ea8d18fc63f43ba7c7a6ed5888e4f69"
+
+PERSISTENCE_PAYLOAD = (
+    "IEX ([Text.Encoding]::UNICODE.GetString([Convert]::FromBase64String("
+    r"(gp HKLM:\Software\Microsoft\Network debug).debug)))"
+)
+PERSISTENCE_POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+PERSISTENCE_ARGS = ["-NonI", "-W", "hidden", "-c", PERSISTENCE_PAYLOAD]
+PERSISTENCE_TASK_ARGS = [
+    "/Create", "/F", "/RU", "system", "/SC", "DAILY", "/ST", "18:45",
+    "/TN", "Updater", "/TR",
+    f'{PERSISTENCE_POWERSHELL} -NonI -W hidden -c "{PERSISTENCE_PAYLOAD}"',
+]
+# Native WinHostMon snapshots disagree about the start of PID 5448. Preserve
+# both recorded identities; this label rule does not alter process selection.
+PERSISTENCE_STARTS = {"20180820101100.007904+000", "20180820100859.007904+000"}
 
 
 def exporter(scratch):
@@ -165,7 +181,7 @@ def osquery_commands(obj, host, record, index):
 
 
 def bots_label(fields, pgm, args):
-    """Label the observed Frothly inventory exploit invocations in BOTS v3.
+    """Label corroborated inventory-exploit and registry-implant commands.
 
     Source: https://github.com/splunk/botsv3 and native FYODOR-L process events
     on 2018-08-20, including GUID {EBF7A186-D28A-5B58-0000-00105D862402}.
@@ -188,7 +204,54 @@ def bots_label(fields, pgm, args):
         and args[1].strip()
     ):
         return "malicious", None
+    if persistence_execution(fields, pgm, args, time):
+        return "malicious", None
     return "unknown", None
+
+
+def persistence_execution(fields, pgm, args, time):
+    """Match the corroborated FYODOR-L registry implant observations in BOTS v3.
+
+    Process creation times are an allowlist of observed seconds, not an attack
+    window. WinHostMon's timestamp is a snapshot time, so its recorded process
+    identity and the capture day are checked separately.
+    """
+    hosts = [str(fields[key]).lower().split(".")[0] for key in
+             ("Computer", "ComputerName", "Host", "host", "_bots_host") if fields.get(key)]
+    if not hosts or any(host != "fyodor-l" for host in hosts) or not math.isfinite(time):
+        return False
+    program = pgm.replace("/", "\\").lower()
+    powershell = program == PERSISTENCE_POWERSHELL.lower() and args == PERSISTENCE_ARGS
+    kind = fields.get("_bots_kind")
+    if kind == "winhostmon":
+        return (
+            fields.get("Type") == "Process"
+            and fields.get("ProcessId") == "5448"
+            and fields.get("StartTime") in PERSISTENCE_STARTS
+            and 1534723200 <= time < 1534809600
+            and powershell
+        )
+    event = str(fields.get("EventID") or fields.get("EventCode") or "")
+    process_event = (
+        kind == "xmlwineventlog:microsoft-windows-sysmon/operational"
+        and fields.get("Channel") == "Microsoft-Windows-Sysmon/Operational"
+        and fields.get("Provider") == "Microsoft-Windows-Sysmon"
+        and event == "1"
+    ) or (
+        kind == "wineventlog:security"
+        and fields.get("LogName") == "Security"
+        and fields.get("SourceName") == "Microsoft Windows security auditing."
+        and event == "4688"
+    )
+    if not process_event:
+        return False
+    return (
+        1534759860 <= time < 1534759861 and powershell
+    ) or (
+        1534759784 <= time < 1534759785
+        and program == r"c:\windows\system32\schtasks.exe"
+        and args == PERSISTENCE_TASK_ARGS
+    )
 
 
 def bots_event_commands(fields, record, number):
@@ -217,9 +280,14 @@ def records(root, options):
 
 def observations(root, options, processes):
     """Read all BOTS sourcetypes that contain observed command arguments."""
+    yield from exported_observations(exports(root, options), options, processes)
+
+
+def exported_observations(buckets, options, processes):
+    """Parse native CSV exports, retaining source context and process identities."""
     csv.field_size_limit(100_000_000)
     audits = defaultdict(list)
-    for bucket, path in exports(root, options):
+    for bucket, path in buckets:
         with path.open(encoding="utf-8", errors="replace", newline="") as stream:
             for number, row in enumerate(csv.DictReader(stream), 1):
                 if options.max_records is not None and number > options.max_records:
@@ -250,6 +318,8 @@ def observations(root, options, processes):
                     for i, fields in xml_events(io.StringIO(raw)):
                         fields.setdefault("Computer", host)
                         fields["_bots_time"] = row.get("_time")
+                        fields["_bots_kind"] = kind
+                        fields["_bots_host"] = host
                         yield from bots_event_commands(fields, record, i)
                 elif kind.startswith("wineventlog"):
                     fields = text_fields(raw)
@@ -260,6 +330,8 @@ def observations(root, options, processes):
                     if valid:
                         fields["SubjectLogonId"] = valid[-1]
                     fields["_bots_time"] = row.get("_time")
+                    fields["_bots_kind"] = kind
+                    fields["_bots_host"] = host
                     yield from bots_event_commands(fields, record, 1)
                 elif kind == "osquery:results":
                     decoder = json.JSONDecoder()
@@ -306,7 +378,10 @@ def observations(root, options, processes):
                         continue
                     fields["host"] = host
                     fields["Image"] = fields.get("Path", "")
-                    for command in event_commands(fields, "splunk-bots", record, 1):
+                    fields["_bots_time"] = row.get("_time")
+                    fields["_bots_kind"] = kind
+                    fields["_bots_host"] = host
+                    for command in bots_event_commands(fields, record, 1):
                         if fields.get("ProcessId") and fields.get("StartTime"):
                             command.session_id = (
                                 f"splunk-bots:{host}:process:{fields['ProcessId']}:"

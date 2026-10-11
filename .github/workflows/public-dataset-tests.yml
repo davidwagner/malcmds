@@ -24,6 +24,8 @@ jobs:
           echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client-17
+      - name: Preserve native BOTS persistence labels and command parsing
+        run: python -m pytest -q tests/test_bots_persistence.py
       - name: Fetch pinned LADE sources and portable parser
         run: python datasets/lade/fetch
       - name: Check native parsers and ingestion
