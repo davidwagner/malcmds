@@ -1,6 +1,6 @@
 """End-to-end TC checks using real entry points and public Drive files.
 
-Run: python -m unittest discover -s datasets -p test_tc.py -v
+Run: python -m unittest discover -s tests -p test_tc.py -v
 All scratch downloads stay under tmp/. Outages and exhausted Drive quotas are
 external failures, not simulated with replacement servers or mocked transfers.
 """
@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 COUNTS = {
     "tc-e3-cadets": 3,
     "tc-e3-fivedirections": 3,
@@ -41,11 +41,13 @@ class TCIntegrationTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.datasets = self.base / "datasets"
         self.datasets.mkdir()
+        self.scripts = self.base / "scripts"
+        self.scripts.mkdir()
         for name in ("_fetch.py", "_google.py", "_tc.py", "_tc_manifest.tsv", "_tc_annotation_sources.tsv", "fetchall"):
-            shutil.copy2(ROOT / name, self.datasets / name)
+            shutil.copy2(ROOT / name, self.scripts / name)
         for name in COUNTS:
             (self.datasets / name).mkdir()
-            shutil.copy2(ROOT / name / "fetch", self.datasets / name / "fetch")
+            shutil.copy2(ROOT.parent / "datasets" / name / "fetch", self.datasets / name / "fetch")
         self.env = dict(os.environ)
         self.env.pop("FETCH_LIST", None)
 
@@ -53,7 +55,7 @@ class TCIntegrationTests(unittest.TestCase):
         """Run an unmodified executable from outside its dataset directory."""
         env = self.env | ({"FETCH_LIST": "1"} if listing else {})
         return subprocess.run(
-            [str(self.datasets / script), *args],
+            [str((self.scripts if script == "fetchall" else self.datasets) / script), *args],
             cwd=self.base,
             env=env,
             capture_output=True,
@@ -101,7 +103,7 @@ class TCIntegrationTests(unittest.TestCase):
 
     def test_bulk_reports_failures(self):
         """A missing required inventory fails each selected fetcher and is reported."""
-        (self.datasets / "_tc_manifest.tsv").unlink()
+        (self.scripts / "_tc_manifest.tsv").unlink()
         result = self.run_script(
             "fetchall", "tc-e3-theia", "tc-e5-marple", listing=True
         )

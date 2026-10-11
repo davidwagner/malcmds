@@ -18,9 +18,8 @@ def test_trace_executable_only_subjects(tmp_path):
     # 200,000 records. Keep the release's original CDM18 Avro schema too.
     shutil.copyfile(HERE / 'fixtures/trace-no-args.bin.gz', root / 'data/sample.bin.gz')
     executable = root / 'ingest'
-    executable.write_text((HERE / 'tc-e3-trace/ingest').read_text().replace(
-        'sys.path.insert(0, str(Path(__file__).resolve().parents[1]))',
-        f'sys.path.insert(0, {str(HERE.resolve())!r})'))
+    shutil.copyfile(HERE.parent / 'datasets/tc-e3-trace/ingest', executable)
+    (tmp_path / 'scripts').symlink_to(HERE.resolve().parent / 'scripts', target_is_directory=True)
     database = tmp_path / 'commands.duckdb'
     argv = [sys.executable, str(executable), '--db', str(database)]
     subprocess.run(argv, capture_output=True, text=True, check=True)
@@ -80,7 +79,7 @@ def test_raw_audit_hex_argument_still_decodes(tmp_path):
     root = tmp_path / 'otrf-security-datasets'
     root.mkdir()
     # Authentic audit event with an independently constructed encoded argument.
-    lines = (HERE / 'otrf_audit_fixture.log').read_text().splitlines()[:6]
+    lines = (HERE / 'fixtures/otrf_audit_fixture.log').read_text().splitlines()[:6]
     lines[1] = lines[1].replace('a1="-a"', 'a1=612062')
     with tarfile.open(root / 'security-datasets.tar.gz', 'w:gz') as archive:
         add_member(archive, 'OTRF/datasets/atomic/linux/host/audit.zip', zipped('audit.log', '\n'.join(lines)))

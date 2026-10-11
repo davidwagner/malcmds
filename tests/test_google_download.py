@@ -1,6 +1,6 @@
 """Live regressions for Google's large-file confirmation using bounded curl ranges.
 
-Run explicitly: python -m unittest discover -s datasets -p test_google_download.py -v
+Run explicitly: python -m unittest discover -s tests -p test_google_download.py -v
 Requires the configured Google browser session and network access. Quota, login,
 HTTP outages, and malformed Google pages cannot be forced without test doubles;
 those paths are checked against saved real responses in test_fetch.py instead.
@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 class GoogleDownloadTests(unittest.TestCase):

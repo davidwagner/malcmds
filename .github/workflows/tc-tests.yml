@@ -1,7 +1,7 @@
 name: TC native ingestion regressions
 on:
   pull_request:
-    paths: ['datasets/**', '.github/workflows/tc-tests.yml']
+    paths: ['datasets/**', 'scripts/**', 'tests/**', '.github/workflows/tc-tests.yml']
 permissions:
   contents: read
 jobs:
@@ -12,10 +12,10 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - run: python -m pip install -r datasets/ingest-requirements.txt pytest
+      - run: python -m pip install -r scripts/ingest-requirements.txt pytest
       - name: Preserve bounded reads and committed prefixes on malformed input
         run: >-
           python -m pytest -q
-          datasets/test_ingest_tc_parallel.py::test_limit_closes_reader_before_unread_corrupt_file
-          datasets/test_ingest_tc_parallel.py::test_failed_scan_cleans_workers_and_preserves_committed_batch
-      - run: python -m pytest -q datasets/test_tc_fixtures.py datasets/test_tc_labels.py datasets/test_tc.py::TCIntegrationTests::test_inventory_and_bulk_selection
+          tests/test_ingest_tc_parallel.py::test_limit_closes_reader_before_unread_corrupt_file
+          tests/test_ingest_tc_parallel.py::test_failed_scan_cleans_workers_and_preserves_committed_batch
+      - run: python -m pytest -q tests/test_tc_fixtures.py tests/test_tc_labels.py tests/test_tc.py::TCIntegrationTests::test_inventory_and_bulk_selection

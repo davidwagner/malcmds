@@ -10,7 +10,8 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+DATASETS = Path(__file__).resolve().parents[1] / "datasets"
+SCRIPTS = DATASETS.parent / "scripts"
 
 
 @pytest.mark.parametrize('partition', ['benign', 'evaluation', 'short'])
@@ -28,7 +29,7 @@ def test_real_partition_ingestion_is_idempotent(partition, tmp_path):
     database = tmp_path / 'commands.duckdb'
     driver = (
         'import sys; from pathlib import Path; '
-        f'sys.path.insert(0, {str(DATASETS)!r}); '
+        f'sys.path.insert(0, {str(SCRIPTS)!r}); '
         'from _ingest import run; from _ingest_optc import records; '
         f'run(Path({str(root)!r}), records)'
     )
@@ -58,12 +59,12 @@ def test_authentic_short_partition_process_commands(tmp_path):
     root = tmp_path / 'optc'
     source = root / 'ecar' / 'short' / 'events.json.gz'
     source.parent.mkdir(parents=True)
-    events = [json.loads(line) for line in (DATASETS / 'optc_short_fixture.jsonl').read_text().splitlines()]
+    events = [json.loads(line) for line in (Path(__file__).parent / 'fixtures/optc_short_fixture.jsonl').read_text().splitlines()]
     with gzip.open(source, 'wt') as stream:
         stream.write(''.join(json.dumps(event) + '\n' for event in events))
     database = tmp_path / 'commands.duckdb'
     driver = ('import sys; from pathlib import Path; '
-              f'sys.path.insert(0, {str(DATASETS)!r}); '
+              f'sys.path.insert(0, {str(SCRIPTS)!r}); '
               'from _ingest import run; from _ingest_optc import records; '
               f'run(Path({str(root)!r}), records)')
     subprocess.run([sys.executable, '-c', driver, '--db', str(database)],
@@ -127,7 +128,7 @@ def test_repeated_commands_preserve_images_labels_sessions_and_limits(tmp_path):
         stream.write('\n')
         stream.write(json.dumps({'object': 'FILE', 'properties': {'command_line': 'ignore'}}) + '\n')
     driver = ('import sys; from pathlib import Path; '
-              f'sys.path.insert(0, {str(DATASETS)!r}); '
+              f'sys.path.insert(0, {str(SCRIPTS)!r}); '
               'from _ingest import run; from _ingest_optc import records; '
               f'run(Path({str(root)!r}), records)')
     database = tmp_path / 'commands.duckdb'

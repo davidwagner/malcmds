@@ -7,7 +7,7 @@ from pathlib import Path
 
 import duckdb
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 def test_command_ingestion(tmp_path):

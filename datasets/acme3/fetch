@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 os.chdir(Path(__file__).resolve().parent)
-sys.path.insert(0, str(Path.cwd().parent))
+sys.path.insert(0, str(Path.cwd().parent.parent / "scripts"))
 from _fetch import download
 
 BASE = "https://gdo168.llnl.gov/data/ACME3/"

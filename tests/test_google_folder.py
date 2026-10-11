@@ -1,6 +1,6 @@
 """End-to-end regressions for OpTC's Google folder download path.
 
-Run with datasets/tmp/google-venv/bin/python -m unittest discover -s datasets
+Run with tmp/google-venv/bin/python -m unittest discover -s tests
 -p test_google_folder.py -v. Tests use real files, gdown, and Google responses.
 Transient HTML, quotas, connection failures during a transfer, and recovery on a
 second request depend on Google; those branches cannot be forced without doubles.
@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 class GoogleFolderTests(unittest.TestCase):

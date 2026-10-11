@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 os.chdir(Path(__file__).resolve().parent)
-sys.path.insert(0, str(Path.cwd().parent))
-from _fetch import (  # noqa: E402 -- shared helpers need the parent on sys.path
+sys.path.insert(0, str(Path.cwd().parent.parent / "scripts"))
+from _fetch import (  # noqa: E402 -- shared helpers need scripts/ on sys.path
     cached_json,
     download,
     github,

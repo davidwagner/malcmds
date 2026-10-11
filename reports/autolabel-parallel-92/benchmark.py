@@ -30,7 +30,7 @@ SCENARIOS = ('CVE-2018-17246', 'python-demo', 'CVE-2024-36401')
 
 
 def _trial(sample, database, workers):
-    sys.path.insert(0, str(REPO / 'datasets'))
+    sys.path.insert(0, str(REPO / 'scripts'))
     from _ingest import run
     from _ingest_autolabel import records
     sys.argv = ['ingest', '--db', database, '--workers', workers]
@@ -126,7 +126,7 @@ def main():
         'physical_memory_bytes': psutil.virtual_memory().total,
         'source_sha256': {
             str(path.relative_to(REPO)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in (REPO / 'datasets' / '_ingest_autolabel.py', REPO / 'datasets' / '_ingest.py')
+            for path in (REPO / 'scripts' / '_ingest_autolabel.py', REPO / 'scripts' / '_ingest.py')
         },
         'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
         'timing': 'Full production ingestion run and CLI parsing; includes process startup, imports, database creation, parsing, insertion, and close. Excludes cache preparation and row comparison.',

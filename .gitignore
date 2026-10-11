@@ -2,3 +2,11 @@
 /cmds.duckdb
 /cmds.duckdb.wal
 /.pytest_cache/
+
+# Downloaded data stays local; retain dataset entry points and documentation.
+/datasets/*/*
+!/datasets/*/fetch
+!/datasets/*/ingest
+!/datasets/*/README.md
+!/datasets/autolabel/release.json
+__pycache__/

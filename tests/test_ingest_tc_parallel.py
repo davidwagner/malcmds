@@ -12,7 +12,7 @@ import duckdb
 import fastavro
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 SCHEMA = {
     'type': 'record', 'name': 'Observation',
     'fields': [
@@ -81,7 +81,7 @@ def make_root(tmp_path, collector):
     (root / 'data').mkdir(parents=True)
     (root / 'ingest').write_text(
         'import sys\nfrom pathlib import Path\n'
-        f'sys.path.insert(0, {str(DATASETS)!r})\n'
+        f'sys.path.insert(0, {str(SCRIPTS)!r})\n'
         'from _ingest import run\nfrom _ingest_tc import records\n'
         'if __name__ == "__main__":\n'
         '    run(Path(__file__).resolve().parent, records)\n'

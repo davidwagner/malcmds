@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
 from _fetch import download
 
 REVISION = "76269c612ef971a195de90cf80e57fd0973f828e"

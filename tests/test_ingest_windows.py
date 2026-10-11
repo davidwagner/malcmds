@@ -13,7 +13,8 @@ from pathlib import Path
 import duckdb
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+DATASETS = Path(__file__).resolve().parents[1] / "datasets"
+SCRIPTS = DATASETS.parent / "scripts"
 TMP = DATASETS.parent / "tmp"
 
 
@@ -24,7 +25,7 @@ def invoke(dataset, database, *options, root=None):
     else:
         code = (
             "import sys; from pathlib import Path; "
-            f"sys.path.insert(0, {str(DATASETS)!r}); "
+            f"sys.path.insert(0, {str(SCRIPTS)!r}); "
             "from _ingest import run; "
             f"from _ingest_windows import {dataset}; "
             f"run(Path({str(root)!r}), {dataset})"

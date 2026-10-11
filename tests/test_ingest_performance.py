@@ -8,7 +8,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
 def ingest(root, database, reader, *options):

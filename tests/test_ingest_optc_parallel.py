@@ -10,8 +10,9 @@ import duckdb
 import pyarrow as pa
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
-sys.path.insert(0, str(DATASETS))
+DATASETS = Path(__file__).resolve().parents[1] / "datasets"
+SCRIPTS = DATASETS.parent / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 from _ingest import SCHEMA, Command, command_table
 
 
@@ -40,7 +41,7 @@ def ingest(root, database, *options):
     """
     driver = root / 'driver.py'
     driver.write_text(
-        f'import sys\nfrom pathlib import Path\nsys.path.insert(0, {str(DATASETS)!r})\n'
+        f'import sys\nfrom pathlib import Path\nsys.path.insert(0, {str(SCRIPTS)!r})\n'
         'from _ingest import run\nfrom _ingest_optc import records\n'
         "if __name__ == '__main__':\n    run(Path(__file__).parent, records)\n"
     )

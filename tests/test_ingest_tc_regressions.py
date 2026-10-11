@@ -9,7 +9,7 @@ import duckdb
 import fastavro
 import pytest
 
-DATASETS = Path(__file__).resolve().parent
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 SCHEMA = {
     'type': 'record',
     'name': 'Observation',
@@ -55,7 +55,7 @@ def test_malformed_command_observations(collector, case, tmp_path):
     driver = root / 'ingest'
     driver.write_text(
         'import sys\nfrom pathlib import Path\n'
-        f'sys.path.insert(0, {str(DATASETS)!r})\n'
+        f'sys.path.insert(0, {str(SCRIPTS)!r})\n'
         'from _ingest import run\nfrom _ingest_tc import records\n'
         'run(Path(__file__).resolve().parent, records)\n'
     )

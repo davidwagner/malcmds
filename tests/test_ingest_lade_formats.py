@@ -185,7 +185,7 @@ def test_lade_unknown_platform_infers_unix_from_executable(tmp_path):
 
 def test_lade_fetched_runtime_installs_and_reuses_without_path_tool(tmp_path):
     """The fetched portable runtime must work on a system without pwsh on PATH."""
-    runtime = HERE / 'lade' / 'powershell-7.6.6-linux-x64.tar.gz'
+    runtime = HERE.parent / 'datasets' / 'lade' / 'powershell-7.6.6-linux-x64.tar.gz'
     assert runtime.exists(), 'Run datasets/lade/fetch to test its pinned portable runtime'
     root = tmp_path / 'isolated' / 'lade'
     root.mkdir(parents=True)

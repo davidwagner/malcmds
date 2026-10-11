@@ -1,9 +1,0 @@
-# Only downloader source and documentation belong in this repository.
-/*/*
-!/*/fetch
-!/*/README.md
-/__pycache__/
-!/*/ingest
-
-# Small immutable source excerpts for offline ingestion regression tests.
-!/fixtures/optc/
