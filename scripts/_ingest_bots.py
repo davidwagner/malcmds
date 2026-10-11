@@ -11,9 +11,11 @@ import subprocess
 import tarfile
 import urllib.request
 from collections import defaultdict
+from itertools import chain
 from pathlib import Path
 
 from _ingest import Command, normalize, select_files, shell_commands
+from _ingest_bots_iocs import label_ioc_commands
 from _ingest_misc import audit_events, audit_value, sudo_command_argv
 from _ingest_windows import event_commands, json_fields, text_fields, xml_events
 
@@ -211,8 +213,9 @@ def records(root, options):
     from _ingest_processes import ProcessCommands
 
     with ProcessCommands() as processes:
-        yield from observations(root, options, processes)
-        yield from processes.commands()
+        yield from label_ioc_commands(chain(
+            observations(root, options, processes), processes.commands(),
+        ))
 
 
 def observations(root, options, processes):

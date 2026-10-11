@@ -64,3 +64,73 @@ def test_wrong_host_time_path_and_file_inspection(tmp_path):
         _insert(con, command_table(commands, 'splunk-bots'))
         assert con.execute("SELECT count(*) FROM COMMANDS WHERE label != 'unknown'").fetchone()[0] == 0
         assert con.execute('SELECT count(*) FROM COMMANDS').fetchone()[0] == len(cases)
+
+
+def test_native_ioc_commands_through_database(tmp_path):
+    """Published Windows, osquery and shell commands retain IOC labels in storage."""
+    from _ingest_bots import history_commands, osquery_commands
+    from _ingest_bots_iocs import label_ioc_commands
+    from _ingest_windows import event_commands
+
+    fixtures = json.loads((Path(__file__).parent / 'fixtures/bots/iocs.json').read_text())
+    commands = []
+    for fixture in fixtures:
+        row = fixture['event']
+        raw, host = row['_raw'], row['host'].removeprefix('host::')
+        record = f"{fixture['bucket']}:{fixture['row']}"
+        kind = row['sourcetype'].removeprefix('sourcetype::').lower()
+        if kind == 'osquery:results':
+            commands.extend(osquery_commands(json.loads(raw), host, record, 1))
+        elif kind == 'bash_history':
+            commands.extend(history_commands(raw, record, host))
+        elif kind.startswith('xmlwineventlog'):
+            for number, fields in xml_events(io.StringIO(raw)):
+                commands.extend(event_commands(fields, 'splunk-bots', record, number))
+        else:
+            commands.extend(event_commands(text_fields(raw), 'splunk-bots', record, 1))
+    with duckdb.connect(str(tmp_path / 'iocs.duckdb')) as con:
+        _initialize(con)
+        _insert(con, command_table(label_ioc_commands(commands), 'splunk-bots'))
+        rows = con.execute('SELECT pgm,args,label,group_id FROM COMMANDS').fetchall()
+    malicious = [(pgm, args) for pgm, args, label, _ in rows if label == 'malicious']
+    assert len(malicious) == 22, 'Native parser changes must preserve all 22 newly identified IOC commands'
+    assert any(pgm.endswith('hdoor.exe') for pgm, _ in malicious)
+    assert any('45.77.53.176' in ' '.join(args) for _, args in malicious)
+    assert any('frothlywebcode' in ' '.join(args) for _, args in malicious)
+    assert all(group is None for _, _, _, group in rows)
+    assert any(pgm == '/tmp/colonelnew' and label == 'unknown' for pgm, _, label, _ in rows), 'An unmatched exploit command must not become benign'
+
+
+def test_ioc_policy_through_shell_parser_and_database(tmp_path):
+    """The pinned indicator set is literal, case-insensitive and command-specific."""
+    from _ingest import Command
+    from _ingest_bots import history_commands
+    from _ingest_bots_iocs import label_ioc_commands
+
+    # Keep expectations independent of the implementation's list. This catches
+    # accidental removal of an indicator when the policy or parser changes.
+    indicators = [
+        '45.77.53.176', '104.207.83.63', '139.198.18.205', '35.153.154.221',
+        '209.107.196.112', '82.102.18.111', 'botsv3.ministerofmayhem.com',
+        'hdoor.exe', 'iexeplorer.exe', 'definitelydontinvestigatethisfile.sh',
+        'frothly-brewery-financial-planning-fy2019-draft.xlsm',
+        '586ef56f4d8963dd546163ac31c865d7', 'akiajogcdxj5nw5pxupa',
+        'frothlywebcode', 'hyunki1984@naver.com', 'yunki1984@naver.com',
+    ]
+    commands = []
+    for index, indicator in enumerate(indicators):
+        commands.extend(history_commands(f"echo '{indicator.upper()}'", str(index), 'session'))
+    commands.extend(history_commands('echo 45x77x53x176; echo ordinary', 'negative', 'hdoor.exe'))
+    commands.extend(history_commands('echo hdoor.exe; echo ordinary', 'siblings', 'session'))
+    commands.append(Command('echo', ['ordinary'], 'known', label='malicious'))
+    commands.append(Command('echo', ['hdoor.exe'], 'benign', label='benign'))
+    with duckdb.connect(str(tmp_path / 'policy.duckdb')) as con:
+        _initialize(con)
+        _insert(con, command_table(label_ioc_commands(commands), 'splunk-bots'))
+        labels = dict(con.execute('SELECT record_id,label FROM COMMANDS').fetchall())
+    assert all(labels[f'{index}:shell:0'] == 'malicious' for index in range(len(indicators))), 'All 16 pinned indicators must survive shell parsing and storage'
+    assert labels['negative:shell:0'] == labels['negative:shell:1'] == 'unknown'
+    assert labels['siblings:shell:0'] == 'malicious'
+    assert labels['siblings:shell:1'] == 'unknown', 'Another command in the same shell input must not spread its IOC label'
+    assert labels['known'] == 'malicious'
+    assert labels['benign'] == 'benign'
