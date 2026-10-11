@@ -1,6 +1,5 @@
 """Read independent AVIATOR exports concurrently, preserving source order."""
 
-import codecs
 import multiprocessing
 import ntpath
 import re
@@ -15,37 +14,10 @@ from types import SimpleNamespace
 
 import pyarrow as pa
 from _ingest import SCHEMA, command_table, select_files, windows_split
-from _ingest_windows import Budget, aviator_priority, parse_log
+from _ingest_aviator_xml import ExportReader, export_encoding, parse_export
+from _ingest_windows import Budget, aviator_priority
 
 ARCHIVE = "10.35097-8s5b0u5yqgfs2y0d.tar"
-
-
-def export_encoding(stream):
-    """Select AVIATOR's declared codec or validated UTF-8/Windows export codec."""
-    prefix = stream.read(4096)
-    stream.seek(0)
-    if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
-        return "utf-16"
-    if prefix.startswith(codecs.BOM_UTF8):
-        return "utf-8-sig"
-    declaration = re.match(br'''\s*<\?xml\b[^>]*encoding=["']([^"']+)["']''', prefix)
-    if declaration:
-        encoding = codecs.lookup(declaration[1].decode("ascii")).name
-        if encoding not in {"utf-8", "utf-16", "utf-16-le", "utf-16-be", "cp1252", "iso8859-1", "ascii"}:
-            raise ValueError(f"Unsupported AVIATOR XML encoding: {encoding}")
-        return encoding
-    decoder = codecs.getincrementaldecoder("utf-8")()
-    try:
-        while chunk := stream.read(1024 * 1024):
-            decoder.decode(chunk)
-        decoder.decode(b"", final=True)
-    except UnicodeDecodeError:
-        # Publisher Windows exports contain E4 (ä) and F1 (ñ); preserve the
-        # exported text, including mojibake already present in raw EVTX.
-        return "cp1252"
-    finally:
-        stream.seek(0)
-    return "utf-8"
 
 
 def export_names(zipped):
@@ -57,18 +29,19 @@ def export_names(zipped):
     )
 
 
-def export_commands(root, member, name, stream, budget):
+def export_commands(root, member, name, stream, budget, *, accelerated=True):
     """Read one export with its archive-derived source IDs and labels."""
     benign = "normal_operation" in name
     rules = _procedure_commands(str(root), Path(member.name).stem[3:]) if not benign else ()
-    for command in parse_log(
+    for command in parse_export(
         stream,
         f"{ARCHIVE}/{member.name}/{name}",
         root.name,
         budget,
         "benign" if benign else "malicious-group",
         None if benign else f"aviator:{Path(member.name).stem[3:]}",
-        encoding=export_encoding(stream) if name.endswith(".xml") else None,
+        encoding=export_encoding(stream, validate=not accelerated) if name.endswith(".xml") else None,
+        accelerated=accelerated,
     ):
         if _matches_procedure(command, rules):
             command.label, command.group_id = "malicious", None
@@ -149,13 +122,19 @@ def records(root, options):
                         break
         if workers <= 1 or options.max_records is not None or options.limit is not None:
             budget = Budget(options)
+            accelerated = options.max_records is None and options.limit is None
             for member in members:
                 binary = archive.extractfile(member)
                 assert binary is not None
                 with binary, zipfile.ZipFile(binary) as zipped:
                     for name in export_names(zipped):
-                        with zipped.open(name) as stream:
-                            yield from export_commands(root, member, name, stream, budget)
+                        stream = zipped.open(name)
+                        if accelerated:
+                            stream = ExportReader(stream)
+                        with stream:
+                            yield from export_commands(
+                                root, member, name, stream, budget, accelerated=accelerated
+                            )
                         if budget.done:
                             return
             return
@@ -197,7 +176,7 @@ def write_export(root, member, name, batch_size, output):
     with tarfile.open(root / ARCHIVE, "r:") as archive:
         binary = archive.extractfile(member)
         assert binary is not None
-        with binary, zipfile.ZipFile(binary) as zipped, zipped.open(name) as stream, \
+        with binary, zipfile.ZipFile(binary) as zipped, ExportReader(zipped.open(name)) as stream, \
                 pa.OSFile(str(output), "wb") as sink, \
                 pa.ipc.new_stream(sink, SCHEMA, options=ipc_options) as writer:
             batch = []
