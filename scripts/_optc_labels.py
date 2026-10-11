@@ -1,12 +1,14 @@
 """Transient published OpTC labels; no label evidence is stored in PROCESS_LAUNCHES."""
 
 import csv
+import io
 import json
 import zipfile
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import simdjson
 from isal import igzip as gzip
 
 EASTERN = ZoneInfo('America/New_York')
@@ -32,18 +34,34 @@ def process_id(event):
     return event.get('objectID') if event.get('object') == 'PROCESS' else event.get('actorID')
 
 
+def _label_event(parser, line):
+    # Keep the standard decoder's handling of a BOM in text-mode gzip input.
+    if isinstance(line, str) and line.startswith('\ufeff'):
+        return json.loads(line)
+    try:
+        return parser.parse(line, recursive=True)
+    except (ValueError, RuntimeError, UnicodeError):
+        # Preserve json.loads support for UTF-16/32 ZIP lines, large numbers and
+        # nonfinite values, as well as its errors for malformed label evidence.
+        return json.loads(line)
+
+
+def _label_events(stream):
+    parser = simdjson.Parser()
+    for line in stream:
+        if line.strip():
+            yield _label_event(parser, line)
+
+
 def read_events(path):
-    """Stream published JSON lines, whether stored in ZIP or gzip archives."""
+    """Stream validated label events with buffered I/O and native JSON decoding."""
     if path.suffix == '.zip':
-        with zipfile.ZipFile(path) as archive, archive.open('malicious.json') as stream:
-            for line in stream:
-                if line.strip():
-                    yield json.loads(line)
+        with zipfile.ZipFile(path) as archive, archive.open('malicious.json') as member, \
+                io.BufferedReader(member, buffer_size=1024 * 1024) as stream:
+            yield from _label_events(stream)
     else:
         with gzip.open(path, 'rt') as stream:
-            for line in stream:
-                if line.strip():
-                    yield json.loads(line)
+            yield from _label_events(stream)
 
 
 def load_labels(root):

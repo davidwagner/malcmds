@@ -198,3 +198,136 @@ def test_export_process_propagation_and_unresolved_tasks(tmp_path):
     result = ingest(root, limited, '--max-records', '1')
     assert result.returncode == 0, result.stderr
     assert labels(limited) == {exported['id']: ('malicious', None)}
+
+
+@pytest.mark.parametrize('archive_kind', ['zip', 'gzip'])
+def test_export_stream_encodings_and_long_lines(tmp_path, archive_kind):
+    """Buffered label reads must retain escaped PROCESS names and whole long lines."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    events = [synthetic_event(name, '2019-09-23T12:00:00-04:00', name)
+              for name in ('literal', 'escaped', 'long', 'unlabeled')]
+    events[0]['properties']['command_line'] = 'cmd.exe /c café'
+    lines = [json.dumps(events[0], ensure_ascii=False),
+             json.dumps(events[1]).replace('"PROCESS"', r'"\u0050ROCESS"'),
+             json.dumps(dict(events[2], padding='x' * (2 * 1024 * 1024))),
+             json.dumps({'object': 'FLOW', 'hostname': events[3]['hostname'],
+                         'id': events[3]['id'], 'properties': {'value': 'PROCESS'}})]
+    payload = ('\n\r\n' + '\r\n'.join(lines)).encode('utf-8')
+    if archive_kind == 'zip':
+        with zipfile.ZipFile(root / 'labels/reviewed/malicious.zip', 'w',
+                             compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('malicious.json', payload)
+    else:
+        (root / 'labels/inria/original/ground_truth_sc1_evts_sysclient0201.json.gz').write_bytes(
+            gzip.compress(payload))
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(e) for e in events])
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(root, database, '--workers', '1')
+    assert result.returncode == 0, result.stderr
+    actual = labels(database)
+    assert all(actual[name] == ('malicious', None) for name in ('literal', 'escaped', 'long')), (
+        'ZIP/gzip buffering or JSON filtering lost a published process label')
+    assert actual['unlabeled'][0] == 'malicious-group', 'A FLOW export must not label a process'
+    assert next(row[2] for row in rows(database) if row[4] == 'literal:0') == ['/c', 'café']
+
+
+@pytest.mark.parametrize('archive_kind', ['zip', 'gzip'])
+def test_corrupt_nonprocess_label_record_fails_ingestion(tmp_path, archive_kind):
+    """Skipping unrelated labels must not hide invalid or truncated JSON evidence."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    payload = b'{"object": "PROCES'
+    if archive_kind == 'zip':
+        with zipfile.ZipFile(root / 'labels/reviewed/malicious.zip', 'w') as archive:
+            archive.writestr('malicious.json', payload)
+    else:
+        (root / 'labels/inria/original/ground_truth_sc1_evts_sysclient0201.json.gz').write_bytes(
+            gzip.compress(payload))
+    event = synthetic_event('launch', '2019-09-23T12:00:00-04:00', 'launch')
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(event)])
+    result = ingest(root, tmp_path / 'commands.duckdb')
+    assert result.returncode != 0, 'Malformed label evidence was silently discarded'
+    assert 'JSONDecodeError' in result.stderr
+
+
+@pytest.mark.parametrize('archive_kind', ['zip', 'gzip'])
+def test_label_json_compatibility(tmp_path, archive_kind):
+    """Native JSON decoding must preserve stdlib duplicate keys and large integers."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    names = ['last-process', 'last-flow', 'large', 'nan', 'surrogate']
+    events = [synthetic_event(name, '2019-09-23T12:00:00-04:00', name) for name in names]
+    events[2]['id'] = 123456789012345678901234567890
+    lines = [json.dumps(events[0]).replace('"object": "PROCESS"',
+                                         '"object": "FLOW", "object": "PROCESS"'),
+             json.dumps(events[1]).replace('"object": "PROCESS"',
+                                         '"object": "PROCESS", "object": "FLOW"'),
+             json.dumps(events[2]), json.dumps(dict(events[3], unused=float('nan'))),
+             json.dumps(dict(events[4], unused='\ud800'))]
+    payload = '\n'.join(lines).encode()
+    if archive_kind == 'zip':
+        with zipfile.ZipFile(root / 'labels/reviewed/malicious.zip', 'w') as archive:
+            archive.writestr('malicious.json', payload)
+    else:
+        (root / 'labels/inria/original/ground_truth_sc1_evts_sysclient0201.json.gz').write_bytes(
+            gzip.compress(payload))
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(e) for e in events])
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(root, database)
+    assert result.returncode == 0, result.stderr
+    actual = labels(database)
+    assert actual['last-flow'][0] == 'malicious-group', 'JSON duplicate keys must use the last value'
+    for record in ('last-process', str(events[2]['id']), 'nan', 'surrogate'):
+        assert actual[record] == ('malicious', None), 'Native decoder changed published event identity'
+
+
+@pytest.mark.parametrize('encoding', ['utf-8-sig', 'utf-16-be', 'utf-32-be'])
+def test_zip_label_json_encodings(tmp_path, encoding):
+    """The ZIP reader retains encodings recognized by json.loads(bytes)."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    event = synthetic_event('encoded', '2019-09-23T12:00:00-04:00', 'encoded')
+    with zipfile.ZipFile(root / 'labels/reviewed/malicious.zip', 'w') as archive:
+        archive.writestr('malicious.json', json.dumps(event).encode(encoding))
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(event)])
+    database = tmp_path / 'commands.duckdb'
+    result = ingest(root, database)
+    assert result.returncode == 0, result.stderr
+    assert labels(database)['encoded'] == ('malicious', None)
+
+
+def test_gzip_label_bom_remains_an_input_error(tmp_path):
+    """The native parser must not silently accept a BOM rejected by the text reader."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    event = synthetic_event('bom', '2019-09-23T12:00:00-04:00', 'bom')
+    (root / 'labels/inria/original/ground_truth_sc1_evts_sysclient0201.json.gz').write_bytes(
+        gzip.compress(json.dumps(event).encode('utf-8-sig')))
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(event)])
+    result = ingest(root, tmp_path / 'commands.duckdb')
+    assert result.returncode != 0
+    assert 'JSONDecodeError' in result.stderr
+
+
+@pytest.mark.parametrize('archive_kind', ['zip', 'gzip'])
+def test_label_archive_integrity(tmp_path, archive_kind):
+    """Buffered native decoding must still reject corrupt ZIP and gzip checksums."""
+    root = tmp_path / 'optc'
+    install_labels(root, [])
+    event = synthetic_event('crc', '2019-09-23T12:00:00-04:00', 'crc')
+    payload = json.dumps(event).encode()
+    if archive_kind == 'zip':
+        path = root / 'labels/reviewed/malicious.zip'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('malicious.json', payload)
+        damaged = path.read_bytes().replace(b'crc', b'bad', 1)
+    else:
+        path = root / 'labels/inria/original/ground_truth_sc1_evts_sysclient0201.json.gz'
+        damaged = gzip.compress(payload)
+        damaged = damaged[:-8] + bytes([damaged[-8] ^ 1]) + damaged[-7:]
+    path.write_bytes(damaged)
+    write_stream(root / 'ecar/evaluation/a.json.gz', [json.dumps(event)])
+    result = ingest(root, tmp_path / 'commands.duckdb')
+    assert result.returncode != 0, 'A corrupt label archive was accepted'
+    assert 'CRC' in result.stderr
