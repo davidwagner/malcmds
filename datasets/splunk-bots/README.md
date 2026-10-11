@@ -1,69 +1,33 @@
 # Splunk Boss of the SOC, version 3
 
-BOTS v3 contains logs from a fictional organization's Windows and Unix/Linux systems, applications, cloud services and network. It was created for a security investigation competition. The data includes ordinary activity and attacks, with commands in process-creation events, Linux audit events and shell history.
+BOTS v3 contains Windows and Unix/Linux logs from a fictional organization, assembled for a security investigation competition. It includes ordinary activity and attacks. The download stores events in Splunk's native indexed format.
 
-## What the Splunk app contains
+## Mapping to the database
 
-Splunk is software for storing, searching and analyzing logs. A Splunk **app** is a folder of files that extends or configures Splunk. It can contain settings, dashboards and data.
+Commands come from Windows process events, WinHostMon and osquery process records, Bash and package history, sudo messages, and joined Linux audit events. Repeated observations of an identified process are combined, preferring its creation event. Unidentified process snapshots, including the release's `ps` listings, are omitted.
 
-The BOTS app, `botsv3_data_set`, contains the event data already organized for searching in Splunk, plus configuration files that tell Splunk how to read it. The events belong to an index named `botsv3`. An index is a named collection of stored events that Splunk can search.
+Process arguments become `pgm` and `args`. Bash history also retains its full input in `shell_input` and remaining shell syntax in `other_tokens`.
 
-The app's `default/` directory contains configuration files. Its `var/lib/splunk/botsv3/db/` directory contains the events and search indexes. The event data combines multiple log formats and sources.
-
-## Records containing commands
-
-| Records | Command fields | Event ID, time and session |
-| --- | --- | --- |
-| Sysmon, source type `xmlwineventlog:microsoft-windows-sysmon/operational`, Event ID 1 | `CommandLine` contains the full command; `Image` names the program. | `UtcTime` and XML `System/TimeCreated/@SystemTime` give the event time. `EventRecordID` identifies the record within a computer's event log. `LogonGuid` identifies a Windows logon session; `LogonId` identifies it on a particular computer until restart. |
-| Windows event logs, source type `wineventlog`, Security Event ID 4688 | The process-creation event contains the program name and, when command-line auditing is enabled, its command line. | Event time and record number identify the event within the computer's Security log. Subject and target logon IDs associate it with Windows logon sessions. |
-| Linux audit, source type `linux_audit`, `type=EXECVE` | `argc` is the argument count; `a0`, `a1`, and subsequent fields give the program and arguments. `PROCTITLE` records can also contain the arguments in encoded form. The related `SYSCALL` record gives the executable in `exe`. | `msg=audit(timestamp:serial)` gives the event time and event number and connects records belonging to the same execution. The computer plus timestamp and serial identify the event. `ses` identifies the audit session on that computer until restart. |
-| Shell history, source type `bash_history` | The raw record contains the text entered in the shell, including shell operators and quoting. | Some history records include timestamps. The history has no login-session ID. |
-| Process lists, source types `osquery:results`, `ps`, `top`, `perfmonmk:process` | Process-list records contain running programs; the fields depend on the query or listing. For osquery, `columns.cmdline` contains a command line when the query includes that column. | The event time gives the time of the process listing. Repeated listings can include the same running command. |
-
-Splunk's `_time` is the event timestamp, `_raw` contains the original event text, and `sourcetype` identifies its format. `host` identifies the computer and combines with Windows logon IDs or Linux audit session numbers to distinguish sessions on different computers. `source` identifies the originating log. `_cd` identifies an event's location within the Splunk index.
+- `record_id` identifies the archive, native bucket, exported event position and command within the event. Audit records also retain their native event identifier.
+- `session_id` starts with `splunk-bots:` and uses the available source identity: host and Windows logon ID; host, user and parent process for osquery; host and history path for shell history; host, process ID and start time for WinHostMon; or the Linux audit session and source, with parent process as fallback.
+- `group_id` is always NULL.
 
 ## Labels
 
-The competition's incident questions describe attacks to investigate. The dataset has no per-command malicious/benign labels or session labels. It includes lookup tables such as ransomware file extensions and dynamic DNS providers; these can help identify suspicious activity while investigating an incident.
+The release has no per-command truth column. The reader derives best-effort `malicious` labels from:
 
-Sources: [official release and list of log sources](https://github.com/splunk/botsv3), [BOTS v3 archive](https://botsdataset.s3.amazonaws.com/botsv3/botsv3_data_set.tgz).
+- Matched FYODOR-L Frothly inventory exploit launches, using process event type, host, time, executable, endpoint and payload arguments.
+- The confirmed FYODOR-L registry-backed PowerShell payload and its `Updater` scheduled task, using the recorded command and event/process identity.
+- Literal, case-insensitive indicator strings in the command's own program or arguments, from the 16-entry list in the pinned [`bots_rich.py`](https://github.com/kmkholm/moe-mamba-soc-triage/blob/44ef4e047c5dbff13f52bc3856b8060f0524f192/src/data/bots_rich.py). Parent-process text and other commands sharing a history line do not transfer a match.
+
+Commands without a match remain `unknown`. Indicator matches are imperfect: inspecting `hdoor.exe` also matches. Conversely, the recorded `/tmp/colonel` and `colonelnew` attack activity is absent from the list. Neither all PowerShell commands nor all activity on FYODOR-L receives an attack label.
+
+The rules are in [`scripts/_ingest_bots.py`](../../scripts/_ingest_bots.py) and [`scripts/_ingest_bots_iocs.py`](../../scripts/_ingest_bots_iocs.py).
 
 ## Ingestion
 
-`./ingest` reads the original indexed archive using Splunk's native `exporttool`.
-It uses `SPLUNK_HOME` when set; otherwise it downloads the pinned Splunk 9.1.3
-Linux x86-64 distribution, verifies its SHA-256, and caches it under
-`../../tmp/ingest/splunk`. It runs the offline exporter only. Extracted buckets
-and CSV exports are cached under `../../tmp/ingest/`; source files are unchanged.
+Run `./ingest` from this directory. It reads the archive through Splunk's offline `exporttool`, using `SPLUNK_HOME` when provided or downloading and verifying the pinned tool otherwise. Exports are cached under `../../tmp/ingest/`.
 
-Commands come from Sysmon XML, rendered Windows process events, WinHostMon
-process command lines, osquery `columns.cmdline`, Bash history, sudo messages,
-joined Linux audit events, and `ps` process tables. WinHostMon's outer value
-quotes are removed only when they wrap the entire value; quotes belonging to
-the executable or its arguments are preserved for argument parsing. The `ps` collector separates COMMAND from
-ARGS and joins arguments with underscores; ingestion restores those separators.
-Process titles, kernel threads, `<noArgs>` rows, and `top`/performance listings
-without arguments are excluded. Audit records join across buckets by host and
-audit event ID. The release contains 112 audit records; the join retains these
-small records while streaming all other sources.
+Use `--db ../../tmp/bots.duckdb --sample-files 1 --seed 83 --max-records 100000` for a separate bounded import. Use a fresh database when evaluating changed labels; a completed import is skipped on later runs.
 
-- `record_id`: archive name, native index bucket name, exported event ordinal,
-  and the XML event/JSON object/process-table row/shell-command ordinal as needed.
-  Audit IDs additionally include the original `audit(timestamp:serial)` value.
-- `label`: `unknown`; competition questions are not individual command labels.
-- `group_id`: NULL.
-- `session_id`: host and native LogonGuid when present; otherwise host, collection
-  scope and numeric logon ID. Osquery uses host, UID, and parent PID (audit UID
-  when no parent is present). Shell history uses host and history-file path;
-  process tables add user and TTY. WinHostMon uses host, `ProcessId`, and
-  `StartTime` to distinguish process instances when login/parent IDs are absent.
-  Audit records use host, source and `ses`, with
-  parent PID as fallback. All IDs start with `splunk-bots`.
-
-The complete native export contains 1,944,094 source events across 17 buckets.
-Use `--sample-files` to select buckets reproducibly and `--max-records` to bound
-source records per selected bucket. Normal invocations process every bucket.
-
-Full local validation ingested 320,479 commands from all 17 buckets. A seeded
-bucket passed repeat-ingestion equality checks; a regression verifies that apt
-history metadata produces only the recorded `apt-get install netcat` command.
+Source: [official BOTS v3 release](https://github.com/splunk/botsv3). See the shared [database schema](../../schema.md) for column definitions.

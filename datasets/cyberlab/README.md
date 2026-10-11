@@ -1,35 +1,23 @@
 # CyberLab honeynet
 
-SSH and Telnet connections to a distributed Cowrie honeynet in 2019–2020. The logs contain remote shell input and connection events targeting Unix/Linux. Early sessions use an emulated shell; from November 2019, the collection also includes sessions on real Ubuntu instances.
+CyberLab records SSH and Telnet connections to a Cowrie honeynet in 2019–2020. It captures remote shell input on emulated Unix/Linux systems and, from November 2019, real Ubuntu instances. Daily `cyberlab_YYYY-MM-DD.json.gz` files contain JSON objects that group events by connection.
 
-Daily files named `cyberlab_YYYY-MM-DD.json.gz` contain JSON arrays. Each element maps one session ID to an array of events. The filename date is the UTC day on which the connections began.
+## Mapping to the database
 
-## Commands and fields
+The reader prefers original `cowrie.command.input` events. When a connection has no original input, it uses `cowrie.command.success` and `cowrie.command.failed` messages after removing Cowrie's prefixes. Handler echoes do not duplicate original input.
 
-| Field | Meaning |
-| --- | --- |
-| `eventid` | Event type. Command events use `cowrie.command.success`, `cowrie.command.failed`, or `cowrie.command.input`. |
-| `message` | Command text and a prefix indicating the event type. Successful command messages use `Command found: `; input messages use `CMD: `. The command follows the prefix. Failed-command events also contain command text. |
-| `timestamp` | UTC event timestamp in ISO 8601 format. |
-| `session_id` | Connection identifier, also used as the containing object's key. |
-| `sensor`, `dst_host_identifier`, `dst_ip_identifier` | Identify the honeypot associated with a session. Together with the daily file and session ID, they distinguish connections across honeypots. |
+Shell input is split into program-and-argument rows. `shell_input` retains the original input, and `other_tokens` retains shell syntax outside the program and arguments. Handler-only messages have no complete `shell_input`.
 
-A record can be identified by the filename, session object's position in the file, and event's position within that session. Events have no separate unique event ID.
+- `record_id` identifies the daily file, connection object's position, connection ID, event position and parsed command.
+- `session_id` combines `cyberlab:`, the daily file, destination host identifier (or sensor), and Cowrie connection ID.
+- `label` is `malicious` for each retained remote command; `group_id` is NULL.
 
-## Labels
-
-The publisher describes the honeypot connections as attack sessions. Commands are associated with those sessions through `session_id` and the containing JSON object. The files have no separate per-command malicious/benign field or benign dataset. The `success` and `failed` event types report how Cowrie handled a command.
-
-Sources: [dataset description and files](https://zenodo.org/records/3687527), [Cowrie event reference](https://docs.cowrie.org/en/latest/OUTPUT.html).
+These labels are best-effort attribution to attacker input captured by the honeypot. Individual rows have not all been independently reviewed. An attacker-issued `uname -a` remains `malicious`, including when Cowrie reports failure; the label does not mean that the command's syntax is inherently harmful. The connection is still available in `session_id`.
 
 ## Ingestion
 
-Run `./ingest` to append commands to the root `cmds.duckdb`. Repeated runs preserve one row per source command. For a reproducible sample, use `./ingest --db ../../tmp/sample.duckdb --sample-files 2 --seed 83 --limit 100`.
+Run `./ingest` from this directory to append to the root `cmds.duckdb`. To inspect a separate sample, run `./ingest --db ../../tmp/cyberlab.duckdb --sample-files 2 --seed 83 --limit 100`. Repeated imports preserve one row per source command.
 
-The reader streams daily compressed JSON arrays. It uses cowrie.command.input when a session contains original input; otherwise it reads success/failed command messages after removing their documented prefixes. This avoids counting Cowrie's handler echoes in addition to the original input. Shell syntax is parsed into individual commands.
+The published January 29, 2020 file is truncated. The reader retains its complete JSON objects.
 
-`record_id` is daily filename + zero-based session-object index + session ID + event index + normalized-command index. `session_id` is `cyberlab:` + daily filename + destination host identifier (sensor fallback) + Cowrie session ID. Honeypot attack sessions have `label=malicious-group` and `group_id=session_id`.
-
-Validation sampled daily files with seed 83 and checked 100 normalized commands. A real-data end-to-end test imports 50 commands twice and checks identical stored rows, identifiers, labels and typed argument lists.
-
-The published Cyberlab file `cyberlab_2020-01-29.json.gz` is truncated. `./fetch` verifies its known publisher checksum, and ingestion keeps all complete JSON objects.
+Sources: [dataset and description](https://zenodo.org/records/3687527), [Cowrie event reference](https://docs.cowrie.org/en/latest/OUTPUT.html). See the shared [database schema](../../schema.md) for column definitions.

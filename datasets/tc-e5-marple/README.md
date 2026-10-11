@@ -1,47 +1,30 @@
 # DARPA Transparent Computing E5 — MARPLE
 
-MARPLE records Windows activity. This dataset contains activity from DARPA Transparent Computing engagement E5, including scripted benign activity and red-team attacks. The files contain process, execution, file and network records in Avro format using Common Data Model version 20 (CDM20).
+MARPLE records Windows activity from DARPA's E5 exercise in May 2019, including scripted benign activity and red-team attacks. Its Avro files use Common Data Model version 20 (CDM20).
 
-## Commands and fields
+## Mapping to the database
 
-Commands appear in `Subject.cmdLine`. An example is `scp  -r C:\Users\admin\Pictures admin@128.55.12.119:./backup/`. An `EVENT_EXECUTE` event links to the Subject containing this command through `Event.predicateObject`. The record inside `TCCDMDatum.datum` identifies whether it is a Subject or Event; some of these records have an incorrect outer `type` value of `RECORD_HOST`.
+The reader takes command lines from process `Subject` records and execution/process events. The inner Avro record identifies its type; some outer records are mislabeled `RECORD_HOST`. Program names and arguments are parsed using Windows quoting. These are process observations, so `shell_input` is NULL and `other_tokens` is empty. Repeated observations of the same process creation are combined; distinct executions remain separate.
 
-| Field | Meaning |
-| --- | --- |
-| `Event.uuid` | Unique event ID. |
-| `Event.type` | Operation recorded by the event, such as `EVENT_EXECUTE` or `EVENT_FORK`. |
-| `Event.timestampNanos` | Event time, in nanoseconds since the Unix epoch. |
-| `Subject.uuid` | Unique Subject ID, used to associate the command with events. |
-| `Subject.cmdLine` | Command line, including arguments, or the process name or title. |
-| `Subject.startTimestampNanos` | Start time, in nanoseconds since the Unix epoch. |
-| `Event.subject` | UUID of the Subject performing the operation; joins to `Subject.uuid`. |
-| `Event.predicateObject` | UUID of the target of the operation. When the target is a Subject, it joins to `Subject.uuid` for its command. |
+- `record_id` combines host, record type, source UUID and a suffix distinguishing observations. Source UUIDs allow lookup in the original files.
+- `session_id` combines dataset, host and collector session, followed by a native Windows session ID when present. Otherwise it uses the parent process UUID, falling back to the process UUID. A collector session is not a login session.
+- Zero/missing host UUIDs use the filename's producer prefix. Filenames also distinguish `marple-1`, `marple-2` and `marple-3` for labeling.
 
-The CDM schema has no common field for a login or connection session ID.
+## Labels
 
-## Malicious and benign activity
+MARPLE-2 and MARPLE-3 commands are `benign`. MARPLE-1 commands are `benign` outside these two reported attacks, in US Eastern daylight time (UTC−04:00):
 
-`ground_truth/TA51_Final_report_E5.pdf` and its `.docx` version describe the red-team attacks: actions, affected computers, times, commands and file or network details. Commands are associated with an attack by matching these details to the event time, computer and command. The dataset contains both benign and malicious activity, and individual commands have no malicious/benign field.
+- May 9, 2019, 13:57–14:02.
+- May 17, 2019, 13:00–13:29.
 
-Some MARPLE records have an all-zero `TCCDMDatum.hostId`. Filenames identify the MARPLE instance that produced each file, such as `ta1-marple-1-e5-official-1`.
+The full ending minute is included. Within these intervals, commands keep the existing attack labels: `malicious` when matched to direct annotations, or `malicious-group` for membership in the attack episode. An ordinary background command can belong to such a group when its individual role is unresolved. `group_id` is `dataset:host:episode:first-last`, with Unix-nanosecond endpoints; all other labels have NULL `group_id`.
 
-## Sources
+Unrecognized filename instances and missing timestamps remain `unknown`. A browser launch before an attack stays benign even if that process is compromised later. For example, `firefox.exe` on MARPLE-1 at May 9 13:56:59 is benign; at 13:57:00 the attack rules apply.
 
-- [official E5 release notes](https://github.com/darpa-i2o/Transparent-Computing/blob/244ae2401032ce92ac3b72f49b8039cae67d60d6/README.md)
-- [official release files](https://drive.google.com/drive/folders/1okt4AYElyBohW4XiOBqmsvjwXsnUjLVf)
-- [CDM20 schema](https://drive.google.com/file/d/12_rZEiaPLQmFfnu0YUeMFMcqHxJWAg_D/view)
-- [CDM design paper](https://www.usenix.org/system/files/tapp2020-paper-khoury.pdf)
+These are best-effort labels based on the official report's two attacks on MARPLE-1. They accept the report's uncertainty about its unexplained May 13 Mimikatz alert. Intervals are in [`scripts/_tc_attacks.json`](../../scripts/_tc_attacks.json); [`TCAnnotations.label()`](../../scripts/_tc_labels.py) applies them.
 
 ## Ingestion
 
-Run `./ingest` from this directory, or `datasets/tc-e5-marple/ingest` from the repository root. The executable installs its declared Python dependencies with `uv`. It streams every completed Avro file in `data/`, including every binary member of E3 tar archives, into the root `cmds.duckdb`. A malformed record is reported with its source and Avro block number; the parser resumes at the next block, preserving the rest of the file. Incomplete download files (`.part` and `.part.bad`) are excluded. `--db PATH`, `--sample-files N --seed N`, `--max-records N` (per file), and `--limit N` support bounded validation.
+Run `./ingest` from this directory. For a separate bounded import, use `./ingest --db ../../tmp/marple.duckdb --sample-files 1 --seed 3 --max-records 200000`. Use a fresh database when evaluating changed labels; a completed import is skipped on later runs.
 
-Commands come from process `Subject.cmdLine` snapshots and `Event.properties.cmdLine` or `CommandLine` on execute events (also Windows process-creation/fork and exit events). The inner Avro union identifies the record type. Thread snapshots, executable-only Subject snapshots, placeholders, and process titles such as `sshd: admin [priv]` are excluded. Execution events with a full command field retain genuine zero-argument commands. These are captured process arguments: operators passed to a program remain arguments. Windows uses Windows quoting rules. Linux NUL-delimited vectors preserve argument boundaries; flattened strings use shell quoting rules without interpreting operators. For an unquoted shell `-c` payload with multiple words, the remainder is inferred to be the single script argument. CADETS uses the executed object's path as `pgm`; other collectors use argv[0]. TRACE audit hex tokens containing whitespace or quoting characters are decoded into single arguments.
-
-- **`record_id`:** host identity, inner record type, source UUID, and a 16-character SHA-256 suffix over collector session, process UUID, timestamp and normalized command. The suffix distinguishes changed snapshots of the same Subject. Exact observations repeated as Subject, fork and execute records are collapsed when their process, timestamp and normalized command agree. Source UUIDs allow lookup in the original Avro records.
-- **`session_id`:** dataset, host identity and CDM collector `sessionNumber`, followed by the native Windows `SessionId`/`SessionID` when present. Otherwise it uses the Subject's `parentSubject` UUID, falling back to the process UUID. Events join the preceding Subject records through UUID to obtain that parent. This groups sibling processes under the same parent; it does not claim that collector `sessionNumber` is a login ID. A disk-backed temporary index bounds memory use. An all-zero/missing host UUID falls back to the filename's stable producer prefix before `.bin`, shared across numbered chunks.
-- **Labels and `group_id`:** commands on a host/day with a documented attack receive `malicious-group`, with `group_id = dataset:host:attack-day:YYYY-MM-DD`. This is deliberately a coarse host/day group, including concurrent benign commands, rather than an individual malicious-command assertion. All other commands are `unknown`, with NULL `group_id`. The explicit date/instance mappings are in `scripts/_ingest_tc.py`. E3 uses UTC calendar days, without assuming a time zone for the report's clock times; E5 uses America/New_York, corroborated by the report's `date`/`nmap` output. Host instances for E5 come from the producer filename. Failed-only scenarios and benign setup sections do not create groups.
-
-The E3 mapping follows ground-truth report sections 3–4. The E5 mapping follows sections 4.3–4.4, 5.2, 7.3, 8.4, 8.6, 9.3–9.4, 10.4, 10.6, 10.8 and 10.11. CADETS' FreeBSD records use the schema's `linux` value as its available Unix category.
-
-Validation scanned 200,000 records from one file chosen with seed 3 and produced 790 commands. The end-to-end test reruns the same ingestion and checks unchanged rows, nonempty programs/session identifiers, valid labels and native DuckDB types. Inspection of longest program names and argument strings checked process-title filtering, TRACE hex decoding, shell `-c` payloads and Windows paths.
+Sources: [official release notes](https://github.com/darpa-i2o/Transparent-Computing/blob/244ae2401032ce92ac3b72f49b8039cae67d60d6/README.md), [official E5 report, sections 4.4, 10.8 and 11.2.6](https://drive.google.com/file/d/1cc3C5JW-Kn-VdXqeBGwvHBKSdR_YmSGj/view). See the shared [database schema](../../schema.md) for column definitions.
