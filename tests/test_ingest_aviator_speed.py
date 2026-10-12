@@ -275,3 +275,20 @@ def test_candidate_exactly_fills_block_and_leading_entity(tmp_path):
     ingest(root, fast, 1)
     ingest(root, reference, 1, '--max-records', '1000000')
     assert rows(fast) == rows(reference)
+
+
+@pytest.mark.parametrize('workers', [1, 2])
+@pytest.mark.parametrize('encoded_name', ['&#67;ommandLine', '&#x43;ommandLine'])
+def test_encoded_field_after_greater_than_in_attribute(tmp_path, workers, encoded_name):
+    """A legal > in an XML attribute must not hide an encoded command field."""
+    content = event(1, 'tool.exe retained').replace(
+        'Name="CommandLine"', f'note=">" Name="{encoded_name}"'
+    )
+    root = archive_root(tmp_path, [('ex_sample.zip', [('sysmon.xml', content)])])
+    fast, reference = tmp_path / 'fast.db', tmp_path / 'reference.db'
+    ingest(root, fast, workers)
+    ingest(root, reference, 1, '--max-records', '1000000')
+    assert rows(reference)[0][2] == ['retained']
+    assert rows(fast) == rows(reference), (
+        'The native filter must retain encoded command names after quoted > characters'
+    )

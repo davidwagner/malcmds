@@ -25,31 +25,20 @@ static const char *find_bytes(const char *data, size_t length, const char *needl
     return NULL;
 }
 
-static const char *attribute_entity(const char *start, const char *end) {
-    const char *p = start;
-    while ((p = memchr(p, '&', (size_t)(end - p)))) {
-        const char *q = p;
-        while (q > start && q[-1] != '>' && q[-1] != '<') --q;
-        if (q > start && q[-1] == '<') return p;
-        /* Skip text through the next tag, including long escaped XML payloads.
-         * Walking backwards from every entity would be quadratic in that text. */
-        p = memchr(p, '<', (size_t)(end - p));
-        if (!p) break;
-    }
-    return end;
-}
-
 size_t aviator_scan(const char *data, size_t length, size_t *spans, size_t capacity,
                     size_t *consumed, size_t *records) {
     const char *cursor = data, *limit = data + length;
-    const char *markers[] = {"Command", "command", "cmdline", "HostApplication"};
+    /* XML can encode letters in field names as decimal or hexadecimal numeric
+     * references. Keep all such events for Python, including when a preceding
+     * quoted attribute contains >. The five named XML entities cannot encode
+     * letters in any command field name accepted by event_commands. */
+    const char *markers[] = {"Command", "command", "cmdline", "HostApplication", "&#"};
     const char *next[5];
     finder find = memchr(data, 0, length) ? find_bytes : find_text;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 5; ++i) {
         next[i] = find(data, length, markers[i]);
         if (!next[i]) next[i] = limit;
     }
-    next[4] = attribute_entity(data, limit);
     size_t found = 0;
     *records = 0;
     *consumed = 0;
@@ -82,8 +71,7 @@ size_t aviator_scan(const char *data, size_t length, size_t *spans, size_t capac
         for (int i = 0; i < 5; ++i) {
             if (next[i] < end) {
                 candidate = 1;
-                next[i] = i == 4 ? attribute_entity(end, limit) :
-                    find(end, (size_t)(limit - end), markers[i]);
+                next[i] = find(end, (size_t)(limit - end), markers[i]);
                 if (!next[i]) next[i] = limit;
             }
         }
