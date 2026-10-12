@@ -1,6 +1,8 @@
 """Exercise durable ingest batches with actual DuckDB errors and subprocesses."""
 
 import json
+import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -10,18 +12,32 @@ import duckdb
 ROOT = Path(__file__).resolve().parents[1] / "scripts"
 
 
-def invoke(root, database, source, *options):
-    """Run the shared writer over source commands in an isolated process."""
+def invoke(root, database, source, *options, timeout=120):
+    """Run the writer with a deadline, killing its workers on timeout (POSIX)."""
     driver = root / 'driver.py'
     driver.write_text(
         f'import sys\nfrom pathlib import Path\nsys.path.insert(0, {str(ROOT)!r})\n'
         'from _ingest import Command, run\n' + source
-        + '\nif __name__ == "__main__":\n    run(Path(__file__).parent, records)\n'
+        + '\nif __name__ == "__main__":\n'
+        '    import faulthandler\n'
+        f'    faulthandler.dump_traceback_later({timeout / 2!r}, repeat=True)\n'
+        '    run(Path(__file__).parent, records)\n'
     )
-    return subprocess.run(
-        [sys.executable, str(driver), '--db', str(database), *options],
-        capture_output=True, text=True, check=False,
-    )
+    command = [sys.executable, str(driver), '--db', str(database), *options]
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, start_new_session=True) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # Killing just the driver leaves pool workers holding its pipes
+            # open, which can make even communicate() after a timeout hang.
+            os.killpg(process.pid, signal.SIGKILL)
+            stdout, stderr = process.communicate()
+            raise AssertionError(
+                f'Ingestion timed out after {timeout} seconds: {command!r}\n'
+                f'stdout:\n{stdout}\nstderr:\n{stderr}'
+            ) from None
+        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def test_failed_batch_preserves_commits_and_retry_replaces(tmp_path):
