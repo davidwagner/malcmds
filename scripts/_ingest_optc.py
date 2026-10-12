@@ -5,6 +5,7 @@ import re
 import tempfile
 from bisect import bisect_right
 from collections import defaultdict, deque
+from contextlib import closing
 from datetime import datetime
 from functools import lru_cache
 from multiprocessing.pool import AsyncResult
@@ -12,6 +13,7 @@ from pathlib import Path, PureWindowsPath
 
 import pyarrow as pa
 from _ingest import SCHEMA, Command, command_table, normalize, select_files
+from _ingest_parallel import ordered_records
 from _optc_labels import (
     EASTERN,
     bound_intervals,
@@ -116,8 +118,8 @@ _cached_command = lru_cache(maxsize=4096)(_parse_command)
 def records(root, options):
     """Read completed gzip streams, using event UUIDs for repeatable source IDs.
 
-    With more than one worker, each gzip file is parsed in its own process and
-    batches are yielded as Arrow tables, in the same file order as one worker.
+    Workers parse gzip files into ordered observation spools. Process selection
+    stays in the parent so later files can supply a preferred creation record.
     A command limit uses one worker to stop without spooling whole source files.
     """
     paths = select_files((root / 'ecar').rglob('*.json.gz'), options)
@@ -129,13 +131,17 @@ def records(root, options):
 
     # Process UUIDs recur across files. Select globally before yielding any row;
     # independent file workers cannot finalize a process representative safely.
-    with ProcessCommands() as processes:
-        for path in paths:
-            for identity, command, creation in file_observations(root, path, options.max_records, lookup):
-                processes.add(identity, command, creation)
-                if getattr(options, 'limit', None) is not None and processes.db.execute('SELECT count(*) FROM commands').fetchone()[0] >= options.limit:
-                    yield from processes.commands()
-                    return
+    workers = 1 if getattr(options, 'limit', None) is not None else getattr(options, 'workers', 6)
+    observations = ordered_records(
+        file_observations, ((root, path, options.max_records, lookup) for path in paths),
+        workers, root / 'tmp', 'optc',
+    )
+    with ProcessCommands() as processes, closing(observations):
+        for identity, command, creation in observations:
+            processes.add(identity, command, creation)
+            if getattr(options, 'limit', None) is not None and processes.db.execute('SELECT count(*) FROM commands').fetchone()[0] >= options.limit:
+                yield from processes.commands()
+                return
         yield from processes.commands()
 
 
