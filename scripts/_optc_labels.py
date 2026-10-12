@@ -3,9 +3,13 @@
 import csv
 import io
 import json
+import multiprocessing
+import sys
 import zipfile
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from functools import partial
+from itertools import islice
 from zoneinfo import ZoneInfo
 
 import simdjson
@@ -127,37 +131,62 @@ def load_labels(root):
     return lookup
 
 
-def bound_intervals(paths, lookup, max_records=None):
+def _scan_lifetimes(path, tracked, max_records):
+    creations = defaultdict(set)
+    reboots = defaultdict(set)
+    parser = simdjson.Parser()
+    with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as stream:
+        for line in islice(stream, max_records):
+            # Boot markers affect process identity even without PID labels.
+            # Without intervals, leave process parsing to the bounded reader.
+            if not ('"HOST"' in line or '\\u00' in line or tracked and '"PROCESS"' in line):
+                continue
+            event = _label_event(parser, line)
+            host = host_name(event.get('hostname'))
+            time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
+            if time is None:
+                continue
+            if event.get('object') == 'HOST' and event.get('action') in ('START', 'BOOT', 'REBOOT'):
+                reboots[host].add(time)
+            elif event.get('object') == 'PROCESS' and event.get('action') == 'CREATE':
+                key = (host, str(event.get('pid')))
+                if key in tracked:
+                    creations[key].add(time)
+    return creations, reboots
+
+
+def _lifetime_scans(paths, tracked, max_records, workers):
+    scan = partial(_scan_lifetimes, tracked=tracked, max_records=max_records)
+    if workers <= 1:
+        yield from map(scan, paths)
+    else:
+        # Spawn avoids inheriting the writer's DuckDB/Arrow threads. Only PID
+        # keys and timestamp sets cross processes, never the full label lookup.
+        with multiprocessing.get_context('spawn').Pool(workers) as pool:
+            yield from pool.imap_unordered(scan, paths, chunksize=1)
+
+
+def bound_intervals(paths, lookup, max_records=None, workers=1):
     """Cap PID intervals at observed reuse or reboot, independent of file order.
 
     CSV starts are rounded to seconds. A creation during the starting second
     belongs to that interval; later creations end it. Only tracked host/PID
     pairs are retained. Read selected records from every selected stream, even
     with command limits: a later file can supply an earlier creation or reboot.
+    Use up to workers independent file scans, then merge all lifetime evidence.
     """
+    paths = list(paths)
+    workers = min(workers, len(paths))
+    print(f'optc: starting preliminary lifetime scan '
+          f'(files={len(paths)}, workers={workers})', file=sys.stderr, flush=True)
     intervals = lookup['intervals']
     creations = defaultdict(set)
     reboots = defaultdict(set)
-    for path in paths:
-        with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as stream:
-            for number, line in enumerate(stream, 1):
-                if max_records is not None and number > max_records:
-                    break
-                # Boot markers affect process identity even without PID labels.
-                # Without intervals, leave process parsing to the bounded reader.
-                if not ('"HOST"' in line or '\\u00' in line or intervals and '"PROCESS"' in line):
-                    continue
-                event = json.loads(line)
-                host = host_name(event.get('hostname'))
-                time = timestamp(event.get('timestamp_ms', event.get('timestamp')))
-                if time is None:
-                    continue
-                if event.get('object') == 'HOST' and event.get('action') in ('START', 'BOOT', 'REBOOT'):
-                    reboots[host].add(time)
-                elif event.get('object') == 'PROCESS' and event.get('action') == 'CREATE':
-                    key = (host, str(event.get('pid')))
-                    if key in intervals:
-                        creations[key].add(time)
+    for file_creations, file_reboots in _lifetime_scans(paths, frozenset(intervals), max_records, workers):
+        for key, times in file_creations.items():
+            creations[key].update(times)
+        for host, times in file_reboots.items():
+            reboots[host].update(times)
     lookup['reboots'] = {host: sorted(times) for host, times in reboots.items()}
     for key, ranges in intervals.items():
         bounded = []
