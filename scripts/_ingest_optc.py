@@ -126,7 +126,7 @@ def records(root, options):
     if not paths:
         raise FileNotFoundError(f'No completed OpTC eCAR gzip files under {root}')
     lookup = load_labels(root)
-    bound_intervals(paths, lookup, options.max_records)
+    bound_intervals(paths, lookup, options.max_records, getattr(options, 'workers', 6))
     from _ingest_processes import ProcessCommands
 
     # Process UUIDs recur across files. Select globally before yielding any row;
