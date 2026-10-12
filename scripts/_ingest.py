@@ -396,9 +396,10 @@ def arguments(dataset_dir):
         "--memory-limit", default="2GB", help="DuckDB memory budget (default: 2GB)"
     )
     parser.add_argument(
-        "--workers", type=_positive, default=os.cpu_count() or 1,
-        help="processes reading input files in parallel for OpTC, unbounded AVIATOR, "
-        "and AutoLabel runs (default: number of CPUs; try 8 for AutoLabel; "
+        "--workers", type=_positive,
+        default=6 if dataset_dir.name in {"comiset", "optc"} else os.cpu_count() or 1,
+        help="processes parsing COMISET, OpTC, unbounded AVIATOR, "
+        "and AutoLabel runs (default: 6 for COMISET/OpTC, otherwise number of CPUs; try 8 for AutoLabel; "
         "AutoLabel --limit uses one; worker memory is separate from --memory-limit)",
     )
     return parser.parse_args()
