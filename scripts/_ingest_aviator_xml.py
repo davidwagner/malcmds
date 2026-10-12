@@ -19,9 +19,19 @@ from isal import isal_zlib
 
 CHUNK_SIZE = 128 * 1024
 CAPACITY = 4096
+FALLBACK = 'aviator-cp1252'
+UNDEFINED = re.compile(b'[\x81\x8d\x8f\x90\x9d]')
 
 
-def export_encoding(stream, *, validate=True):
+def _preserve_undefined(error):
+    # Only used with CP1252: its undefined bytes map reversibly to C1 controls.
+    return error.object[error.start:error.end].decode('latin1'), error.end
+
+
+codecs.register_error(FALLBACK, _preserve_undefined)
+
+
+def export_encoding(stream, *, validate=True, source=""):
     """Select AVIATOR's declared codec or validated UTF-8/Windows export codec."""
     prefix = stream.read(4096)
     stream.seek(0)
@@ -37,18 +47,16 @@ def export_encoding(stream, *, validate=True):
         return encoding
     if not validate:
         return "auto"
-    decoder = codecs.getincrementaldecoder("utf-8")()
+    codec = ExportCodec('auto')
     try:
         while chunk := stream.read(1024 * 1024):
-            decoder.decode(chunk)
-        decoder.decode(b"", final=True)
-    except UnicodeDecodeError:
-        # Publisher Windows exports contain E4 (ä) and F1 (ñ); preserve the
-        # exported text, including mojibake already present in raw EVTX.
-        return "cp1252"
+            codec.check(chunk)
+        codec.check(b'', final=True)
+        codec.report(source)
+        return codec.encoding
     finally:
         stream.seek(0)
-    return "utf-8"
+
 
 class ExportReader(io.BufferedReader):
     """Use ISA-L inside ZipExtFile, retaining its ZIP framing and CRC checks.
@@ -119,25 +127,36 @@ class ExportCodec:
     def __init__(self, encoding):
         self.encoding = encoding
         self.decoder = codecs.getincrementaldecoder('utf-8')()
-        self.undefined = None
+        self.offset = 0
+        self.first_undefined = None
+        self.undefined_count = 0
 
     def check(self, chunk, *, final=False):
-        """Validate all bytes, including records discarded by the command filter."""
-        if self.encoding in {'auto', 'cp1252'} and self.undefined is None:
-            self.undefined = next((byte for byte in
-                                   (b'\x81', b'\x8d', b'\x8f', b'\x90', b'\x9d')
-                                   if byte in chunk), None)
-        if self.encoding != 'cp1252':
+        """Validate bytes and count fallback bytes even in discarded events."""
+        if self.encoding in {'auto', FALLBACK}:
+            for match in UNDEFINED.finditer(chunk):
+                if self.first_undefined is None:
+                    self.first_undefined = self.offset + match.start()
+                self.undefined_count += 1
+        self.offset += len(chunk)
+        if self.encoding == 'cp1252':
+            chunk.decode('cp1252')  # Explicit declarations remain strict.
+        elif self.encoding != FALLBACK:
             try:
                 self.decoder.decode(chunk, final=final)
             except UnicodeDecodeError:
                 if self.encoding != 'auto':
                     raise
-                self.encoding = 'cp1252'
-        if self.encoding == 'cp1252' and self.undefined is not None:
-            self.undefined.decode('cp1252')
+                self.encoding = FALLBACK
         if final and self.encoding == 'auto':
             self.encoding = 'utf-8'
+
+    def report(self, source):
+        """Report preserved bytes only after whole-export encoding detection."""
+        if self.encoding == FALLBACK and self.undefined_count:
+            print(f'aviator: {source}: preserved {self.undefined_count} undefined Windows-1252 bytes '
+                  f'as Unicode controls; first at byte offset {self.first_undefined} (zero-based)',
+                  file=sys.stderr, flush=True)
 
 
 def _candidate_bytes(stream, codec, scan):
@@ -190,7 +209,7 @@ def _pending_candidates(pending, encoding):
     pending.truncate()
 
 
-def _encoded_candidates(stream, encoding, scan):
+def _encoded_candidates(stream, encoding, scan, source):
     codec = ExportCodec(encoding)
     scratch = Path(__file__).parent.parent / 'tmp' / 'ingest'
     scratch.mkdir(parents=True, exist_ok=True)
@@ -209,13 +228,15 @@ def _encoded_candidates(stream, encoding, scan):
                 yield from _pending_candidates(pending, codec.encoding)
                 deferred = False
             yield number, raw, 'ascii' if codec.encoding == 'auto' else codec.encoding
+        codec.report(source)
 
 
-def filtered_events(stream, encoding, scan):
+def filtered_events(stream, encoding, scan, source):
     """Yield command candidates with the reference parser's fields and ordinals."""
     rejected = 0
-    for number, raw, codec in _encoded_candidates(stream, encoding, scan):
-        text = raw.decode(codec).replace('\r\n', '\n').replace('\r', '\n')
+    for number, raw, codec in _encoded_candidates(stream, encoding, scan, source):
+        text = raw.decode('cp1252' if codec == FALLBACK else codec,
+                          errors=FALLBACK if codec == FALLBACK else 'strict').replace('\r\n', '\n').replace('\r', '\n')
         events = list(xml_events(io.StringIO(text), commands_only=True))
         if not events:
             rejected += 1
@@ -230,10 +251,12 @@ def parse_export(stream, source, dataset, budget, label, group, *, encoding, acc
         prefix = stream.peek(4096)[:4096].decode('latin1')
         if EVENT_START.search(prefix) and (scan := _scanner()) is not None:
             print(f'{dataset}: reading {source}', file=sys.stderr, flush=True)
-            for number, fields in filtered_events(stream, encoding, scan):
+            for number, fields in filtered_events(stream, encoding, scan, source):
                 if fields:
                     yield from event_commands(fields, dataset, source, number, label, group)
             return
     if encoding == 'auto':
-        encoding = export_encoding(stream)
-    yield from parse_log(stream, source, dataset, budget, label, group, encoding=encoding)
+        encoding = export_encoding(stream, source=source)
+    yield from parse_log(stream, source, dataset, budget, label, group,
+                         encoding='cp1252' if encoding == FALLBACK else encoding,
+                         errors=FALLBACK if encoding == FALLBACK else None)

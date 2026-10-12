@@ -40,7 +40,7 @@ def export_commands(root, member, name, stream, budget, *, accelerated=True):
         budget,
         "benign" if benign else "malicious-group",
         None if benign else f"aviator:{Path(member.name).stem[3:]}",
-        encoding=export_encoding(stream, validate=not accelerated) if name.endswith(".xml") else None,
+        encoding=export_encoding(stream, validate=False) if name.endswith(".xml") else None,
         accelerated=accelerated,
     ):
         if _matches_procedure(command, rules):

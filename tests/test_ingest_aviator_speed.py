@@ -61,13 +61,15 @@ def test_limit_stops_before_unread_truncated_event(tmp_path):
 
 
 @pytest.mark.parametrize('payload', [
-    event(1, 'tool.exe good').encode() + event(2).replace('host', '\x81').encode('latin1'),
+    b'<?xml version="1.0" encoding="windows-1252"?>'
+    + event(1, 'tool.exe good').encode() + event(2).replace('host', '\x81').encode('latin1'),
     b'<?xml version="1.0" encoding="utf-8"?>' + event(1).encode() + b'\xff',
 ])
-def test_skipped_records_still_validate_encoding(tmp_path, payload):
+@pytest.mark.parametrize('bounds', [(), ('--max-records', '1000000')])
+def test_skipped_records_still_validate_encoding(tmp_path, payload, bounds):
     """Ignoring command-free XML must not hide errors in the declared text codec."""
     root = archive_root(tmp_path, [('ex_sample.zip', [('sysmon.xml', payload)])])
-    result = ingest(root, tmp_path / 'invalid.db', 1, check=False)
+    result = ingest(root, tmp_path / 'invalid.db', 1, *bounds, check=False)
     assert result.returncode != 0
     assert 'UnicodeDecodeError' in result.stderr
 
@@ -182,14 +184,6 @@ def test_ambiguous_candidates_spill_and_keep_order(tmp_path):
     ingest(root, reference, 1, '--max-records', '1000000')
     assert rows(fast) == rows(reference)
     assert rows(fast)[1][2] == ['after']
-
-
-def test_late_cp1252_rejects_undefined_byte_in_earlier_utf8(tmp_path):
-    """A UTF-8 continuation byte can become undefined after CP1252 is selected."""
-    raw = event(1, 'tool.exe \u0101').encode() + event(2).encode() * 20000 + b'\xff'
-    root = archive_root(tmp_path, [('ex_sample.zip', [('sysmon.xml', raw)])])
-    result = ingest(root, tmp_path / 'invalid.db', 1, check=False)
-    assert result.returncode != 0 and 'UnicodeDecodeError' in result.stderr
 
 
 def test_benchmark_cli_prepares_samples_and_checks_fresh_databases(tmp_path):

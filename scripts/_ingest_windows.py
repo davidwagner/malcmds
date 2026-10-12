@@ -387,13 +387,17 @@ def bounded_lines(stream, budget):
         yield line
 
 
-def parse_log(binary, source, dataset, budget, label="unknown", group=None, *, encoding=None):
-    """Stream XML, JSONL, rendered Windows events, and Linux audit records."""
+def parse_log(binary, source, dataset, budget, label="unknown", group=None, *, encoding=None, errors=None):
+    """Stream XML, JSONL, rendered Windows events, and Linux audit records.
+
+    Explicit encodings default to strict decoding; callers may supply a
+    dataset-specific error handler. Autodetected logs retain replacement decoding.
+    """
     print(f"{dataset}: reading {source}", file=sys.stderr, flush=True)
     # BufferedReader also works for archive members without materializing them.
     buffered = io.BufferedReader(binary)
     prefix = buffered.peek(4096)[:4096]
-    errors = "strict" if encoding is not None else "replace"
+    errors = errors or ("strict" if encoding is not None else "replace")
     encoding = encoding or (
         "utf-16" if prefix.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
     )
