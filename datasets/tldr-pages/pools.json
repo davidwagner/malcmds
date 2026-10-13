@@ -1,0 +1,72 @@
+{
+  "linux_source_file": [
+    "/home/alex/reports/january.csv",
+    "/home/sam/Monthly Reports/february.csv",
+    "/srv/reports/march.csv"
+  ],
+  "linux_target_file": [
+    "/home/alex/backups/january.csv",
+    "/home/sam/Report Backups/february.csv",
+    "/srv/backups/march.csv"
+  ],
+  "linux_directory": [
+    "/home/alex/reports",
+    "/home/sam/Monthly Reports",
+    "/srv/reports"
+  ],
+  "linux_target_directory": [
+    "/home/alex/backups",
+    "/home/sam/Report Backups",
+    "/srv/backups"
+  ],
+  "windows_source_file": [
+    "C:\\Reports\\january.csv",
+    "C:\\Users\\Sam\\Monthly Reports\\february.csv",
+    "D:\\Reports\\march.csv"
+  ],
+  "windows_target_file": [
+    "C:\\Backups\\january.csv",
+    "C:\\Users\\Sam\\Report Backups\\february.csv",
+    "D:\\Backups\\march.csv"
+  ],
+  "windows_directory": [
+    "C:\\Reports",
+    "C:\\Users\\Sam\\Monthly Reports",
+    "D:\\Reports"
+  ],
+  "windows_target_directory": [
+    "C:\\Backups",
+    "C:\\Users\\Sam\\Report Backups",
+    "D:\\Backups"
+  ],
+  "username": [
+    "alex",
+    "sam",
+    "jordan"
+  ],
+  "hostname": [
+    "files.example.org",
+    "backup.example.org",
+    "build.example.org"
+  ],
+  "address": [
+    "192.0.2.10",
+    "192.0.2.20",
+    "192.0.2.30"
+  ],
+  "port": [
+    "8080",
+    "8443",
+    "9000"
+  ],
+  "password": [
+    "Mango47Cloud",
+    "River26Stone",
+    "Cedar83Brook"
+  ],
+  "message": [
+    "Monthly report",
+    "Backup completed",
+    "Service started"
+  ]
+}

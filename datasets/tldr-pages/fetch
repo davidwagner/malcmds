@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Fetch the pinned tldr archive with SHA-256 verification."""
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+from _fetch import download
+
+os.chdir(HERE)
+download("https://codeload.github.com/tldr-pages/tldr/tar.gz/6baf5eaa78b6181f4adc2176788d670389b33658",
+         "tldr.tar.gz", size=502981,
+         checksum="sha256:a31ba152700c4604419bfaa764920cb2a98e3b1a16e1d25b6e8c035d7e8796ba")

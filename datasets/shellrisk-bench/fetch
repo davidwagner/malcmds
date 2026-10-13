@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Download the pinned source and required overlap reference."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+from _fetch import download
+
+REVISION = '437467862139b4e9cdd5322024ef3434a67c7ec8'
+FILES = [('data/train-00000-of-00001.parquet', 'data/train-00000-of-00001.parquet', 2065036, '88b2bf56ffba81afe396cf2f1f27b3884dcdf76d588275c44cf9e9a6677fe4af'), ('data/test-00000-of-00001.parquet', 'data/test-00000-of-00001.parquet', 517879, 'e9df3b50a716ad077eeab6fcc27be57834bc2ff3f28ebeaf48dfd6640e9064c8'), ('README.md', 'SOURCE_README.md', 4765, 'ae0cf43acc792a3acebe19545533d16aa4b6ffda266a008fa29b3bdc18ce0f66')]
+
+os.chdir(HERE)
+for source, destination, size, sha256 in FILES:
+    download(f"https://huggingface.co/datasets/kontext-security/ShellRisk-Bench/resolve/{REVISION}/{source}",
+             destination, size=size, checksum="sha256:" + sha256)
+subprocess.run([sys.executable, str(HERE.parent / "quasarnix" / "fetch")], check=True)

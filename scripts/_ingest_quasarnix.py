@@ -87,6 +87,26 @@ def _label(pgm, args, text):
     return 'malicious-group'
 
 
+def read_array(path: Path) -> list[str]:
+    """Decode one complete published array, repairing the background JSON escapes."""
+    try:
+        text = path.read_text(encoding='utf-8')
+        strings = _background(text) if path.name == 'nl2bash.json' else json.loads(text)
+    except (OSError, ValueError) as error:
+        raise ValueError(f'Cannot read QuasarNix reference {path}; run its ./fetch: {error}') from error
+    if not isinstance(strings, list) or any(not isinstance(s, str) for s in strings):
+        raise ValueError(f'{path}: expected the published array of command strings')
+    return strings
+
+
+def reference_commands(root: Path) -> set[str]:
+    """Read the complete reference independently of ingestion and sampling options."""
+    result = set()
+    for name in FILES:
+        result.update(read_array(root / name))
+    return result
+
+
 def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
     """Import all five arrays with source-occurrence IDs and command-level labels."""
     paths = [root / name for name in FILES]
@@ -95,10 +115,7 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
             raise FileNotFoundError(f'Missing QuasarNix release file {path}; run ./fetch')
     for path in select_files(paths, options):
         background = path.name == 'nl2bash.json'
-        text = path.read_text()
-        strings = _background(text) if background else json.loads(text)
-        if not isinstance(strings, list) or any(not isinstance(s, str) for s in strings):
-            raise ValueError(f'{path}: expected the published array of command strings')
+        strings = read_array(path)
         for index, text in enumerate(strings):
             if options.max_records is not None and index >= options.max_records:
                 break

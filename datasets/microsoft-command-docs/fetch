@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Download fixed Microsoft documentation and the static PowerShell parser."""
+
+import os
+import sys
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+sys.path.insert(0, str(Path.cwd().parent.parent / "scripts"))
+from _fetch import download
+
+download(
+    "https://codeload.github.com/MicrosoftDocs/windowsserverdocs/tar.gz/312d2998c621f384c4e404fe63c7c1c4cbaf61a0",
+    "windowsserverdocs.tar.gz", 400128038,
+    "sha256:561920f71db3032bd2dfae1564a04cc4a3c373cb16473dd5a1d8e3e3e97b0d77",
+)
+download(
+    "https://codeload.github.com/MicrosoftDocs/PowerShell-Docs/tar.gz/a3de8f22552170e70852470d46cd52cd9ca471ec",
+    "powershell-docs.tar.gz", 29305180,
+    "sha256:ee706a7b82a2c3c021770a79fb0bd8465266db04828651ad6df5ba0aadc2aa02",
+)
+download(
+    "https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell-7.6.6-linux-x64.tar.gz",
+    "powershell-7.6.6-linux-x64.tar.gz", 75876271,
+    "sha256:ddbc4a2d113bbd46d283cfedcbcd117a70caefd7673f41f2b4e0000badf103bc",
+)
