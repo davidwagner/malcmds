@@ -177,7 +177,9 @@ def osquery_commands(obj, host, record, index):
     if obj.get("name") == "pack_process-monitoring_proc_events":
         argv = audit_cmdline_argv(text)
     for command in event_commands(fields, "splunk-bots", record, index, argv=argv):
-        command.session_id = f"splunk-bots:{host}:uid:{fields.get('uid', '?')}:parent:{fields.get('parent') or fields.get('auid', '?')}"
+        # Account IDs cannot identify logins in this source. Keep events separate;
+        # these groups do not represent reconstructed login or SSH connections.
+        command.session_id = f"splunk-bots:record:{record}:{index}"
         yield command
 
 
