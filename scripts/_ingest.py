@@ -8,7 +8,7 @@ import re
 import shlex
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic
 
@@ -442,9 +442,14 @@ def program_basename(pgm, os):
     return re.split(r"[/\\]" if os == "windows" else "/", pgm)[-1]
 
 
+def _session_id(observation: Command | ShellInput, dataset: str) -> str:
+    """Return the explicit session, or this source occurrence's fallback."""
+    return observation.session_id or f"{dataset}:record:{observation.record_id}"
+
+
 def _metadata(command, dataset):
     return [dataset, command.record_id, command.label, command.group_id,
-            command.session_id or f"{dataset}:record:{command.record_id}", command.os]
+            _session_id(command, dataset), command.os]
 
 
 def command_table(commands, dataset):
@@ -468,7 +473,11 @@ def observation_tables(observations, dataset):
         if isinstance(observation, ShellInput):
             if not observation.record_id:
                 raise ValueError("ShellInput requires nonempty record_id")
-            commands.extend(observation.commands)
+            shell_session = _session_id(observation, dataset)
+            commands.extend(
+                child if child.session_id else replace(child, session_id=shell_session)
+                for child in observation.commands
+            )
             values = [observation.shell_input,
                       [program_basename(c.pgm, c.os) for c in observation.commands],
                       shell_tokens(observation.shell_input, observation.os),

@@ -40,7 +40,7 @@ def test_quasarnix_release_excerpts(tmp_path):
         assert con.execute("SELECT dataset_label,count(*) FROM PROCESS_LAUNCHES GROUP BY dataset_label ORDER BY dataset_label").fetchall() == [('malicious', 4), ('benign', 4)]
         assert con.execute("SELECT args FROM PROCESS_LAUNCHES WHERE record_id='X_train_malicious_cmd_orig.json:0:0'").fetchone() == (['-i'],)
         assert con.execute("SELECT shell_input FROM SHELL_INPUTS WHERE record_id='nl2bash.json:0'").fetchone() == ('find . -name \\!',)
-        assert con.execute('SELECT count(DISTINCT session_id), count(*) FROM PROCESS_LAUNCHES').fetchone() == (8, 8)
+        assert con.execute('SELECT count(DISTINCT session_id), count(*) FROM PROCESS_LAUNCHES').fetchone() == (6, 8)
 
 
 def _archive(root, files):
@@ -79,6 +79,11 @@ def test_honeypot_occurrences_connections_and_responses(tmp_path):
         assert all(r[2] == 'malicious-group' for r in rows), 'Severity zero is not a benign annotation'
         assert sum(r[4] == 'shell-honeypot:2024:abc123' for r in rows) == 1
         assert sum(':record:' in r[4] for r in rows) == 3
+        assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s '
+                           "ON p.record_id = s.record_id || ':0' "
+                           'WHERE p.session_id = s.session_id').fetchone() == (4,)
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS WHERE session_id = "
+                           "'shell-honeypot:2024:abc123'").fetchone() == (1,)
         assert all(r[3] != r[4] for r in rows), 'An attacker-IP group is not a login session'
     again = _ingest(root, '_ingest_shell_honeypot', db)
     assert json.loads(again.stdout)['skipped']
