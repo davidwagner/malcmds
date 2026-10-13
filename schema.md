@@ -9,7 +9,7 @@ Both tables have these columns:
 - `record_id` - an identifier that locates the original record in the dataset (VARCHAR). Shell-derived process identifiers can include an additional invocation index.
 - `dataset_label` - `malicious`, `benign`, `unknown`, or `malicious-group` (ENUM). `malicious-group` means the group identified by `group_id` is believed to contain some malicious activity, but it's not known which commands are malicious and which are benign (each command is not individually labelled).
 - `group_id` - the label group's identifier when `dataset_label` is `malicious-group`; otherwise NULL (VARCHAR).
-- `session_id` - the login session, SSH connection, or other session identifier (VARCHAR).
+- `session_id` - the login session, SSH connection, or other session identifier (VARCHAR). When missing, a shell input uses `<dataset>:record:<record_id>` and its parsed commands inherit that ID unless they have an explicit session of their own. This fallback identifies one shared input whose login is unknown. Repeated inputs at different source positions remain separate. Native process observations without a session use their own record fallback. Explicit session IDs are preserved, including a child ID that differs from its shell input.
 - `os` - `windows` or `linux`, inferred best-effort (ENUM).
 
 `PROCESS_LAUNCHES` also has:

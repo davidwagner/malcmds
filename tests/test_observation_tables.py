@@ -128,3 +128,77 @@ def test_incompatible_observation_schema_cannot_be_skipped(tmp_path, table):
     assert f'{table} uses an incompatible schema' in result.stderr
     with duckdb.connect(str(database)) as con:
         assert con.execute(f'SELECT * FROM {table}').fetchall() == [('preserve',)]
+
+
+def test_session_inheritance_preserves_objects_and_explicit_ids(tmp_path):
+    """Persist repeated conversions and reused children without changing the inputs."""
+    from copy import deepcopy
+
+    from _ingest import Command, ShellInput, _initialize, _insert, observation_tables
+
+    shared = Command('echo', ['hello'], 'unrelated-child', label='benign')
+    explicit = Command('id', [], 'explicit-child', session_id='ssh:99')
+    observations = [
+        ShellInput('echo hello; id', 'first', [shared, explicit]),
+        ShellInput('echo hello', 'second', [shared]),
+        ShellInput('echo hello; id', 'native-shell', [shared, explicit], session_id='ssh:42'),
+        ShellInput('VALUE=one', 'empty', []),
+        Command('id', [], 'standalone'),
+        Command('id', [], 'standalone-again'),
+        Command('id', [], 'native-process', session_id='native:7'),
+    ]
+    original = deepcopy(observations)
+    with duckdb.connect(str(tmp_path / 'sessions.duckdb')) as con:
+        _initialize(con)
+        previous = None
+        for dataset in ('example', 'example', 'other'):
+            batch = observation_tables(observations, dataset)
+            if dataset == 'example' and previous is not None:
+                assert all(a.equals(b) for a, b in zip(batch, previous))
+            previous = batch
+            _insert(con, batch)
+            assert con.execute('SELECT record_id,session_id FROM PROCESS_LAUNCHES ORDER BY rowid').fetchall() == [
+                ('unrelated-child', f'{dataset}:record:first'),
+                ('explicit-child', 'ssh:99'),
+                ('unrelated-child', f'{dataset}:record:second'),
+                ('unrelated-child', 'ssh:42'),
+                ('explicit-child', 'ssh:99'),
+                ('standalone', f'{dataset}:record:standalone'),
+                ('standalone-again', f'{dataset}:record:standalone-again'),
+                ('native-process', 'native:7'),
+            ]
+            assert con.execute('SELECT record_id,session_id FROM SHELL_INPUTS ORDER BY rowid').fetchall() == [
+                ('first', f'{dataset}:record:first'),
+                ('second', f'{dataset}:record:second'),
+                ('native-shell', 'ssh:42'),
+                ('empty', f'{dataset}:record:empty'),
+            ]
+            assert observations == original
+            con.execute('DELETE FROM PROCESS_LAUNCHES')
+            con.execute('DELETE FROM SHELL_INPUTS')
+
+
+def test_quasarnix_shell_sessions_through_ingest(tmp_path):
+    """Repeated real shell syntax keeps occurrence IDs, text, labels and groups."""
+    from _ingest_quasarnix import FILES
+
+    root = tmp_path / 'quasarnix'
+    root.mkdir()
+    inputs = ['echo hello; id', 'echo hello; id', 'VALUE=one']
+    for name in FILES:
+        (root / name).write_text(json.dumps(inputs if name == FILES[0] else []))
+    database = tmp_path / 'quasarnix.duckdb'
+    result = invoke(root, database, 'from _ingest_quasarnix import records\n', '--batch-size', '1')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database)) as con:
+        shells = con.execute('SELECT record_id,shell_input,dataset_label,group_id,session_id FROM SHELL_INPUTS ORDER BY record_id').fetchall()
+        assert shells == [
+            (f'{FILES[0]}:{i}', text, 'malicious', None, f'quasarnix:record:{FILES[0]}:{i}')
+            for i, text in enumerate(inputs)
+        ]
+        processes = con.execute('SELECT record_id,pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
+        assert processes == [
+            (f'{FILES[0]}:{i}:{j}', pgm, args, 'malicious-group',
+             f'quasarnix:{FILES[0]}:{i}', f'quasarnix:record:{FILES[0]}:{i}')
+            for i in range(2) for j, (pgm, args) in enumerate([('echo', ['hello']), ('id', [])])
+        ]
