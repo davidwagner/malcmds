@@ -16,7 +16,7 @@ import duckdb
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'eval_ai_classifiers'
-CLASSIFIERS = ['jev', 'pplx', 'luna', 'haiku', 'sol']
+CLASSIFIERS = ['jev', 'pplx', 'luna', 'haiku', 'sol', 'sol-with-search']
 
 
 def create_source(path, rows):
@@ -93,7 +93,7 @@ def test_sampling_identity_caps_and_reproducibility(tmp_path, table, identity_co
     ]
     assert read_rows(first, "SELECT count(*) FROM samples WHERE shell_input = ''") == [(int(table == "SHELL_INPUTS"),)]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == before
-    assert read_rows(first, 'SELECT count(*) FROM classifier_costs') == [(5,)]
+    assert read_rows(first, 'SELECT count(*) FROM classifier_costs') == [(len(CLASSIFIERS),)]
     run_cli(first, '--source', source, '--sample-only', '--seed', '23', '--resume', table=table)
     assert read_rows(first, query) == read_rows(second, query)
     run_cli(first, '--source', source, '--sample-only', '--seed', '24', '--resume', success=False, table=table)
@@ -205,7 +205,7 @@ def test_live_provider_contract_and_resume(tmp_path):
     run_cli(output, *flags, timeout=900, table="PROCESS_LAUNCHES")
     rows = read_rows(output, '''SELECT classifier, prediction, p_malicious, p_benign,
         p_unknown, score_kind, status FROM results ORDER BY classifier''')
-    assert len(rows) == 15, 'An API/model contract changed: three results per provider are required'
+    assert len(rows) == 3 * len(CLASSIFIERS), 'An API/model contract changed: three results per provider are required'
     assert read_rows(output, 'SELECT classifier, count(*) FROM results GROUP BY ALL ORDER BY classifier') == [
         (name, 3) for name in sorted(CLASSIFIERS)
     ]
@@ -240,7 +240,7 @@ def test_empty_source_and_cli_validation(tmp_path):
     assert read_rows(output, 'SELECT count(*) FROM samples') == [(0,)]
     assert read_rows(output, 'SELECT count(*) FROM disagreements') == [(0,)]
     assert read_rows(output, 'SELECT count(*) FROM confusion_matrices') == [(0,)]
-    assert read_rows(output, 'SELECT total_samples, evaluated_samples, total_cost_usd FROM classifier_costs') == [(0, 0, 0.0)] * 5
+    assert read_rows(output, 'SELECT total_samples, evaluated_samples, total_cost_usd FROM classifier_costs') == [(0, 0, 0.0)] * len(CLASSIFIERS)
     for index, flags in enumerate([
         ['--concurrency', '0'], ['--max-hours', '0'], ['--max-hours', 'nan'],
         ['--request-timeout', 'inf'], ['--retries', '-1'],
@@ -269,7 +269,7 @@ def test_replay_recorded_responses_and_reject_invalid_scores(tmp_path, corruptio
     """
     source, output = tmp_path / 'source.duckdb', tmp_path / 'output.duckdb'
     create_source(source, [('1', 'replay', 'benign', 'echo hello', 'echo', ['hello'])])
-    run_cli(output, '--source', source, '--sample-only')
+    run_cli(output, '--source', source, '--classifiers', *CLASSIFIERS[:-1], '--sample-only')
     observations = json.loads((Path(__file__).parent / 'fixtures/eval-ai/observations.json').read_text())
     keys = tmp_path / 'keys'
     keys.write_text('OPENAI_API_KEY=unused\nANTHROPIC_API_KEY=unused\nOPENROUTER_API_KEY=unused\n')
@@ -286,7 +286,7 @@ def test_replay_recorded_responses_and_reject_invalid_scores(tmp_path, corruptio
             db.execute('''INSERT INTO requests(sample_id,classifier,stage,http_status,
                 response,cost_usd,cost_kind) VALUES (1,?,?,200,?,?,?)''', [
                     name, stage, json.dumps(response), observation['cost_usd'], observation['cost_kind']])
-    run_cli(output, '--source', source, '--keys', keys, '--resume', success=corruption != 'scores')
+    run_cli(output, '--source', source, '--classifiers', *CLASSIFIERS[:-1], '--keys', keys, '--resume', success=corruption != 'scores')
     assert read_rows(output, 'SELECT count(*) FROM requests') == [(5,)], 'Replay must not call the APIs'
     assert read_rows(output, 'SELECT count(*) FROM results') == [(5,)]
     if corruption == 'label':
@@ -310,7 +310,7 @@ def test_replay_recorded_responses_and_reject_invalid_scores(tmp_path, corruptio
         ('luna', 0), ('pplx', 1), ('sol', 0)
     ]
     if corruption == 'none':
-        run_cli(output, '--source', source, '--keys', keys, '--resume')
+        run_cli(output, '--source', source, '--classifiers', *CLASSIFIERS[:-1], '--keys', keys, '--resume')
         assert read_rows(output, 'SELECT count(*) FROM requests') == [(5,)]
 
 
@@ -341,3 +341,94 @@ def test_observation_table_selection_and_resume(tmp_path):
     assert 'Resume configuration differs' in result.stderr
     run_cli(tmp_path / 'invalid-table.duckdb', '--source', source, '--sample-only',
             table='COMMANDS', success=False)
+
+
+def test_sol_with_search_selection(tmp_path):
+    """Select the search classifier alone and persist it in evaluation summaries."""
+    source, output = tmp_path / 'source.duckdb', tmp_path / 'output.duckdb'
+    create_source(source, [('1', 'search', 'benign', 'echo hello', 'echo', ['hello'])])
+    flags = ['--source', source, '--classifiers', 'sol-with-search', '--sample-only']
+    run_cli(output, *flags)
+    assert read_rows(output, 'SELECT classifier,total_samples FROM classifier_costs') == [
+        ('sol-with-search', 1)
+    ]
+    config = json.loads(read_rows(output, 'SELECT config FROM evaluation_run')[0][0])
+    assert config['classifiers'] == ['sol-with-search']
+    assert config['models']['sol-with-search']['model'] == 'gpt-6.1-sol'
+    run_cli(output, *flags, '--resume')
+
+
+@pytest.mark.skipif(os.environ.get('EVAL_AI_LIVE') != '1', reason='requires funded OpenAI credentials')
+@pytest.mark.parametrize('classifier', ['sol', 'sol-with-search'])
+def test_live_sol_search_and_cost(tmp_path, classifier):
+    """Exercise real search, label extraction, costs, analytics, and saved progress.
+
+    Live service failures cannot be triggered reliably without test doubles.
+    Search and reasoning output are read from the real API's saved response.
+    """
+    source, output = tmp_path / 'source.duckdb', tmp_path / 'output.duckdb'
+    create_source(source, [('1', 'search', 'benign', 'echo hello', 'echo', ['hello'])])
+    flags = ['--source', source, '--classifiers', classifier, '--retries', '0']
+    run_cli(output, *flags)
+    assert read_rows(output, '''SELECT classifier,model,prediction,raw_prediction,
+        p_malicious,p_benign,p_unknown,score_kind,status FROM results''') == [
+        (classifier, 'gpt-6.1-sol', 'benign', 'benign', None, None, None, None, 'ok')
+    ]
+    [(encoded, actual_cost, kind)] = read_rows(output,
+        'SELECT response,cost_usd,cost_kind FROM requests')
+    response = json.loads(encoded)
+    searches = [item for item in response['output'] if item['type'] == 'web_search_call']
+    assert bool(searches) == (classifier == 'sol-with-search')
+    assert all(item['status'] == 'completed' for item in searches)
+    assert response['reasoning']['effort'] == 'medium'
+    usage = response['usage']
+    details = usage['input_tokens_details']
+    cached, written = details.get('cached_tokens', 0), details.get('cache_write_tokens', 0)
+    expected_cost = ((usage['input_tokens'] - cached - written) * 2
+                     + cached * 0.1 + written * 2.5 + usage['output_tokens'] * 10) / 1_000_000
+    assert actual_cost == pytest.approx(expected_cost + len(searches) * 0.01)
+    assert kind == 'estimated'
+    assert read_rows(output, '''SELECT evaluated_samples,total_cost_usd
+        FROM classifier_costs''') == [(1, actual_cost)]
+    count = read_rows(output, 'SELECT count(*) FROM requests')
+    run_cli(output, *flags, '--resume')
+    assert read_rows(output, 'SELECT count(*) FROM requests') == count
+
+
+def test_replay_sol_search_response_and_comparison(tmp_path):
+    """Replay real Sol responses captured on 2026-10-12, including web search.
+
+    Request IDs and encrypted reasoning are omitted from the observations.
+    The CLI reads its persisted requests without making any API calls.
+    """
+    source, output = tmp_path / 'source.duckdb', tmp_path / 'output.duckdb'
+    create_source(source, [('1', 'search', 'benign', 'echo hello', 'echo', ['hello'])])
+    flags = ['--source', source, '--classifiers', 'sol', 'sol-with-search']
+    run_cli(output, *flags, '--sample-only')
+    observations = json.loads(
+        (Path(__file__).parent / 'fixtures/eval-ai/search-observations.json').read_text())
+    keys = tmp_path / 'keys'
+    keys.write_text('OPENAI_API_KEY=unused\n')
+    with duckdb.connect(str(output)) as db:
+        for observation in observations:
+            db.execute('''INSERT INTO requests(sample_id,classifier,stage,http_status,
+                response,cost_usd,cost_kind) VALUES (1,?,?,200,?,?,?)''', [
+                observation['classifier'], observation['stage'], json.dumps(observation['response']),
+                observation['cost_usd'], observation['cost_kind']])
+    run_cli(output, *flags, '--keys', keys, '--resume')
+    assert read_rows(output, '''SELECT classifier,model,prediction,raw_prediction,
+        p_malicious,p_benign,p_unknown,score_kind,status FROM results ORDER BY classifier''') == [
+        (name, 'gpt-6.1-sol', 'benign', 'benign', None, None, None, None, 'ok')
+        for name in ('sol', 'sol-with-search')
+    ]
+    assert read_rows(output, '''SELECT reference,sample_count,disagreement_count
+        FROM disagreements WHERE classifier='sol-with-search' AND scope='overall'
+        ORDER BY reference''') == [('dataset_label', 1, 0), ('sol', 1, 0)]
+    assert read_rows(output, 'SELECT classifier,evaluated_samples,total_cost_usd FROM classifier_costs ORDER BY classifier') == [
+        (row['classifier'], 1, row['cost_usd'])
+        for row in observations
+    ]
+    assert read_rows(output, 'SELECT status FROM evaluation_run') == [('complete',)]
+    run_cli(output, *flags, '--keys', keys, '--resume')
+    run_cli(output, '--analyze-only')
+    assert read_rows(output, 'SELECT count(*) FROM requests') == [(2,)]

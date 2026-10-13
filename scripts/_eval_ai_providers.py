@@ -5,6 +5,8 @@ https://openrouter.ai/docs/client-sdks/typescript/sdks/decisions/README
 https://developers.openai.com/api/docs/guides/latest-model
 https://developers.openai.com/api/docs/models/gpt-6-luna
 https://developers.openai.com/api/docs/models/gpt-6.1-sol
+https://developers.openai.com/api/docs/guides/tools-web-search
+https://developers.openai.com/api/docs/pricing
 https://platform.claude.com/docs/en/models/haiku-5-5/overview
 
 Medium-effort OpenAI requests do not support logprobs; Anthropic Messages
@@ -64,6 +66,8 @@ MODELS: dict[str, ModelConfig] = {
               'input': 0.1, 'output': 0.5, 'cached': 0.01, 'write': 0.125},
     'sol': {'provider': 'openai', 'model': 'gpt-6.1-sol',
             'input': 2.0, 'output': 10.0, 'cached': 0.1, 'write': 2.5},
+    'sol-with-search': {'provider': 'openai', 'model': 'gpt-6.1-sol',
+                        'input': 2.0, 'output': 10.0, 'cached': 0.1, 'write': 2.5},
 }
 ENDPOINTS = {
     'openrouter': 'https://openrouter.ai/api/alpha/decisions',
@@ -99,6 +103,9 @@ def request_body(name: str, command: str, max_tokens: int) -> dict:
                 'input': [{'role': 'user', 'content': command}],
                 'reasoning': {'effort': 'medium'}, 'max_output_tokens': max_tokens,
                 'store': False}
+        if name == 'sol-with-search':
+            body['tools'] = [{'type': 'web_search'}]
+            body['tool_choice'] = 'required'
         return body
     body = {'model': model['model'], 'system': LABEL_PROMPT,
             'messages': [{'role': 'user', 'content': command}], 'max_tokens': max_tokens,
@@ -133,7 +140,7 @@ def probabilities(value: object) -> tuple:
 
 
 def cost(name: str, response: dict) -> tuple:
-    """Use billed USD when present, otherwise estimate from full token usage.
+    """Use billed USD when present, otherwise estimate token and search charges.
 
     Missing usage stays NULL. Network failures may have incurred unreported
     charges; totals with unpriced attempts are explicitly incomplete.
@@ -164,8 +171,12 @@ def cost(name: str, response: dict) -> tuple:
     elif model['provider'] == 'openai' and total_input > 272_000:
         rate_in, rate_cache, rate_write, rate_out = (
             rate_in * 2, rate_cache * 2, rate_write * 2, rate_out * 1.5)
+    # Web search costs $10 per 1,000 calls; search content is billed as input.
+    search_cost = 0.01 * sum(item.get('type') == 'web_search_call'
+                             for item in response.get('output', []))
     return ((input_tokens * rate_in + output_tokens * rate_out
-             + cached * rate_cache + written * rate_write) / 1_000_000, 'estimated')
+             + cached * rate_cache + written * rate_write) / 1_000_000
+            + search_cost, 'estimated')
 
 
 def retry_delay(headers: dict, attempt: int) -> float:
