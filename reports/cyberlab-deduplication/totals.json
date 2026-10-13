@@ -1,0 +1,55 @@
+{
+  "files": 293,
+  "source": {
+    "outer_entries": 24985786,
+    "event_lists": 24985786,
+    "events": 154097349,
+    "command_events": 5808707,
+    "selected_events": 5456687,
+    "removed_events": 380922,
+    "removed_command_events": 18962,
+    "removed_selected_events": 18961,
+    "affected_lists": 634
+  },
+  "rows": {
+    "PROCESS_LAUNCHES": {
+      "removed": 19802,
+      "added": 0,
+      "changed": 0
+    },
+    "SHELL_INPUTS": {
+      "removed": 898,
+      "added": 0,
+      "changed": 0
+    }
+  },
+  "database": {
+    "PROCESS_LAUNCHES": {
+      "removed": 19802,
+      "added": 0,
+      "changed_old": 0,
+      "changed_new": 0,
+      "old": 10081350,
+      "new": 10061548
+    },
+    "SHELL_INPUTS": {
+      "removed": 898,
+      "added": 0,
+      "changed_old": 0,
+      "changed_new": 0,
+      "old": 5411539,
+      "new": 5410641
+    }
+  },
+  "replacement": {
+    "PROCESS_LAUNCHES": 10061548,
+    "SHELL_INPUTS": 5410641,
+    "INGESTED": [
+      [
+        "cyberlab",
+        true
+      ]
+    ],
+    "other_dataset_counts_and_markers_unchanged": true
+  }
+}

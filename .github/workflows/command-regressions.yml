@@ -24,6 +24,10 @@ jobs:
           tests/test_shell_input_observations.py
       - name: Preserve PublicArena network paths and PAExec attack labels
         run: python -m pytest -q tests/test_publicarena_paths.py
+      - name: Preserve CyberLab observations and copied-event filtering
+        run: >-
+          python -m pytest -q tests/test_cyberlab_deduplication.py
+          tests/test_ingest_cyberlab_regressions.py
       - name: Check script locations and dataset entry points
         run: python -m pytest -q tests/test_directory_layout.py
       - name: Preserve six-worker parsing and global process selection
