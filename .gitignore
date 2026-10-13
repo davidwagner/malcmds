@@ -11,3 +11,8 @@
 !/datasets/*/README.md
 !/datasets/autolabel/release.json
 __pycache__/
+
+# Checked-in extraction and substitution inputs.
+!/datasets/tldr-pages/pools.json
+!/datasets/tldr-pages/rules.json
+!/datasets/microsoft-command-docs/extraction-rules.json

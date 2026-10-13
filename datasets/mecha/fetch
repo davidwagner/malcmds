@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""Download the pinned source and required overlap reference."""
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+from _fetch import download
+
+REVISION = 'd3883ec38c0458a73a0b8aef19103cb2d006c87c'
+FILES = [('linuxcommands.json', 'linuxcommands.json', 923481, '81b33a65b80134875706fe005601f8b75dee726e91c4b632a517790e2b9ab175'), ('README.md', 'SOURCE_README.md', 4285, 'e55a45b12e0edc67d0860d618aecd66b91bd9aef90fb5db208c558cfc35f6667')]
+
+os.chdir(HERE)
+for source, destination, size, sha256 in FILES:
+    download(f"https://huggingface.co/datasets/mecha-org/linux-command-dataset/resolve/{REVISION}/{source}",
+             destination, size=size, checksum="sha256:" + sha256)

@@ -1,0 +1,54 @@
+name: Benign command datasets
+on:
+  pull_request:
+    paths: ['datasets/**', 'scripts/**', 'tests/**', '.github/workflows/benign-command-datasets.yml']
+  push:
+    branches: [main]
+    paths: ['datasets/**', 'scripts/**', 'tests/**', '.github/workflows/benign-command-datasets.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install ingestion dependencies
+        run: python -m pip install -r scripts/ingest-requirements.txt pytest uv
+      - name: Fetch the pinned PowerShell parser
+        run: |
+          python - <<'PYTHON'
+          import os
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('scripts').resolve()))
+          from _fetch import download
+          root = Path('datasets/lade').resolve()
+          os.chdir(root)
+          download(
+              'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell-7.6.6-linux-x64.tar.gz',
+              'powershell-7.6.6-linux-x64.tar.gz', 75876271,
+              'sha256:ddbc4a2d113bbd46d283cfedcbcd117a70caefd7673f41f2b4e0000badf103bc',
+          )
+          import tarfile
+          target = root.parent.parent / 'tmp/lade-powershell-7.6.6'
+          target.mkdir(parents=True, exist_ok=True)
+          with tarfile.open(root / 'powershell-7.6.6-linux-x64.tar.gz') as archive:
+              archive.extractall(target, filter='data')
+          (target / 'pwsh').chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'LADE_PWSH={target / "pwsh"}\n')
+          PYTHON
+      - name: Check new dataset ingestion and shared source decoding
+        run: >-
+          python -m pytest -q
+          tests/test_ingest_cmd_compounds.py
+          tests/test_ingest_lade_formats.py
+          tests/test_ingest_tabular.py
+          tests/test_ingest_tldr.py
+          tests/test_ingest_microsoft_docs.py
+          tests/test_ingest_quasarnix_honeypot.py
+          tests/test_ingest_public_errors.py
+          tests/test_directory_layout.py

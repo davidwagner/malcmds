@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+from _cmd import cmd_commands
 from _ingest import Command, ShellInput, normalize, select_files, shell_commands
 from _ingest_acme import ordinary_launch
 from _ingest_windows import Budget
@@ -56,76 +57,6 @@ def ps_commands(text, parser, other=True):
         raise RuntimeError("PowerShell syntax parser ended before returning its result")
     for row in json.loads(line):
         yield row["program"], row["arguments"], row["other"]
-
-
-def cmd_tokens(text):
-    """Tokenize cmd quoting, caret escapes, separators and redirections statically."""
-    tokens = []
-    word = []
-    quoted = False
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if not quoted and not word:
-            redirect = re.match(r"\d*[<>]{1,2}(?:&\d+)?", text[index:])
-            if redirect:
-                tokens.append(redirect[0])
-                index += len(redirect[0])
-                continue
-        if char == "^" and index + 1 < len(text):
-            word.append(text[index:index + 2])
-            index += 2
-            continue
-        if char == '"':
-            quoted = not quoted
-        if not quoted and (char.isspace() or char in "&|<>"):
-            if word:
-                tokens.append("".join(word))
-                word = []
-            if char in "&|<>":
-                if index + 1 < len(text) and text[index + 1] == char:
-                    char += char
-                    index += 1
-                tokens.append(char)
-            elif char in "\r\n" and (not tokens or tokens[-1] != "\n"):
-                tokens.append("\n")
-        else:
-            word.append(char)
-        index += 1
-    if word:
-        tokens.append("".join(word))
-    return tokens
-
-
-def cmd_commands(text):
-    """Split cmd command lists and omit redirects from each process's arguments."""
-    tokens = cmd_tokens(text)
-    groups = []
-    current = []
-    redirect = False
-    for index, token in enumerate(tokens):
-        if token in {"&", "&&", "|", "||", "\n"}:
-            if current:
-                groups.append(current)
-            current = []
-            redirect = False
-        elif re.fullmatch(r"\d*[<>]{1,2}(?:&\d+)?", token):
-            redirect = "&" not in token
-        elif redirect:
-            redirect = False
-        else:
-            current.append(index)
-    if current:
-        groups.append(current)
-    for indices in groups:
-        words = [tokens[i] for i in indices]
-        if words[0].lower() in {"rem", "::"}:
-            continue
-        argv = [re.sub(r"\^(.)", r"\1", token.replace('"', "")) for token in words]
-        if not argv[0]:
-            continue
-        yield argv[0], argv[1:], [token for i, token in enumerate(tokens)
-                                  if i not in indices and token != "\n"]
 
 
 def inferred_platform(text, platform):

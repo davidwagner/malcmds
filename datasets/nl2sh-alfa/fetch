@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Download the pinned source and required overlap reference."""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+from _fetch import download
+
+REVISION = 'a99cb5784cf5c2a42b1cc26c1903d9c3b35206ba'
+FILES = [('train.csv', 'train.csv', 4913406, 'f45ada6ba1f0f78c26a5859e827b27c12f17dd1fb131c783dd43ebc580a3afc0'), ('test.csv', 'test.csv', 49523, '65a94a14db655c4a695bde38653b7e8884b071cded604ee05e62d7a61ea44c35'), ('README.md', 'SOURCE_README.md', 4756, 'f4e2c20802b3071da1cf813d99ebf9c7fc9e043a9ddb1c9c5eb2d8c25c40a2b5')]
+
+os.chdir(HERE)
+for source, destination, size, sha256 in FILES:
+    download(f"https://huggingface.co/datasets/westenfelder/NL2SH-ALFA/resolve/{REVISION}/{source}",
+             destination, size=size, checksum="sha256:" + sha256)
+subprocess.run([sys.executable, str(HERE.parent / "quasarnix" / "fetch")], check=True)
