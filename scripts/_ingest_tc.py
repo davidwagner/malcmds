@@ -80,8 +80,21 @@ def avro_records(path):
             yield from avro_blocks(buffered, path.name)
 
 
-def _candidates(path, max_records, windows, annotated_objects=()):
-    """Scan all source records, retaining subjects and command-bearing events."""
+def _event_candidate(record, windows, annotated_objects):
+    """Retain command observations and events used by existing label rules."""
+    event_type = record.get('type')
+    props = record.get('properties') or {}
+    return ((event_type == 'EVENT_EXECUTE' or
+             (windows and event_type in {'EVENT_FORK', 'EVENT_EXIT'})) and bool(
+                 props.get('cmdLine') or props.get('CommandLine') or
+                 (windows and props.get('ImageFileName')) or
+                 (event_type == 'EVENT_EXECUTE' and record.get('predicateObjectPath')))
+            or any(identifier(record.get(field)).lower() in annotated_objects
+                   for field in ('predicateObject', 'predicateObject2')))
+
+
+def _candidates(path, max_records, windows, annotated_objects=(), cadets=False):
+    """Retain commands, annotation inputs, and CADETS process relationships."""
     started = reported = monotonic()
     count = retained = 0
     print(f'{path.name}: scanning', file=sys.stderr, flush=True)
@@ -93,15 +106,8 @@ def _candidates(path, max_records, windows, annotated_objects=()):
             kind = branch.rsplit('.', 1)[-1]
             keep = kind == 'Subject'
             if kind == 'Event':
-                event_type = record.get('type')
-                props = record.get('properties') or {}
-                keep = (event_type == 'EVENT_EXECUTE' or
-                        (windows and event_type in {'EVENT_FORK', 'EVENT_EXIT'})) and bool(
-                            props.get('cmdLine') or props.get('CommandLine') or
-                            (windows and props.get('ImageFileName')) or
-                            (event_type == 'EVENT_EXECUTE' and record.get('predicateObjectPath')))
-                keep = keep or any(identifier(record.get(field)).lower() in annotated_objects
-                                   for field in ('predicateObject', 'predicateObject2'))
+                keep = (_event_candidate(record, windows, annotated_objects) or
+                        (cadets and record.get('type') in {'EVENT_FORK', 'EVENT_ACCEPT'}))
             if keep:
                 retained += 1
                 yield outer
@@ -120,19 +126,19 @@ def _candidates(path, max_records, windows, annotated_objects=()):
               file=sys.stderr, flush=True)
 
 
-def _spool(path, destination, max_records, windows, annotated_objects):
+def _spool(path, destination, max_records, windows, annotated_objects, cadets=False):
     """Decode one file to a private spool; database state stays in the parent."""
     with destination.open('wb') as stream:
-        for outer in _candidates(path, max_records, windows, annotated_objects):
+        for outer in _candidates(path, max_records, windows, annotated_objects, cadets):
             pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def _ordered_files(paths, options, temporary, windows, annotated_objects=()):
+def _ordered_files(paths, options, temporary, windows, annotated_objects=(), cadets=False):
     """Prefetch at most one file per worker and consume in original order."""
     workers = min(getattr(options, 'tc_workers', 8), len(paths))
     if workers <= 1 or getattr(options, 'limit', None) is not None:
         for path in paths:
-            yield path, _candidates(path, options.max_records, windows, annotated_objects)
+            yield path, _candidates(path, options.max_records, windows, annotated_objects, cadets)
         return
     # Spawn avoids inheriting the live DuckDB connection and SQLite state.
     pool = multiprocessing.get_context('spawn').Pool(workers)
@@ -142,7 +148,7 @@ def _ordered_files(paths, options, temporary, windows, annotated_objects=()):
         for index, path in remaining:
             destination = Path(temporary) / f'{index}.pickle'
             pending.append((path, destination, pool.apply_async(
-                _spool, (path, destination, options.max_records, windows, annotated_objects))))
+                _spool, (path, destination, options.max_records, windows, annotated_objects, cadets))))
             if len(pending) == workers:
                 break
         while pending:
@@ -156,7 +162,7 @@ def _ordered_files(paths, options, temporary, windows, annotated_objects=()):
                 index, path = item
                 destination = Path(temporary) / f'{index}.pickle'
                 pending.append((path, destination, pool.apply_async(
-                    _spool, (path, destination, options.max_records, windows, annotated_objects))))
+                    _spool, (path, destination, options.max_records, windows, annotated_objects, cadets))))
         pool.close()
         pool.join()
     finally:
@@ -339,6 +345,68 @@ def annotation_files(files, annotations, temporary):
         files.close()
 
 
+def _cadets_files(files, db, temporary, annotated_objects):
+    """Index CADETS relationships before replaying the original command inputs."""
+    db.execute('CREATE TABLE parents (scope TEXT, subject TEXT, parent TEXT, PRIMARY KEY(scope,subject,parent)) WITHOUT ROWID')
+    db.execute('CREATE TABLE ssh_servers (scope TEXT, subject TEXT, PRIMARY KEY(scope,subject)) WITHOUT ROWID')
+    saved = []
+    failure = None
+    try:
+        try:
+            for index, (path, source) in enumerate(files):
+                destination = Path(temporary) / f'cadets-{index}.pickle'
+                saved.append((path, destination))
+                with destination.open('wb') as stream:
+                    for outer in source:
+                        branch, record = outer['datum']
+                        kind = branch.rsplit('.', 1)[-1]
+                        host = identifier(outer.get('hostId') or record.get('hostId')) or path.name.split('.bin')[0]
+                        scope = f"{host}:{outer.get('sessionNumber', 0)}"
+                        if kind == 'Subject':
+                            subject = identifier(record.get('uuid'))
+                            parent = identifier(record.get('parentSubject'))
+                        else:
+                            subject = identifier(record.get('predicateObject'))
+                            parent = identifier(record.get('subject')) if record.get('type') == 'EVENT_FORK' else ''
+                            if (record.get('type') == 'EVENT_ACCEPT' and
+                                    Path((record.get('properties') or {}).get('exec', '')).name == 'sshd'):
+                                server = identifier(record.get('subject'))
+                                if server:
+                                    db.execute('INSERT OR IGNORE INTO ssh_servers VALUES (?,?)', (scope, server))
+                        if subject and parent:
+                            db.execute('INSERT OR IGNORE INTO parents VALUES (?,?,?)', (scope, subject, parent))
+                        # Extra relationship events must not create commands,
+                        # change fallback record numbers, or affect labels.
+                        if kind == 'Subject' or _event_candidate(record, False, annotated_objects):
+                            pickle.dump(outer, stream, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception as error:  # noqa: BLE001 - replay valid input before reporting scan failure
+            failure = error
+        for path, destination in saved:
+            with destination.open('rb') as stream:
+                yield path, _unspool(stream)
+            destination.unlink()
+        if failure is not None:
+            raise failure
+    finally:
+        files.close()
+
+
+def _cadets_ssh_root(db: sqlite3.Connection, scope: str, subject: str) -> str | None:
+    """Return the child of the nearest accepting SSH server, or no known group."""
+    visited = set()
+    child = None
+    while subject and subject not in visited:
+        visited.add(subject)
+        if db.execute('SELECT 1 FROM ssh_servers WHERE scope=? AND subject=?', (scope, subject)).fetchone():
+            return child
+        parents = db.execute('SELECT parent FROM parents WHERE scope=? AND subject=? LIMIT 2',
+                             (scope, subject)).fetchall()
+        if len(parents) != 1:
+            return None
+        child, subject = subject, parents[0][0]
+    return None
+
+
 def records(root, options):
     """Yield process command snapshots and execution records with bounded RAM."""
     collector = root.name.split('-')[-1]
@@ -361,7 +429,10 @@ def records(root, options):
             db.execute('CREATE TABLE executions (scope TEXT, subject TEXT, time INTEGER, pgm TEXT, args TEXT)')
             db.execute('CREATE INDEX execution_creation ON executions (scope,subject,time,pgm,args)')
             paths = select_files(paths, options)
-            files = _ordered_files(paths, options, temporary, os_name == 'windows', set(annotations.objects))
+            files = _ordered_files(paths, options, temporary, os_name == 'windows',
+                                   set(annotations.objects), collector == 'cadets')
+            if collector == 'cadets':
+                files = _cadets_files(files, db, temporary, set(annotations.objects))
             if collector == 'fivedirections':
                 files = image_files(files, db, temporary, options.limit is not None)
             if annotations.objects:
@@ -425,7 +496,11 @@ def records(root, options):
                         continue
                     for pgm, args in commands:
                         native_session = props.get('SessionId', props.get('SessionID'))
-                        if native_session is not None:
+                        if collector == 'cadets':
+                            ssh_root = _cadets_ssh_root(db, scope, subject)
+                            suffix = f'ssh-tree:{ssh_root}' if ssh_root else f'process:{subject or record_uuid}'
+                            session = f'{root.name}:{scope}:{suffix}'
+                        elif native_session is not None:
                             session = f'{root.name}:{scope}:windows-session:{native_session}'
                         else:
                             session = f'{root.name}:{scope}:parent:{parent or subject or record_uuid}'
