@@ -1,0 +1,89 @@
+[
+  {
+    "classifier": "sol",
+    "stage": "label",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6.1-sol",
+      "output": [
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "benign"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 191,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "output_tokens": 6,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 197
+      }
+    },
+    "cost_usd": 0.000442,
+    "cost_kind": "estimated"
+  },
+  {
+    "classifier": "sol-with-search",
+    "stage": "label",
+    "response": {
+      "status": "completed",
+      "model": "gpt-6.1-sol",
+      "output": [
+        {
+          "type": "web_search_call",
+          "status": "completed",
+          "action": {
+            "type": "search",
+            "queries": [
+              "calculator: 1+1"
+            ],
+            "query": "calculator: 1+1"
+          }
+        },
+        {
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "benign"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "usage": {
+        "input_tokens": 4695,
+        "input_tokens_details": {
+          "cache_write_tokens": 4501,
+          "cached_tokens": 0
+        },
+        "output_tokens": 37,
+        "output_tokens_details": {
+          "reasoning_tokens": 31
+        },
+        "total_tokens": 4732
+      }
+    },
+    "cost_usd": 0.022010500000000002,
+    "cost_kind": "estimated"
+  }
+]

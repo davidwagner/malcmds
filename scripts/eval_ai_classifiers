@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["duckdb==1.5.6", "httpx==0.28.1", "python-dotenv==1.2.2"]
 # ///
-"""Sample observations, evaluate five classifiers, and materialize DuckDB analytics.
+"""Sample observations, evaluate six classifiers, and materialize DuckDB analytics.
 
 Usage: scripts/eval_ai_classifiers results.duckdb --source cmds.duckdb
 Repeat the same command with --resume after interruption; successful requests
@@ -17,7 +17,9 @@ are distinguished by scope, including when a source dataset itself is NULL.
 Confusion fractions are joint fractions, not row-normalized percentages.
 Errors have NULL predictions; non-label model output becomes unknown.
 Incomplete runs expose coverage and return nonzero. Jev and Perplexity return
-native probabilities; Luna, Haiku, and Sol have NULL scores and score_kind.
+native probabilities; Luna, Haiku, Sol, and sol-with-search have NULL scores
+and score_kind. sol-with-search uses GPT-6.1 Sol with required web search;
+cost estimates include search tool calls. Sol remains the comparison reference.
 
 Use --table PROCESS_LAUNCHES (the default) for process observations or
 --table SHELL_INPUTS for shell observations. Each run samples one table so shell
