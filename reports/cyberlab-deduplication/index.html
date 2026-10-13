@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>CyberLab copied event correction</title>
+<style>body{max-width:1100px;margin:2em auto;padding:0 1em;font:16px/1.6 system-ui;color:#18212b}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:.4em .6em;border:1px solid #ccd3dc;text-align:left}th{background:#eef2f6}pre{white-space:pre-wrap;background:#f4f6f8;padding:1em}code{overflow-wrap:anywhere}</style>
+<h1>CyberLab copied event correction</h1><p>Written by KISS. Validation run: October 12, 2026 (America/Los_Angeles). <a href="https://github.com/davidwagner/malcmds/issues/136">Issue #136</a>.</p>
+<p>CyberLab sometimes includes multiple copies of the same logged action in one event list. The importer now keeps the first copy when every field matches and a nonempty timestamp is present. A repeated command with a different timestamp or any different field remains. Records without a timestamp remain too.</p>
+<p>Comparison ignores object field order, preserves array order and value types, and compares Decimal numbers without rounding. Each event list starts a fresh comparison. This assumes equal complete timestamped records are copies; a source with coarse timestamps could record two genuine actions identically.</p>
+<p>Processing order: source records → remove exact copies → join continuation lines → parse commands → write database rows. Retained records keep their original source positions in their IDs.</p>
+<h2>Complete source scan</h2>
+<p>Re-read all 293 downloaded archives: 154,097,349 events in 24,985,786 outer entries. The known truncated January 29 archive used the existing recovery rule. The independent comparison used recursively typed values and unordered object fields. It found 380,922 extra records, including 18,962 command records. Of those, 18,961 would be selected by the importer.</p>
+<p>The importer prefers original shell inputs over command-handler messages when a list contains both. One shell input can produce several process rows, so source-event and database-row counts differ.</p>
+<h2>Database comparison</h2><table><tr><th>Table</th><th>Before</th><th>After</th><th>Removed IDs</th><th>Added IDs</th><th>Changed existing IDs</th></tr>
+<tr><td>PROCESS_LAUNCHES</td><td>10,081,350</td><td>10,061,548</td><td>19,802</td><td>0</td><td>0</td></tr>
+<tr><td>SHELL_INPUTS</td><td>5,411,539</td><td>5,410,641</td><td>898</td><td>0</td><td>0</td></tr>
+</table>
+<p>Compared every column of every CyberLab row, including IDs, command contents, labels, groups, and sessions. For every source list containing selected copies, ran the baseline reader and independently filtered reader through the database row conversion. Their exact full-row differences matched all differences in the fresh database. The baseline code was commit <code>7b12255aadf3b2d31a1994ba0b147d689b69fa5c</code>.</p>
+<p>The rebuild used eight independent file partitions through the actual reader and database writer, then combined their tables. A serial reproduction uses <code>python datasets/cyberlab/ingest --db tmp/cyberlab-clean.duckdb</code> with the dependencies in <code>scripts/ingest-requirements.txt</code>.</p>
+<h2>Files with removed selected commands</h2><p>The <a href="by-file.csv">complete CSV</a> reports all source removals and process/shell row changes for every archive, plus totals. <a href="totals.json">Totals are also available as JSON</a>.</p>
+<table><tr><th>Archive date</th><th>Selected source copies</th><th>Process rows removed</th><th>Process rows added</th><th>Process rows changed</th><th>Shell rows removed</th><th>Shell rows changed</th></tr>
+<tr><td>2019-05-31</td><td>41</td><td>41</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>2019-06-01</td><td>5766</td><td>5766</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>2019-06-02</td><td>5711</td><td>5711</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>2019-06-03</td><td>6052</td><td>6052</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>2019-06-04</td><td>493</td><td>493</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>2019-09-18</td><td>4</td><td>8</td><td>0</td><td>0</td><td>4</td><td>0</td></tr>
+<tr><td>2019-11-12</td><td>797</td><td>1537</td><td>0</td><td>0</td><td>797</td><td>0</td></tr>
+<tr><td>2019-12-06</td><td>5</td><td>8</td><td>0</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><td>2019-12-08</td><td>3</td><td>7</td><td>0</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><td>2019-12-10</td><td>4</td><td>9</td><td>0</td><td>0</td><td>4</td><td>0</td></tr>
+<tr><td>2020-01-27</td><td>18</td><td>32</td><td>0</td><td>0</td><td>18</td><td>0</td></tr>
+<tr><td>2020-02-18</td><td>67</td><td>138</td><td>0</td><td>0</td><td>67</td><td>0</td></tr>
+</table><h2>Changed and added rows</h2>
+<p>PROCESS_LAUNCHES: no added rows or changed retained rows.</p>
+<p>SHELL_INPUTS: no added rows or changed retained rows.</p>
+<h2>Regression checks and replacement</h2>
+<p>All 27 impacted tests passed. The new regressions use actual gzip input and DuckDB output. Published June cases retain 4,997, 4,702, and 4,701 process rows; September automation retains 8,974. November copies, separate connections, cross-entry/file records, continuation handling, input preference, exact Decimal comparisons, untimed repetition, and truncated-file recovery are covered. Source excerpts preserve every field and original outer/event positions.</p>
+<p>Every reachable branch in the new helpers ran under coverage. The defensive error for unsupported value types cannot occur through the JSON reader and is documented in the tests. Ruff, Python compilation, and whitespace checks passed. Separate reviews of production code and tests found no demonstrated issues.</p>
+<p>After all row differences matched their source explanations, replaced CyberLab rows in the local database in one transaction. The transaction checked the old rows had not changed, checked all new rows against the fresh database, and preserved other datasets’ counts and completion markers. The previous CyberLab rows remain in <code>tmp/issue136/comparison.duckdb</code> as <code>baseline_PROCESS_LAUNCHES</code> and <code>baseline_SHELL_INPUTS</code>. The completion marker is true.</p></html>

@@ -16,7 +16,9 @@ import sys
 import tempfile
 import zipfile
 import zlib
+from collections.abc import Hashable, Iterator
 from datetime import datetime
+from decimal import Decimal
 from itertools import islice
 from pathlib import Path
 
@@ -404,18 +406,52 @@ def known_truncated_cyberlab(path):
     return checksum.hexdigest() == "7d2b798aa797115d181ae920cca59002"
 
 
+def _cyberlab_value_key(value: object) -> Hashable:
+    """Compare every JSON field, ignoring object order but preserving types."""
+    if isinstance(value, dict):
+        return (dict, tuple((key, _cyberlab_value_key(item))
+                            for key, item in sorted(value.items())))
+    if isinstance(value, list):
+        return (list, tuple(_cyberlab_value_key(item) for item in value))
+    if value is None or isinstance(value, (bool, int, str, Decimal)):
+        return (type(value), value)
+    # gzip_json_items yields only JSON values, including Decimal for fractions.
+    raise TypeError(f"Unsupported CyberLab JSON value: {type(value).__name__}")
+
+
+def _cyberlab_unique_events(
+    events: list[dict[str, object]],
+) -> Iterator[tuple[int, dict[str, object]]]:
+    """Keep the first timestamped copy within one list, with its source position.
+
+    Equal complete records with a nonempty timestamp are assumed to be copies.
+    Coarse timestamps could make genuine repeated actions indistinguishable.
+    Untimed records are retained because they cannot establish this equality.
+    Decimal values compare numerically without rounding or conversion to text.
+    """
+    seen = set()
+    for position, event in enumerate(events):
+        if event.get("timestamp") not in (None, ""):
+            key = _cyberlab_value_key(event)
+            if key in seen:
+                continue
+            seen.add(key)
+        yield position, event
+
+
 def cyberlab(root, options):
     """Read Cowrie input; suppress handler echoes when original input exists."""
     for path in select_files(root.glob("*.json.gz"), options):
         rows = gzip_json_items(path, allow_truncated=known_truncated_cyberlab(path))
         for index, obj in enumerate(limited(rows, options)):
             for sid, events in obj.items():
+                retained = list(_cyberlab_unique_events(events))
                 has_input = any(
-                    e.get("eventid") == "cowrie.command.input" for e in events
+                    e.get("eventid") == "cowrie.command.input" for _, e in retained
                 )
                 if has_input:
                     inputs = [(n, event, event.get("input") or event.get("message", "").removeprefix("CMD: "))
-                              for n, event in enumerate(events) if event.get("eventid") == "cowrie.command.input"]
+                              for n, event in retained if event.get("eventid") == "cowrie.command.input"]
                     for part, text in complete_inputs([item[2] for item in inputs]):
                         n, event, _ = inputs[part]
                         host = event.get("dst_host_identifier") or event.get("sensor") or ""
@@ -423,7 +459,7 @@ def cyberlab(root, options):
                                            f"cyberlab:{path.name}:{host}:{sid}",
                                            "malicious", shell=True)
                     continue
-                for n, event in enumerate(events):
+                for n, event in retained:
                     kind = event.get("eventid", "")
                     prefixes = {
                         "cowrie.command.input": "CMD: ",
