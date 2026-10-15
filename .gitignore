@@ -9,6 +9,7 @@
 !/datasets/*/fetch
 !/datasets/*/ingest
 !/datasets/*/README.md
+!/datasets/*/NOTES.md
 !/datasets/autolabel/release.json
 __pycache__/
 
