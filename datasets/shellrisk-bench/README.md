@@ -6,18 +6,21 @@ Pinned revision: `437467862139b4e9cdd5322024ef3434a67c7ec8`. Prepare and ingest 
 
 ```sh
 ./fetch
-./build_sessions --upstream-root ../../tmp/shellrisk-upstream
 ./ingest --db ../../cmds.duckdb
 ```
 
-The session builder downloads or reuses the pinned SWE-smith and Terminal-Bench
-trajectories and adapter code. This is a large, one-time download. It checks file
+`./fetch` runs the session builder automatically using `uv`, which also supplies
+the builder's pinned Python dependency. The builder downloads or reuses the
+pinned SWE-smith and Terminal-Bench trajectories and adapter code in
+`../../tmp/shellrisk-upstream`. This is a large, one-time download. It checks file
 sizes and SHA-256 hashes, replays extraction in the original order, and matches
 every published agent command by source, extraction ID, exact text and command
 hash. It writes `sessions.jsonl` and `sessions.manifest.json` beside this README.
 The manifest records input revisions, ordered file hashes, extraction settings,
 coverage and the mapping hash. Rebuilding from the same inputs produces the same
 files. Ordinary ingestion reads only the published files and this mapping.
+To rebuild using a different cache directory, run
+`./build_sessions --upstream-root /path/to/cache` directly.
 The shared downloader verifies byte counts and SHA-256 hashes and saves the source
 card, including publisher license information, as `SOURCE_README.md`.
 
