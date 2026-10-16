@@ -2,8 +2,7 @@
 
 These use actual archive/JSON formats and the real writer; malformed records are
 intentional copies used to verify that an incomplete import cannot be marked done.
-Honeypot _lines' extractfile(None) guard cannot be reached through records(): both
-call sites require a regular tar member first. No test double bypasses that check.
+Malformed honeypot records are retained in its audit output.
 """
 
 import io
@@ -127,7 +126,7 @@ def test_quasarnix_command_labels_and_bounded_reading(tmp_path):
 
 
 def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
-    """Positive multi-command inputs retain group attribution; native IDs survive."""
+    """Behavior labels ignore replay severity; explicit native IDs survive."""
     root = tmp_path / 'shell-honeypot'
     raw = [
         {'eventid': 'cowrie.session.connect', 'src_ip': '192.0.2.1', 'session': 'native-one', 'timestamp': '2024-01-01'},
@@ -137,6 +136,8 @@ def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
         {'info': 'session.connect', 'src_ip': '192.0.2.2', 'timestamp': '2024-01-01T00:00:02'},
         {'info': 'command.input', 'src_ip': '192.0.2.2', 'tshark': "command  found [ 'uname -a']", 'timestamp': '2024-01-01T00:00:03'},
     ]
+    for row in raw:
+        row['protocol'] = 'ssh'
     archive_release(root, {
         'dataset/sessions/2024.jsonl': [{'session_id': 'ip-group', 'src_ip': '192.0.2.1', 'commands': ['id', 'id; whoami']}],
         '2024/cowrie/capture.jsonl': raw,
@@ -152,26 +153,38 @@ def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
     with duckdb.connect(str(database), read_only=True) as connection:
         rows = connection.execute('SELECT pgms,dataset_label,group_id,session_id,shell_input FROM SHELL_INPUTS ORDER BY record_id').fetchall()
         by_input = {row[4]: row for row in rows}
-        assert by_input['id'] == (['id'], 'malicious', None, 'shell-honeypot:2024:native-one', 'id')
-        assert by_input['id; whoami'][:4] == (['id', 'whoami'], 'malicious', None, 'shell-honeypot:2024:native-two')
-        assert by_input['uname -a'][:3] == (['uname'], 'malicious-group', 'shell-honeypot:2024:ip:192.0.2.2')
-        assert by_input['uname -a'][3].endswith('2024/cowrie/capture.jsonl:6')
+        assert by_input['id'][:3] == (['id'], 'benign', None)
+        assert ':record:' in by_input['id'][3]
+        assert by_input['id; whoami'][:4] == (['id', 'whoami'], 'benign', None, 'shell-honeypot:2024:deployment:native:native-two')
+        assert by_input['uname -a'][:3] == (['uname'], 'benign', None)
+        assert by_input['uname -a'][3].endswith('2024/cowrie/capture.jsonl:line:7')
     bounded = tmp_path / 'bounded.duckdb'
     result = invoke(root, bounded, 'from _ingest_shell_honeypot import records\n', '--max-records', '2')
     assert result.returncode == 0, result.stderr
     assert_incomplete(bounded)
 
 
-@pytest.mark.parametrize('files,error', [
-    ({'dataset/request_response/a.jsonl': []}, 'missing published cleaned session'),
-    ({'dataset/sessions/2024.jsonl': [{'session_id': 'g', 'src_ip': 'x', 'commands': []}],
-      '2024/cowrie/a.jsonl': [{'eventid': 'cowrie.command.input', 'input': 42}]}, 'command input is not a string'),
-])
-def test_honeypot_malformed_metadata_is_incomplete(tmp_path, files, error):
-    """Absent cleaned inventory and invalid command payloads cannot finish ingestion."""
+def test_honeypot_unsupported_archive_is_incomplete(tmp_path):
+    """Replay and derived 2024 tables alone are not observation sources."""
     root = tmp_path / 'shell-honeypot'
-    archive_release(root, files)
+    archive_release(root, {'dataset/request_response/a.jsonl': []})
     database = tmp_path / 'commands.duckdb'
     result = invoke(root, database, 'from _ingest_shell_honeypot import records\n')
-    assert result.returncode != 0 and error in result.stderr
+    assert result.returncode != 0
     assert_incomplete(database)
+
+
+def test_honeypot_malformed_input_is_audited(tmp_path):
+    """A bad payload is skipped while subsequent valid observations survive."""
+    root = tmp_path / 'shell-honeypot'
+    archive_release(root, {'2024/cowrie/a.jsonl': [
+        {'eventid': 'cowrie.command.input', 'input': 42, 'protocol': 'ssh'},
+        {'eventid': 'cowrie.command.input', 'input': 'id', 'protocol': 'ssh'},
+    ]})
+    database = tmp_path / 'commands.duckdb'
+    result = invoke(root, database, 'from _ingest_shell_honeypot import records\n')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(database), read_only=True) as connection:
+        assert connection.execute('SELECT shell_input FROM SHELL_INPUTS').fetchall() == [('id',)]
+    audit = [json.loads(line) for line in (root / 'import-audit.jsonl').read_text().splitlines()]
+    assert any(row['record_id'].endswith(':line:2') for row in audit)

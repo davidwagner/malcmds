@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download both periods, complete raw captures, cleaned groups, and annotations."""
+"""Download the pinned archive for 2024 events and earlier command occurrences."""
 import os
 import sys
 from pathlib import Path
@@ -9,4 +9,5 @@ sys.path.insert(0, str(HERE.parent.parent / "scripts"))
 from _fetch import download
 
 os.chdir(HERE)
-download("https://codeload.github.com/zyw-286/shell-attack-evolution-dataset/tar.gz/d5f7fe120ebd921e04026b6348c3ec5d399c5df6", "release.tar.gz")
+download("https://codeload.github.com/zyw-286/shell-attack-evolution-dataset/tar.gz/d5f7fe120ebd921e04026b6348c3ec5d399c5df6", "release.tar.gz",
+         checksum="sha256:266ed2e6c0923e56f317bf880b7294698cfc5792538cc8f58dbdfda68a9c0c11")
