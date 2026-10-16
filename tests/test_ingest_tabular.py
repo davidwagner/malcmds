@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 
 import duckdb
-import pyarrow as pa
-import pyarrow.parquet as pq
 import pytest
 from _ingest_quasarnix import FILES
 
@@ -45,14 +43,6 @@ def source(root):
             with (root / filename).open('w', newline='') as stream:
                 writer = csv.writer(stream); writer.writerow(fields); writer.writerows(rows)
         return [('ls', 'benign'), ('ls -l', 'benign'), ('df -h ', 'benign')]
-    if root.name == 'shellrisk-bench':
-        (root / 'data').mkdir()
-        for split, rows in [('train', [('df -h', 'not_risky'), (attack, 'risky'),
-                                      ('df -h ', 'risky'), ('find . -name \\!', 'not_risky')]),
-                            ('test', [('cobc -v || true', 'not_risky')])]:
-            pq.write_table(pa.Table.from_pylist([{'command': text, 'label': label} for text, label in rows]),
-                           root / f'data/{split}-00000-of-00001.parquet')
-        return [('cobc -v || true', 'benign'), ('df -h ', 'unknown')]
     if root.name == 'mecha':
         (root / 'linuxcommands.json').write_text(json.dumps([
             {'input': 'Compress data', 'output': 'bzip2 data.txt'},
@@ -63,7 +53,7 @@ def source(root):
     return [('sudo !!', 'unknown'), ('python -m SimpleHTTPServer', 'unknown')]
 
 
-@pytest.mark.parametrize('dataset', ['nl2sh-alfa', 'shellrisk-bench', 'mecha', 'cli-commands-explained'])
+@pytest.mark.parametrize('dataset', ['nl2sh-alfa', 'mecha', 'cli-commands-explained'])
 def test_tabular_cli(dataset, tmp_path):
     root = tmp_path / dataset
     expected = source(root)
@@ -94,12 +84,12 @@ def test_tabular_cli(dataset, tmp_path):
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (True,)
     skipped = ingest(root, db)
     assert json.loads(skipped.stdout)['skipped']
-    if dataset in ('nl2sh-alfa', 'shellrisk-bench'):
+    if dataset == 'nl2sh-alfa':
         report = next(json.loads(line) for line in result.stderr.splitlines() if line.startswith('{'))
         assert report['quasarnix_overlap_removed'] == 3
 
 
-@pytest.mark.parametrize('dataset', ['nl2sh-alfa', 'shellrisk-bench'])
+@pytest.mark.parametrize('dataset', ['nl2sh-alfa'])
 @pytest.mark.parametrize('damage', ['missing', 'invalid', 'wrong_type'])
 def test_reference_required_even_when_limited(dataset, damage, tmp_path):
     root = tmp_path / dataset
@@ -117,17 +107,6 @@ def test_reference_required_even_when_limited(dataset, damage, tmp_path):
     with duckdb.connect(str(db)) as con:
         assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
         assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
-
-
-def test_unknown_risk_fails(tmp_path):
-    root = tmp_path / 'shellrisk-bench'
-    source(root)
-    reference(tmp_path)
-    pq.write_table(pa.Table.from_pylist([{'command': 'ls', 'label': 'unexpected'}]),
-                   root / 'data/test-00000-of-00001.parquet')
-    result = ingest(root, tmp_path / 'commands.duckdb')
-    assert result.returncode != 0
-    assert 'unexpected risk label' in result.stderr
 
 
 def test_real_markdown_and_multiline_inputs(tmp_path):

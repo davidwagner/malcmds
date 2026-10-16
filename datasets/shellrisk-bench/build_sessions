@@ -1,0 +1,28 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyarrow==25.0.1"]
+# ///
+"""Build attempt sessions from the pinned upstream trajectories (about 1.7 GB)."""
+import argparse
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent.parent / "scripts"))
+from _shellrisk_session_build import build_session_map
+
+
+def main():
+    """Download or reuse pinned files, replay extraction, and write the mapping."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--published-root", type=Path, default=HERE)
+    parser.add_argument("--upstream-root", type=Path, default=HERE.parent.parent / "tmp" / "shellrisk-upstream")
+    parser.add_argument("--output-dir", type=Path, default=HERE)
+    args = parser.parse_args()
+    manifest = build_session_map(args.published_root, args.upstream_root, args.output_dir)
+    print(f"sessions.jsonl SHA-256: {manifest['mapping_sha256']}")
+
+
+if __name__ == "__main__":
+    main()

@@ -34,14 +34,14 @@ def command_text(text: str, occurrence: str) -> str:
     return text
 
 
-def source_rows(path: Path) -> Iterator[dict]:
+def source_rows(path: Path, *, columns: tuple[str, ...] = ('command', 'label')) -> Iterator[dict]:
     """Read source records in original order without modifying command text."""
     if path.suffix == '.csv':
         with path.open(encoding='utf-8', newline='') as stream:
             yield from csv.DictReader(stream)
     elif path.suffix == '.parquet':
         with pq.ParquetFile(path) as source:
-            for batch in source.iter_batches(columns=['command', 'label']):
+            for batch in source.iter_batches(columns=list(columns)):
                 yield from batch.to_pylist()
     else:
         rows = json.loads(path.read_text(encoding='utf-8'))
@@ -59,13 +59,20 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
             raise FileNotFoundError(f'Missing release file {path}; run ./fetch')
     filtered = dataset in ('nl2sh-alfa', 'shellrisk-bench')
     reference = reference_commands(root.parent / 'quasarnix') if filtered else set()
+    mapping = None
+    columns: tuple[str, ...] = ('command', 'label')
+    if dataset == 'shellrisk-bench':
+        from _shellrisk_sessions import load_session_map, session_id_for
+        mapping = load_session_map(root)
+        columns = ('command', 'label', 'id', 'source', 'upstream_id')
     examined = removed = 0
     try:
         for path in select_files(paths, options):
-            for index, row in enumerate(source_rows(path)):
+            for index, row in enumerate(source_rows(path, columns=columns)):
                 if options.max_records is not None and index >= options.max_records:
                     break
                 label = 'unknown' if dataset == 'cli-commands-explained' else 'benign'
+                session_id = session_id_for(row, mapping) if mapping is not None else ''
                 if dataset == 'nl2sh-alfa':
                     fields = ('bash', 'bash2') if path.name == 'test.csv' else ('bash',)
                 elif dataset == 'mecha':
@@ -92,7 +99,7 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
                         continue
                     commands = [Command(pgm, args, f'{occurrence}:{number}', label=label)
                                 for number, (pgm, args, _) in enumerate(shell_commands(text))]
-                    yield ShellInput(text, occurrence, commands, label=label)
+                    yield ShellInput(text, occurrence, commands, label=label, session_id=session_id)
     finally:
         if filtered:
             print(json.dumps({'dataset': dataset, 'candidates_examined': examined,

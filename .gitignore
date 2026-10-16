@@ -8,6 +8,7 @@
 /datasets/*/*
 !/datasets/*/fetch
 !/datasets/*/ingest
+!/datasets/shellrisk-bench/build_sessions
 !/datasets/*/README.md
 !/datasets/*/NOTES.md
 !/datasets/autolabel/release.json
