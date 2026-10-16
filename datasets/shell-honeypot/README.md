@@ -73,16 +73,25 @@ Malformed records and unsupported protocols are counted and skipped.
 The small catalogue in `scripts/_shell_honeypot_labels.py` labels behavior.
 Narrow routine queries are benign. Explicit SSH-key installation, security
 control disabling, and matching download-and-execute sequences are malicious.
-Uncovered or incomplete syntax stays unknown. Redirections and substitutions
+Uncovered or incomplete syntax proceeds to the replay fallback below. Redirections and substitutions
 are checked before benign classification. Compound inputs become malicious
 when a recognized harmful component is present; unrelated process children
 retain their own labels. All `group_id` values are NULL.
 
-KISS reviews the rules and frequent unknown inputs. Replay severity assists
-that review but never determines a label. An unsuccessful harmful command can
-have score zero. The importer retains all exact-text curated references and
-scores, including disagreements. Replay turn indices never link an annotation
-to an original command occurrence.
+KISS reviews the rules and frequent unknown inputs. When the full input's
+behavior label is unknown, exact-text curated `severity_vi` scores provide a
+fallback: 4 means malicious, 0–1 mean benign, and 2–3 or missing scores leave it
+unknown. Unsupported score values also leave it unknown. If multiple non-null
+scores exist, they must all imply the same label; otherwise it stays unknown.
+Existing benign and malicious rule decisions take precedence, so a recognized
+harmful command with score zero remains malicious. Parsed process children
+retain their independent behavior labels because replay scores describe the
+full input. Reasons identify the applied rule or `replay-severity-vi`; behavior
+references are empty and contain no issue URL.
+
+The importer retains all exact-text curated references and scores, including
+disagreements. Replay turn indices never link an annotation to an original
+command occurrence.
 
 ## Audit and reproduction
 
@@ -105,6 +114,10 @@ Audit files are replaced by the next actual import; retain copies when
 comparing runs. The main schema is unchanged.
 
 ## Measured pinned release
+
+These measurements predate the severity fallback. Row and session counts are
+unchanged; the label counts and unknown rates below describe behavior rules
+alone. A new full import is needed to measure the fallback's effect.
 
 The complete import produced **685,248 shell rows** and **1,429,196 process
 rows**, with unique record IDs and matching parent/child session IDs. Of the

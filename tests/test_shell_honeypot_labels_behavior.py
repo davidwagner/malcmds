@@ -99,3 +99,36 @@ def test_replay_scores_cannot_override_behavior_or_match_changed_text(tmp_path):
     assert emitted[2]['replay_references'] == []
     summary = json.loads((root / 'import-summary.json').read_text())
     assert summary['counts']['conflicting-replay-scores'] == 1
+
+
+@pytest.mark.parametrize(('scores', 'expected'), [
+    ([], 'unknown'), ([None], 'unknown'), ([0], 'benign'), ([1], 'benign'),
+    ([2], 'unknown'), ([3], 'unknown'), ([4], 'malicious'),
+    ([5], 'unknown'), (['4'], 'unknown'), ([True], 'unknown'),
+    ([0, 1], 'benign'), ([4, 4], 'malicious'), ([0, 4], 'unknown'),
+    ([2, 4], 'unknown'), ([None, 4], 'malicious'),
+])
+def test_severity_fallback_through_import(tmp_path, scores, expected):
+    """Exact replay scores fill unknown shell labels while preserving behavior rules."""
+    texts = ['unreviewed_program', 'uname -a', 'iptables -F',
+             'uname -a; unreviewed_program', 'unreviewed_program ']
+    root, database = ingest(tmp_path, {
+        'dataset/sessions/2021_2022.jsonl': [{'commands': texts}],
+        'dataset/request_response/curated.jsonl': [
+            {'command': text, 'severity_vi': score, 'severity_iv': 4}
+            for text in texts[:-1] for score in scores
+        ],
+    })
+    with duckdb.connect(str(database)) as con:
+        assert dict(con.execute('SELECT shell_input,dataset_label FROM SHELL_INPUTS').fetchall()) == {
+            texts[0]: expected, texts[1]: 'benign', texts[2]: 'malicious',
+            texts[3]: expected, texts[4]: 'unknown',
+        }
+        assert [row[0] for row in con.execute(
+            'SELECT dataset_label FROM PROCESS_LAUNCHES ORDER BY record_id'
+        ).fetchall()] == ['unknown', 'benign', 'malicious', 'benign', 'unknown', 'unknown']
+    emitted = [json.loads(line) for line in (root / 'import-audit.jsonl').read_text().splitlines()
+               if json.loads(line)['action'] == 'emit']
+    assert all('issues/154' not in json.dumps(row) for row in emitted)
+    assert [ref['severity'] for ref in emitted[0]['replay_references']] == scores
+    assert emitted[0]['reason'] == ('replay-severity-vi' if expected != 'unknown' else 'uncovered-or-incomplete')

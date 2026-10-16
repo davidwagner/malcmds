@@ -1,12 +1,12 @@
-"""Reviewed behavior labels for issue #154, independent of replay severity.
+"""Reviewed behavior labels, independent of replay severity.
 
-KISS reviewed these narrow rules against the issue's examples. Routine queries
+KISS reviewed these narrow command-pattern rules. Routine queries
 and literal output are benign only with complete, understood syntax. Writing
 an SSH public key to authorized_keys, explicitly disabling security controls,
 and downloading then launching the same absolute path are malicious in this
 attack collection. These are behavior labels, not claims about operator intent
 or successful execution. Unknown syntax stays unknown; replay scores cannot
-override these decisions. References identify the design supporting each rule.
+override these decisions.
 """
 
 import posixpath
@@ -26,7 +26,6 @@ class LabelDecision:
     references: tuple[str, ...] = ()
 
 
-_REFERENCE = "https://github.com/davidwagner/malcmds/issues/154"
 _UNKNOWN = LabelDecision("unknown", "uncovered-or-incomplete")
 _LITERAL = {"command_name", "word", "string", "string_content", "raw_string",
             "ansi_c_string", "concatenation", "number"}
@@ -52,7 +51,7 @@ _READ_ONLY_INPUTS = {
 
 
 def _decision(label: str, rule: str) -> LabelDecision:
-    return LabelDecision(label, rule, (_REFERENCE,))
+    return LabelDecision(label, rule)
 
 
 def _nodes(root):

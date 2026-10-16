@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from _ingest import Command, ShellInput, normalize
-from _shell_honeypot_labels import classify_input
+from _shell_honeypot_labels import LabelDecision, classify_input
 
 REVISION = 'd5f7fe120ebd921e04026b6348c3ec5d399c5df6'
 RELEASE_SHA256 = '266ed2e6c0923e56f317bf880b7294698cfc5792538cc8f58dbdfda68a9c0c11'
@@ -293,6 +293,14 @@ def make_observation(assigned, text, limitation, annotations, audit, totals, dis
     commands = [Command(pgm, args, f'{event.record_id}:{index}', session_id=assigned.session_id)
                 for index, (pgm, args) in enumerate(normalize(text, os='linux', shell=True))]
     decision, children = classify_input(text, commands)
+    if decision.label == 'unknown':
+        # Replay annotations describe the full input, not each parsed invocation.
+        scores = [ref['severity'] for ref in annotations.get(text, [])
+                  if ref['severity'] is not None]
+        labels = {({0: 'benign', 1: 'benign', 4: 'malicious'}.get(score, 'unknown')
+                   if type(score) is int else 'unknown') for score in scores}
+        if len(labels) == 1 and 'unknown' not in labels:
+            decision = LabelDecision(labels.pop(), 'replay-severity-vi')
     for command, child in zip(commands, children, strict=True):
         command.label = child.label
     observation = ShellInput(text, event.record_id, commands, label=decision.label,
