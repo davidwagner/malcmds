@@ -74,17 +74,17 @@ def test_honeypot_occurrences_connections_and_responses(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
         rows = con.execute('SELECT pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
-        assert len(rows) == 4, 'Raw coverage may only suppress matching cleaned occurrences, including multiplicity'
+        assert len(rows) == 3, 'Derived 2024 tables and samples must not duplicate raw observations'
         assert {r[0] for r in rows} == {'uname', 'id'}, 'Responses must never become commands'
-        assert all(r[2] == 'malicious-group' for r in rows), 'Severity zero is not a benign annotation'
-        assert sum(r[4] == 'shell-honeypot:2024:abc123' for r in rows) == 1
-        assert sum(':record:' in r[4] for r in rows) == 3
+        assert all(r[2] == 'benign' for r in rows), 'Routine commands use behavior labels'
+        assert sum('abc123' in r[4] for r in rows) == 1
+        assert sum(':record:' in r[4] for r in rows) == 1
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s '
                            "ON p.record_id = s.record_id || ':0' "
-                           'WHERE p.session_id = s.session_id').fetchone() == (4,)
+                           'WHERE p.session_id = s.session_id').fetchone() == (3,)
         assert con.execute("SELECT count(*) FROM SHELL_INPUTS WHERE session_id = "
-                           "'shell-honeypot:2024:abc123'").fetchone() == (1,)
-        assert all(r[3] != r[4] for r in rows), 'An attacker-IP group is not a login session'
+                           "(SELECT session_id FROM SHELL_INPUTS WHERE contains(session_id, 'abc123') LIMIT 1)").fetchone() == (1,)
+        assert all(r[3] is None for r in rows), 'Behavior labels have no attacker-IP group'
     again = _ingest(root, '_ingest_shell_honeypot', db)
     assert json.loads(again.stdout)['skipped']
 
@@ -104,7 +104,6 @@ def test_honeypot_complete_capture_formats(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
         assert con.execute("SELECT pgm,args,shell_input FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s ON starts_with(p.record_id, s.record_id || ':') ORDER BY p.record_id").fetchall() == [
-            ('uname', ['-s', '-v', '-n', '-r', '-m'], 'uname -s -v -n -r -m '),
             ('uname', ['-s', '-v', '-n', '-r', '-m'], 'uname -s -v -n -r -m')], 'Read original input once; process echoes must not duplicate it'
 
 

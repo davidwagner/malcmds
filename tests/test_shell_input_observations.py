@@ -31,8 +31,8 @@ def test_shell_observations_without_executions_and_repeated_inputs(tmp_path, dat
             (tmp_path / name).write_text(json.dumps(inputs if name == FILES[0] else []))
         source = 'from _ingest_quasarnix import records\n'
     elif dataset == 'honeypot':
-        _archive(tmp_path, {'dataset/sessions/2024.jsonl': [
-            {'session_id': 'connection', 'period': '2024', 'src_ip': '192.0.2.1', 'commands': inputs}]})
+        _archive(tmp_path, {'dataset/sessions/2021_2022.jsonl': [
+            {'session_id': 'connection', 'period': '2021_2022', 'src_ip': '192.0.2.1', 'commands': inputs}]})
         source = 'from _ingest_shell_honeypot import records\n'
     elif dataset == 'bots':
         source = f'''
