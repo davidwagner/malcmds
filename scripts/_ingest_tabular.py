@@ -59,12 +59,7 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
             raise FileNotFoundError(f'Missing release file {path}; run ./fetch')
     filtered = dataset in ('nl2sh-alfa', 'shellrisk-bench')
     reference = reference_commands(root.parent / 'quasarnix') if filtered else set()
-    mapping = None
     columns: tuple[str, ...] = ('command', 'label')
-    if dataset == 'shellrisk-bench':
-        from _shellrisk_sessions import load_session_map, session_id_for
-        mapping = load_session_map(root)
-        columns = ('command', 'label', 'id', 'source', 'upstream_id')
     examined = removed = 0
     try:
         for path in select_files(paths, options):
@@ -72,7 +67,6 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
                 if options.max_records is not None and index >= options.max_records:
                     break
                 label = 'unknown' if dataset == 'cli-commands-explained' else 'benign'
-                session_id = session_id_for(row, mapping) if mapping is not None else ''
                 if dataset == 'nl2sh-alfa':
                     fields = ('bash', 'bash2') if path.name == 'test.csv' else ('bash',)
                 elif dataset == 'mecha':
@@ -99,7 +93,7 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
                         continue
                     commands = [Command(pgm, args, f'{occurrence}:{number}', label=label)
                                 for number, (pgm, args, _) in enumerate(shell_commands(text))]
-                    yield ShellInput(text, occurrence, commands, label=label, session_id=session_id)
+                    yield ShellInput(text, occurrence, commands, label=label)
     finally:
         if filtered:
             print(json.dumps({'dataset': dataset, 'candidates_examined': examined,

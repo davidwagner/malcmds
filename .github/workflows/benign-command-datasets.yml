@@ -48,6 +48,8 @@ jobs:
           tests/test_ingest_lade_formats.py
           tests/test_ingest_tabular.py
           tests/test_shellrisk_sessions.py
+          tests/test_shellrisk_fetch.py
+          tests/test_migrate_record_sessions.py
           tests/test_ingest_tldr.py
           tests/test_ingest_microsoft_docs.py
           tests/test_ingest_quasarnix_honeypot.py

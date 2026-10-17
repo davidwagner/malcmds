@@ -28,7 +28,7 @@ def ingest(tmp_path, files):
 
 
 def test_telnet_normalizes_ports_crosses_midnight_and_splits_login_idle(tmp_path):
-    """Only relevant activity advances the 60-minute estimated-session clock."""
+    """Each Telnet input has its own session across endpoints, dates, and logins."""
     root, database = ingest(tmp_path, {
         '2024/cowrie/telnet_01.json': [
             event('command.input', 'echo first', '2024-03-01T23:50:00'),
@@ -47,14 +47,14 @@ def test_telnet_normalizes_ports_crosses_midnight_and_splits_login_idle(tmp_path
     with duckdb.connect(str(database)) as con:
         sessions = dict(con.execute('SELECT shell_input,session_id FROM SHELL_INPUTS').fetchall())
         assert len(sessions) == 6
-        assert sessions['echo first'] == sessions['echo midnight'] == sessions['echo hour']
-        assert len({sessions[text] for text in ['echo first', 'echo concurrent', 'echo idle', 'echo login']}) == 4
+        assert len(set(sessions.values())) == 6
+        assert all(value.startswith('shell-honeypot:record:') for value in sessions.values())
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES WHERE group_id IS NOT NULL').fetchone() == (0,)
     assert json.loads((root / 'import-summary.json').read_text())
 
 
 def test_ssh_connect_close_reuse_and_long_explicit_interval(tmp_path):
-    """An explicit connection lasts until close and reused native IDs stay separate."""
+    """SSH inputs remain separate even inside one long explicit connection."""
     rows = [
         event('session.connect', 'New connection [session: reused]', '2024-03-01T23:00:00', protocol='ssh'),
         event('command.input', 'echo first', '2024-03-01T23:01:00', protocol='ssh'),
@@ -68,9 +68,8 @@ def test_ssh_connect_close_reuse_and_long_explicit_interval(tmp_path):
     _, database = ingest(tmp_path, {'2024/cowrie/ssh_a.json': rows[:2], '2024/cowrie/ssh_b.json': rows[2:]})
     with duckdb.connect(str(database)) as con:
         sessions = dict(con.execute('SELECT shell_input,session_id FROM SHELL_INPUTS').fetchall())
-        assert sessions['echo first'] == sessions['echo late']
-        assert len(set(sessions.values())) == 3
-        assert 'reused' in sessions['echo first'] and 'reused' in sessions['echo reconnect']
+        assert len(set(sessions.values())) == 4
+        assert all(value.startswith('shell-honeypot:record:') for value in sessions.values())
 
 
 def test_missing_endpoints_times_and_early_occurrences_get_fallbacks(tmp_path):
@@ -112,7 +111,7 @@ def test_fragment_only_reconstruction_and_failed_attempts(tmp_path):
 
 
 def test_native_ids_preserve_literals_and_bounded_assignment(tmp_path):
-    """Native IDs work without endpoints, and output limits preserve session IDs."""
+    """Native connection IDs never group inputs; limits preserve occurrence IDs."""
     literal = "  printf '%s\\n' 'command  found [ b\"id\" ]'  "
     root, database = ingest(tmp_path, {'2024/cowrie/ssh.jsonl': [
         {'eventid': 'cowrie.command.input', 'input': literal, 'session': 'abc', 'protocol': 'ssh'},
@@ -122,7 +121,8 @@ def test_native_ids_preserve_literals_and_bounded_assignment(tmp_path):
     with duckdb.connect(str(database)) as con:
         rows = con.execute('SELECT record_id,shell_input,session_id FROM SHELL_INPUTS ORDER BY record_id').fetchall()
         assert rows[0][1] == literal
-        assert rows[0][2] == rows[1][2] == 'shell-honeypot:2024:deployment:native:abc'
+        assert len({row[2] for row in rows}) == 3
+        assert all(row[2] == 'shell-honeypot:record:' + row[0] for row in rows)
         assert rows[2][2] != rows[0][2]
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (2,)
     bounded = tmp_path / 'bounded.duckdb'

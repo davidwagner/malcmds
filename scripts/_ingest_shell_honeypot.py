@@ -290,7 +290,8 @@ def read_early_inputs(archive, member, audit, counts):
 def make_observation(assigned, text, limitation, annotations, audit, totals, distinct, sessions):
     """Parse one input and attach independent shell and invocation behavior labels."""
     event = assigned.event
-    commands = [Command(pgm, args, f'{event.record_id}:{index}', session_id=assigned.session_id)
+    session_id = f'shell-honeypot:record:{event.record_id}'
+    commands = [Command(pgm, args, f'{event.record_id}:{index}', session_id=session_id)
                 for index, (pgm, args) in enumerate(normalize(text, os='linux', shell=True))]
     decision, children = classify_input(text, commands)
     if decision.label == 'unknown':
@@ -304,7 +305,7 @@ def make_observation(assigned, text, limitation, annotations, audit, totals, dis
     for command, child in zip(commands, children, strict=True):
         command.label = child.label
     observation = ShellInput(text, event.record_id, commands, label=decision.label,
-                             session_id=assigned.session_id)
+                             session_id=session_id)
     key = f'{event.collection}/{event.protocol}'
     totals[key]['shell:' + decision.label] += 1
     totals[key]['reason:' + decision.reason] += 1
@@ -314,9 +315,9 @@ def make_observation(assigned, text, limitation, annotations, audit, totals, dis
     if text not in distinct[key]:
         distinct[key][text] = [decision.label, 0]
     distinct[key][text][1] += 1
-    sessions[key][assigned.session_id] += 1
+    sessions[key][session_id] += 1
     audit_entry(audit, event.record_id, 'emit', decision.reason, source=event.path,
-                line=event.line, session_id=assigned.session_id, method=assigned.method,
+                line=event.line, session_id=session_id, method='record', decoding_method=assigned.method,
                 label=decision.label, child_rules=[c.reason for c in children],
                 references=list(decision.references), replay_references=annotations.get(text, []),
                 limitation=limitation, raw_text=event.text if limitation == 'reconstructed-fragment' else None)
@@ -344,11 +345,6 @@ def records(root: Path, options):
         annotations = load_replay_annotations(archive, [m for n, m in members.items()
             if n in (CURATED, 'dataset/request_response/vm_replay_2021_2022.jsonl')], audit, counts)
         events = sorted(read_events(archive, raw, audit, counts), key=event_sort_key)
-        sensitivity = {}
-        for minutes in (5, 15, 30, 60):
-            sizes = Counter(a.session_id for a in assign_sessions(events, minutes)
-                            if a.event.protocol == 'telnet' and a.event.kind == 'input')
-            sensitivity[str(minutes)] = {'sessions': len(sizes), 'singletons': sum(v == 1 for v in sizes.values())}
         connections = defaultdict(list)
         login_sessions = set()
         scope = '' if digest == RELEASE_SHA256 else f':partial:{digest[:16]}'
@@ -368,8 +364,8 @@ def records(root: Path, options):
                         'full_pinned_archive': digest == RELEASE_SHA256,
                         'sources': [{'path': n, 'bytes': m.size} for n, m in sorted(members.items())
                                  if m in raw or n == EARLY or n in (CURATED, 'dataset/request_response/vm_replay_2021_2022.jsonl')],
-                        'idle_minutes': 60, 'session_scope': 'full-selected-sources',
-                        'inferred_id_source_scope': scope or 'pinned-release',
+                        'decoding_idle_minutes': 60, 'session_scope': 'per-record',
+                        'decoding_source_scope': scope or 'pinned-release',
                         'output_limit': getattr(options, 'limit', None), 'max_records': cap,
                         'sample_files': getattr(options, 'sample_files', None)}
         (root / 'import-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -402,5 +398,5 @@ def records(root: Path, options):
                                    'frequent_unknown_inputs': unknowns.most_common(30)}
             summary = {'output_complete': complete, 'emitted_shell_rows': emitted,
                            'emitted_process_rows': sum(v for c in totals.values() for k, v in c.items() if k.startswith('process:')),
-                           'counts': dict(counts), 'groups': groups, 'telnet_timeout_minutes': sensitivity}
+                           'counts': dict(counts), 'groups': groups}
             (root / 'import-summary.json').write_text(json.dumps(summary, indent=2) + '\n')

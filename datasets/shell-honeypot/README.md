@@ -15,44 +15,18 @@ unique-command tables, and replay turns from observation rows. This avoids
 counting different published views of the same commands more than once.
 Repeated strings at different source positions remain separate observations.
 
-Earlier command lists group by source IP. They have no command timestamps or
-connection identifiers. An inactivity threshold cannot split those lists into
-login sessions. Each occurrence therefore receives its own
-`shell-honeypot:record:<record_id>` session, shared by its parsed children.
-Empty inputs still produce shell rows. Acquiring complete earlier raw logs
-would permit better grouping; those logs must replace the earlier derived
-source as a whole to avoid unmatchable duplicates.
+Every input, including 2024 SSH and Telnet observations, receives its own
+`shell-honeypot:record:<record_id>` session. Its parsed process children share
+that identifier. Repeated text at different source positions remains separate.
+Empty inputs still produce shell rows.
 
-## Connection reconstruction
+## Connection context for decoding
 
-For 2024, events from all days are sorted by structured endpoints, time, path,
-and numeric line position. String and integer ports are normalized. Separate
-source ports remain separate even when the IP is shared. Protocol comes from
-event metadata, so SSH/Telnet on ports such as 443 are supported.
-
-SSH connect events start intervals; closes and disconnects end them. A new
-connect always starts a new interval, even when its endpoints or native ID
-repeat. Native IDs found in connect messages are qualified by collection,
-deployment, and connect record. Standard Cowrie inputs with a native session
-ID preserve that grouping directly. Missing endpoints or timestamps in
-transformed inputs receive per-record fallback sessions.
-
-Telnet and orphan SSH commands use estimated sessions. More than **60 minutes**
-without relevant activity ends an estimated session. Successful Telnet login
-after a command also starts a new session. Repeated logins before the first
-command remain together. Commands, logins, connects, and closes count as
-activity; processing/debug messages do not. Explicit SSH intervals take
-precedence over inactivity. SSH logins without a matching active tuple are
-counted as orphan metadata. Different connections may still reuse a Telnet
-tuple within an hour when login information is absent.
-
-Session assignment reads all selected source events before applying `--limit`
-or `--max-records`. These flags limit emitted shell observations; they do not
-truncate source files before reconstructing sessions. A custom archive gets
-its digest in inferred session IDs, so partial collections cannot silently
-claim the same inferred IDs as the pinned release. All source files are read
-also when the shared `--sample-files` option is supplied; its presence marks
-the run incomplete, as with other shared sampling flags.
+The importer still sorts connection events and uses native IDs, explicit
+connect/close messages, or a 60-minute inactivity estimate to distinguish
+literal input from transformed fragments. This internal context preserves the
+existing choice of observations and their text. It does not group database
+rows into sessions. All selected source events are read before output limits apply.
 
 ## Shell reconstruction and behavior labels
 
@@ -98,13 +72,13 @@ command occurrence.
 Each import writes three files beside `release.tar.gz`:
 
 - `import-manifest.json`: revision, actual archive hash, source paths and sizes,
-  session threshold, inferred-ID scope, and output limits.
-- `import-audit.jsonl`: source record IDs, connection methods, label rules,
+  decoding threshold and source scope, per-record session policy, and output limits.
+- `import-audit.jsonl`: source record IDs, per-record sessions, decoding methods, label rules,
   exact-text replay references, reconstruction limitations, and rejected rows.
   Bulk processing/debug messages are counted by event type in the summary.
 - `import-summary.json`: emitted rows, label counts and unknown rates by
   period/protocol, most frequent unknown strings, omission reasons, session
-  counts, and Telnet comparisons at 5, 15, 30, and 60 minutes.
+  counts.
 
 These files describe the reader's output. Check the shared writer's `INGESTED`
 table for successful database completion. A completed dataset is skipped on
@@ -115,7 +89,7 @@ comparing runs. The main schema is unchanged.
 
 ## Measured pinned release
 
-These measurements predate the severity fallback. Row and session counts are
+These measurements predate the severity fallback. Row counts are
 unchanged; the label counts and unknown rates below describe behavior rules
 alone. A new full import is needed to measure the fallback's effect.
 
@@ -148,15 +122,9 @@ The earlier source also includes `Enter new UNIX password: ` (2,423), whose
 status as submitted input cannot be recovered from the derived list. These
 remain unknown instead of inheriting a label from attacker association.
 
-There are 409,025 SSH sessions with observations (332,878 singletons), and
-67,894 earlier fallback sessions. Telnet sensitivity, counted on input events:
-
-| Idle interval | Sessions | Singletons |
-| --- | ---: | ---: |
-| 5 minutes | 15,205 | 18 |
-| 15 minutes | 15,204 | 18 |
-| 30 minutes | 15,204 | 18 |
-| 60 minutes | 15,203 | 18 |
+There are now 685,248 independent input sessions: 519,466 SSH, 97,888 Telnet,
+and 67,894 earlier occurrences. The following historical counts describe the
+internal decoding intervals, rather than the database session IDs.
 
 Only 4,814 of 10,215 Telnet intervals containing successful-login metadata
 also contain input on the exact tuple. There are 353,783 orphan SSH login
@@ -169,3 +137,11 @@ No mixed-format fragment omissions occurred in this pinned run.
 Replay auditing reproduces 438 changed texts at matching replay-turn indices
 and 30 exact command strings with conflicting severity scores. Empty shell
 rows remain present: 39 SSH, 2,198 Telnet, and 154 earlier occurrences.
+
+To update existing database sessions without re-ingesting or changing labels,
+stop other writers, back up the database, and run
+`./scripts/migrate_record_sessions --db cmds.duckdb` from the repository root.
+The transaction updates both Shell Honeypot and ShellRisk inputs and their
+parsed processes, preserving all other fields. It deletes obsolete session
+labels for those datasets, retaining labels for IDs still present, if `SESSION_LABELS` exists. Repeating the command
+has the same result.

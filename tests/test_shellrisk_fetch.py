@@ -1,7 +1,7 @@
 """Run the public fetch/ingest commands against real pinned source files.
 
 Set SHELLRISK_FETCH_CACHE to a checkout containing fetched ShellRisk and
-QuasarNix files, and SHELLRISK_UPSTREAM_ROOT to its cached upstream trajectories,
+QuasarNix files,
 to run the full regression without downloading several GB again.
 """
 
@@ -42,11 +42,10 @@ def test_fetch_list_leaves_dataset_unprepared(tmp_path):
     assert not (tmp_path / 'tmp').exists()
 
 
-@pytest.mark.skipif(not (os.environ.get('SHELLRISK_FETCH_CACHE') and
-                        os.environ.get('SHELLRISK_UPSTREAM_ROOT')),
-                    reason='Fetch regression needs the real published and upstream caches.')
-def test_fetch_then_ingest_builds_sessions(tmp_path):
-    """Fetching a release without a mapping must prepare it for full ingestion."""
+@pytest.mark.skipif(not os.environ.get('SHELLRISK_FETCH_CACHE'),
+                    reason='Fetch regression needs the real published caches.')
+def test_fetch_then_ingest_uses_independent_sessions(tmp_path):
+    """Fetching the published release prepares ingestion without trajectory files."""
     from _ingest_quasarnix import FILES
     from _shellrisk_sessions import PUBLISHED_FILES
 
@@ -58,9 +57,6 @@ def test_fetch_then_ingest_builds_sessions(tmp_path):
         target.symlink_to(cache / 'shellrisk-bench' / name)
     for name in FILES:
         (root.parent / 'quasarnix' / name).symlink_to(cache / 'quasarnix' / name)
-    (tmp_path / 'tmp').mkdir()
-    (tmp_path / 'tmp' / 'shellrisk-upstream').symlink_to(
-        Path(os.environ['SHELLRISK_UPSTREAM_ROOT']), target_is_directory=True)
     env = dict(os.environ, FETCH_LIST='0')
     result = subprocess.run([sys.executable, str(root / 'fetch')], cwd=tmp_path,
                             env=env, capture_output=True, text=True, check=False)
@@ -71,9 +67,9 @@ def test_fetch_then_ingest_builds_sessions(tmp_path):
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(db)) as con:
         assert con.execute('SELECT count(*), count(DISTINCT session_id) FROM SHELL_INPUTS'
-                           ).fetchone() == (19699, 13137)
+                           ).fetchone() == (19699, 19699)
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (41663,)
         assert con.execute('SELECT dataset, ingested FROM INGESTED').fetchall() == [
             ('shellrisk-bench', True)]
-    assert (root / 'sessions.jsonl').is_file()
-    assert (root / 'sessions.manifest.json').is_file()
+    assert not (root / 'sessions.jsonl').exists()
+    assert not (root / 'sessions.manifest.json').exists()

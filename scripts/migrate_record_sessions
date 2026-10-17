@@ -1,0 +1,60 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6"]
+# ///
+"""Give ShellRisk and Shell Honeypot inputs independent occurrence sessions."""
+import argparse
+from pathlib import Path
+
+import duckdb
+
+TARGETS = "('shellrisk-bench', 'shell-honeypot')"
+
+
+def migrate(database: Path):
+    """Update both observation tables atomically without changing other fields."""
+    if not database.is_file():
+        raise FileNotFoundError(database)
+    with duckdb.connect(str(database)) as con:
+        con.execute('BEGIN TRANSACTION')
+        try:
+            duplicate = con.execute(f'''SELECT dataset, record_id FROM SHELL_INPUTS
+                WHERE dataset IN {TARGETS} GROUP BY dataset, record_id
+                HAVING count(*) > 1 LIMIT 1''').fetchone()
+            if duplicate:
+                raise ValueError(f'Duplicate shell record: {duplicate}')
+            orphan = con.execute(f'''SELECT p.dataset, p.record_id FROM PROCESS_LAUNCHES p
+                LEFT JOIN SHELL_INPUTS s ON p.dataset = s.dataset
+                AND regexp_replace(p.record_id, ':[0-9]+$', '') = s.record_id
+                WHERE p.dataset IN {TARGETS}
+                AND (s.record_id IS NULL OR NOT regexp_matches(p.record_id, ':[0-9]+$'))
+                LIMIT 1''').fetchone()
+            if orphan:
+                raise ValueError(f'Process has no shell parent: {orphan}')
+            con.execute(f'''UPDATE SHELL_INPUTS SET session_id = dataset || ':record:' || record_id
+                WHERE dataset IN {TARGETS}''')
+            con.execute(f'''UPDATE PROCESS_LAUNCHES p SET session_id = s.session_id
+                FROM SHELL_INPUTS s WHERE p.dataset IN {TARGETS} AND p.dataset = s.dataset
+                AND regexp_replace(p.record_id, ':[0-9]+$', '') = s.record_id''')
+            if con.execute("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'main' AND table_name = 'SESSION_LABELS'").fetchone()[0]:
+                con.execute(f'''DELETE FROM SESSION_LABELS l WHERE dataset IN {TARGETS}
+                    AND NOT EXISTS (SELECT 1 FROM SHELL_INPUTS s
+                        WHERE s.dataset = l.dataset AND s.session_id = l.session_id)''')
+            con.execute('COMMIT')
+        except Exception:
+            con.execute('ROLLBACK')
+            raise
+
+
+def main():
+    """Migrate an existing database; stop other writers and back it up first."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--db', required=True, type=Path)
+    args = parser.parse_args()
+    migrate(args.db)
+    print('Updated shellrisk-bench and shell-honeypot session IDs.')
+
+
+if __name__ == '__main__':
+    main()
