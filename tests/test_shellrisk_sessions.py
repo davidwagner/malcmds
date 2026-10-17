@@ -1,4 +1,4 @@
-"""Exercise attempt grouping and corrupt mapping rejection through the ingest CLI.
+"""Exercise independent ingestion sessions and the optional attempt mapping tools.
 
 The loader also rejects unknown published sources, non-string upstream IDs,
 and duplicate published keys.
@@ -99,9 +99,7 @@ def test_attempts_strings_labels_and_processes(tmp_path):
             text, label, session = actual[row['record_id']]
             assert text == row['command']
             assert label == ('unknown' if row['label'] == 'risky' else 'benign')
-            entry = indexed.get((row['source'], row['upstream_id']))
-            assert session == (entry['session_id'] if entry else
-                               f"shellrisk-bench:record:{row['record_id']}")
+            assert session == f"shellrisk-bench:record:{row['record_id']}"
         first = indexed['swesmith', 'swesmith-000291']
         second = indexed['swesmith', 'swesmith-000305']
         assert first['session_id'] == second['session_id']
@@ -162,8 +160,8 @@ def test_shellrisk_reference_required_when_limited(tmp_path, damage):
     'null_command', 'invalid_upstream_id', 'null_upstream_id', 'invalid_task',
     'row_out_of_range', 'wrong_adapter_files', 'shortened_release',
 ])
-def test_invalid_mapping_fails_before_limited_ingest(tmp_path, damage):
-    from test_ingest_tabular import ingest, reference
+def test_optional_mapping_loader_rejects_invalid_mapping(tmp_path, damage):
+    from test_ingest_tabular import reference
     root = tmp_path / 'shellrisk-bench'
     _, entries = fixture(root)
     reference(tmp_path)
@@ -262,12 +260,12 @@ def test_invalid_mapping_fails_before_limited_ingest(tmp_path, damage):
             manifest = json.loads(manifest_path.read_text())
             manifest['mapping_sha256'] = hashlib.sha256(mapping.read_bytes()).hexdigest()
             manifest_path.write_text(json.dumps(manifest))
-    db = tmp_path / 'commands.duckdb'
-    result = ingest(root, db, '--limit', '1', '--max-records', '1', '--sample-files', '1')
+    result = subprocess.run([sys.executable, '-c',
+        'import sys; from pathlib import Path; from _shellrisk_sessions import load_session_map; '
+        'load_session_map(Path(sys.argv[1]))', str(root)],
+        env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / 'scripts')),
+        capture_output=True, text=True, check=False)
     assert result.returncode != 0, result.stdout
-    with duckdb.connect(str(db)) as con:
-        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
-        assert con.execute('SELECT ingested FROM INGESTED').fetchone() == (False,)
 
 
 @pytest.mark.skipif(not (os.environ.get('SHELLRISK_PUBLISHED_ROOT') and
@@ -343,3 +341,24 @@ def test_builder_rejects_modified_pinned_files(tmp_path, damage):
     assert 'pinned file size/hash mismatch' in result.stderr
     assert not (output / 'sessions.jsonl').exists()
     assert not (output / 'sessions.manifest.json').exists()
+
+
+@pytest.mark.parametrize('mapping', ['missing', 'corrupt'])
+def test_ingestion_needs_no_attempt_mapping(tmp_path, mapping):
+    """Published inputs ingest independently even without usable trajectory files."""
+    from test_ingest_tabular import ingest, reference
+    root = tmp_path / 'shellrisk-bench'
+    fixture(root)
+    reference(tmp_path)
+    for name in ['sessions.jsonl', 'sessions.manifest.json']:
+        path = root / name
+        if mapping == 'missing':
+            path.unlink()
+        else:
+            path.write_text('invalid JSON')
+    db = tmp_path / 'commands.duckdb'
+    result = ingest(root, db, '--max-records', '2')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(db)) as con:
+        assert con.execute("SELECT count(*) FROM SHELL_INPUTS WHERE session_id != dataset || ':record:' || record_id").fetchone() == (0,)
+        assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone()[0] > 0

@@ -77,13 +77,13 @@ def test_honeypot_occurrences_connections_and_responses(tmp_path):
         assert len(rows) == 3, 'Derived 2024 tables and samples must not duplicate raw observations'
         assert {r[0] for r in rows} == {'uname', 'id'}, 'Responses must never become commands'
         assert all(r[2] == 'benign' for r in rows), 'Routine commands use behavior labels'
-        assert sum('abc123' in r[4] for r in rows) == 1
-        assert sum(':record:' in r[4] for r in rows) == 1
+        assert all('abc123' not in r[4] for r in rows)
+        assert sum(':record:' in r[4] for r in rows) == 3
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES p JOIN SHELL_INPUTS s '
                            "ON p.record_id = s.record_id || ':0' "
                            'WHERE p.session_id = s.session_id').fetchone() == (3,)
         assert con.execute("SELECT count(*) FROM SHELL_INPUTS WHERE session_id = "
-                           "(SELECT session_id FROM SHELL_INPUTS WHERE contains(session_id, 'abc123') LIMIT 1)").fetchone() == (1,)
+                           "(SELECT session_id FROM SHELL_INPUTS ORDER BY record_id LIMIT 1)").fetchone() == (1,)
         assert all(r[3] is None for r in rows), 'Behavior labels have no attacker-IP group'
     again = _ingest(root, '_ingest_shell_honeypot', db)
     assert json.loads(again.stdout)['skipped']
