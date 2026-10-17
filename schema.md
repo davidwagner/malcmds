@@ -13,6 +13,11 @@ Both tables have these columns:
 - `os` - `windows` or `linux`, inferred best-effort (ENUM).
 - `ai_label` - `malicious`, `benign`, or `unknown`, obtained by an AI classifier (ENUM)
 
+Label policy:
+- 'malicious' means the command is malicious, or evidence of an intrusion; commands that should trigger an alert to a sysadmin. If something looks like a security scan but it's ambiguous whether it is authorized or unauthorized, still label it 'malicious'.
+- 'benign' means the command is benign, harmless, does not contain evidence of an intrusion, should not trigger an alert to a system admin.
+- 'unknown' means it is unclear whether the command is malicious or benign.
+
 `PROCESS_LAUNCHES` also has:
 
 - `pgm` - the executable's full path, or its observed program name when the path is unavailable (VARCHAR).
