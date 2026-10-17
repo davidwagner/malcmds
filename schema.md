@@ -7,10 +7,11 @@ Both tables have these columns:
 
 - `dataset` - the original dataset, e.g., `optc` (VARCHAR).
 - `record_id` - an identifier that locates the original record in the dataset (VARCHAR). Shell-derived process identifiers can include an additional invocation index.
-- `dataset_label` - `malicious`, `benign`, `unknown`, or `malicious-group` (ENUM). `malicious-group` means the group identified by `group_id` is believed to contain some malicious activity, but it's not known which commands are malicious and which are benign (each command is not individually labelled).
+- `dataset_label` - label for this single command, `malicious`, `benign`, `unknown`, or `malicious-group` (ENUM). `malicious-group` means the group identified by `group_id` is believed to contain some malicious activity, but it's not known which commands are malicious and which are benign (each command is not individually labelled).
 - `group_id` - the label group's identifier when `dataset_label` is `malicious-group`; otherwise NULL (VARCHAR).
 - `session_id` - the login session, SSH connection, recorded agent task attempt, or other session identifier (VARCHAR).
 - `os` - `windows` or `linux`, inferred best-effort (ENUM).
+- `ai_label` - `malicious`, `benign`, or `unknown`, obtained by an AI classifier (ENUM)
 
 `PROCESS_LAUNCHES` also has:
 
@@ -27,6 +28,12 @@ Both tables have these columns:
 For example, `/bin/ls dir; ./go > out` produces one shell row with `pgms = ['ls', 'go']` and `tokens = ['/bin/ls', 'dir', ';', './go', '>', 'out']`. It also produces two process rows: `pgm = '/bin/ls', args = ['dir']` and `pgm = './go', args = []`.
 
 Native process telemetry populates only `PROCESS_LAUNCHES`. Parsing and normalization are best-effort.
+
+`SESSION_LABELS` labels each session, and has these rows:
+- `dataset`
+- `session_id`
+- `ai_label` - label for this session considered in its entirety, `malicious`, `benign`, or `unknown`, obtained by an AI classifier (ENUM)
+
 
 The `INGESTED` table tracks completion across both observation tables:
 
