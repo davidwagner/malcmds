@@ -1,0 +1,47 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6"]
+# ///
+"""Set CyberLab and Microsoft IoT dataset labels to unknown in an existing database.
+
+Both observation tables change in one transaction. Session identifiers, AI
+labels, source text, and ingestion status remain unchanged. Rerunning is safe.
+"""
+
+import argparse
+from pathlib import Path
+
+import duckdb
+
+
+def migrate(database):
+    """Repair dataset labels atomically without replacing any observations."""
+    if not database.is_file():
+        raise ValueError(f'Database does not exist: {database}')
+    with duckdb.connect(str(database)) as con:
+        con.execute('BEGIN')
+        try:
+            for table in ('SHELL_INPUTS', 'PROCESS_LAUNCHES'):
+                con.execute(f"""UPDATE {table}
+                    SET dataset_label = 'unknown', group_id = NULL
+                    WHERE dataset IN ('cyberlab', 'microsoft-iot')
+                      AND (dataset_label IS DISTINCT FROM 'unknown' OR group_id IS NOT NULL)""")
+            con.execute('COMMIT')
+        except Exception:
+            con.execute('ROLLBACK')
+            raise
+
+
+def main():
+    """Repair the explicitly selected database or the repository's default database."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--db', type=Path,
+                        default=Path(__file__).resolve().parents[1] / 'cmds.duckdb')
+    options = parser.parse_args()
+    migrate(options.db.resolve())
+    print('CyberLab and Microsoft IoT dataset labels are unknown in both observation tables.')
+
+
+if __name__ == '__main__':
+    main()

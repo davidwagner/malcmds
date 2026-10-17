@@ -66,7 +66,7 @@ def test_published_copies_and_automation(tmp_path, date, index, sid, count):
         rows = con.execute('SELECT record_id,pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES').fetchall()
         if count is not None:
             assert len(rows) == count
-        assert all(r[3:5] == ('malicious', None) for r in rows)
+        assert all(r[3:5] == ('unknown', None) for r in rows)
         assert all(r[5].endswith(':' + sid) for r in rows)
         assert {r[0].rsplit(':', 1)[0] for r in rows} == {
             f'{name}:{index}:{sid}:{position}' for position, _ in selected}
@@ -163,4 +163,4 @@ def test_handler_types_and_nested_container_types(tmp_path):
     with _ingest(tmp_path) as con:
         rows = con.execute('SELECT record_id,pgm,args,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()
         assert {r[0] for r in rows} == {f'events.json.gz:0:same:{index}:0' for index in [0, 2, 4, 5, 6]}
-        assert all(r[1:] == ('uname', [], 'malicious', None) for r in rows)
+        assert all(r[1:] == ('uname', [], 'unknown', None) for r in rows)

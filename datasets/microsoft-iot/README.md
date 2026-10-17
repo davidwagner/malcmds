@@ -8,12 +8,14 @@ The reader opens `Microsoft.IoT-Dump-pwd-infected.zip` with the publisher's pass
 
 - Shell `record_id` combines the sequence ID and zero-based `Commands` position. Process rows append the parsed-command position.
 - `session_id` is `microsoft-iot:` followed by the sequence ID. It groups the recorded sequence; individual connection IDs are unavailable.
-- `dataset_label` is `malicious` for every shell input and parsed command; `group_id` is NULL.
+- `dataset_label` is `unknown` for every shell input and parsed command; `group_id` is NULL.
 
-These are best-effort labels attributing commands to malware/attack input captured by the publisher's honeypots. Individual rows have not all been independently reviewed. For example, `uname -a` in an attacker sequence stays `malicious`, although administrators also use it. Normalized row counts are counts of commands, not connections or distinct sequences.
+Honeypot origin does not establish whether each command is harmful. Routine commands such as `uname -a` occur alongside attacks, so every command has an `unknown` dataset label. The source connection or sequence remains available in `session_id`. AI classifications, when present, are stored separately in `ai_label`.
 
 ## Ingestion
 
 Run `./ingest` from this directory to append to the root `cmds.duckdb`. For a separate sample, run `./ingest --db ../../tmp/microsoft-iot.duckdb --limit 100`. Repeated imports preserve one shell row per observed input and one process row per parsed invocation.
 
 Sources: [Microsoft announcement](https://techcommunity.microsoft.com/t5/azure-sentinel/enabling-security-research-amp-hunting-with-open-source-iot/ba-p/1279037), [published archive](https://github.com/Azure/Azure-Sentinel/blob/048039639702f528379307aca6f6881d74b142c8/Sample%20Data/Microsoft.IoT-Dump-pwd-infected.zip). See the shared [database schema](../../schema.md) for column definitions.
+
+To repair labels in an existing database without reingestion, run `../../scripts/migrate_honeypot_labels --db ../../cmds.duckdb` from this directory. The transaction updates both CyberLab and Microsoft IoT rows in both observation tables, clears `group_id`, and preserves other columns and session labels. Repeating it is safe.
