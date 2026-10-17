@@ -31,6 +31,7 @@ from _ingest import (
     select_files,
     shell_commands,
 )
+from _ingest_cyberlab_labels import cyberlab_label
 from _ingest_windows_apt_labels import decode_windows_apt_field
 from _shell_input import complete_inputs
 
@@ -455,9 +456,13 @@ def cyberlab(root, options):
                     for part, text in complete_inputs([item[2] for item in inputs]):
                         n, event, _ = inputs[part]
                         host = event.get("dst_host_identifier") or event.get("sensor") or ""
-                        yield from emitted(text, f"{path.name}:{index}:{sid}:{n}",
-                                           f"cyberlab:{path.name}:{host}:{sid}",
-                                           "unknown", shell=True)
+                        rid = f"{path.name}:{index}:{sid}:{n}"
+                        session = f"cyberlab:{path.name}:{host}:{sid}"
+                        # A sequence label does not label each parsed process.
+                        commands = [Command(program, args, f"{rid}:{i}", session_id=session)
+                                    for i, (program, args, _) in enumerate(shell_commands(text))]
+                        yield ShellInput(text, rid, commands, cyberlab_label(text),
+                                         session_id=session)
                     continue
                 for n, event in retained:
                     kind = event.get("eventid", "")
