@@ -1,0 +1,59 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6"]
+# ///
+"""Remove all rows for one or more dataset names from cmds.duckdb.
+
+Example: ./scripts/remove-dataset optc quasarnix
+Names are exact matches. Unknown names are harmless. All deletions commit
+in one transaction, including ingestion records so datasets can be reingested.
+"""
+
+import argparse
+from pathlib import Path
+
+import duckdb
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def remove_datasets(database, datasets):
+    """Delete matching rows from every table with a dataset column atomically."""
+    if not database.is_file():
+        raise FileNotFoundError(f'Database does not exist: {database}')
+    with duckdb.connect(str(database)) as con:
+        con.execute('BEGIN')
+        tables = con.execute('''
+            SELECT DISTINCT c.table_schema, c.table_name
+            FROM information_schema.columns c
+            JOIN information_schema.tables t
+              USING (table_catalog, table_schema, table_name)
+            WHERE lower(c.column_name) = 'dataset' AND t.table_type = 'BASE TABLE'
+            ORDER BY c.table_schema, c.table_name
+        ''').fetchall()
+        placeholders = ','.join('?' for _ in datasets)
+        for schema, table in tables:
+            qualified = '.'.join('"' + name.replace('"', '""') + '"'
+                                 for name in (schema, table))
+            con.execute(f'DELETE FROM {qualified} WHERE dataset IN ({placeholders})', datasets)
+        # Closing the connection rolls back if any statement above fails.
+        con.execute('COMMIT')
+    print('Removed datasets: ' + ', '.join(datasets))
+
+
+def main():
+    """Parse dataset names and an optional database path, then remove their rows."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('datasets', nargs='+', help='exact dataset names to remove')
+    parser.add_argument('--db', type=Path, default=ROOT / 'cmds.duckdb',
+                        help='database path (default: cmds.duckdb in the repository root)')
+    options = parser.parse_args()
+    try:
+        remove_datasets(options.db, options.datasets)
+    except (OSError, duckdb.Error) as error:
+        parser.exit(1, f'{parser.prog}: {error}\n')
+
+
+if __name__ == '__main__':
+    main()
