@@ -10,9 +10,9 @@ Each observed shell input produces one `SHELL_INPUTS` row. `shell_input` retains
 
 - Shell `record_id` identifies the daily file, connection object's position, connection ID and event position. Process rows append the parsed-command position.
 - `session_id` combines `cyberlab:`, the daily file, destination host identifier (or sensor), and Cowrie connection ID.
-- `dataset_label` is `malicious` for each retained remote input and command; `group_id` is NULL.
+- `dataset_label` is `unknown` for each retained remote input and command; `group_id` is NULL.
 
-These labels are best-effort attribution to attacker input captured by the honeypot. Individual rows have not all been independently reviewed. An attacker-issued `uname -a` remains `malicious`, including when Cowrie reports failure; the label does not mean that the command's syntax is inherently harmful. The connection is still available in `session_id`.
+Honeypot origin does not establish whether each command is harmful. Routine commands such as `uname -a` occur alongside attacks, so every command has an `unknown` dataset label. The source connection or sequence remains available in `session_id`. AI classifications, when present, are stored separately in `ai_label`.
 
 ## Ingestion
 
@@ -21,3 +21,5 @@ Run `./ingest` from this directory to append to the root `cmds.duckdb`. To inspe
 The published January 29, 2020 file is truncated. The reader retains its complete JSON objects.
 
 Sources: [dataset and description](https://zenodo.org/records/3687527), [Cowrie event reference](https://docs.cowrie.org/en/latest/OUTPUT.html). See the shared [database schema](../../schema.md) for column definitions.
+
+To repair labels in an existing database without reingestion, run `../../scripts/migrate_honeypot_labels --db ../../cmds.duckdb` from this directory. The transaction updates both CyberLab and Microsoft IoT rows in both observation tables, clears `group_id`, and preserves other columns and session labels. Repeating it is safe.

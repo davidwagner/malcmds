@@ -81,7 +81,7 @@ def test_real_dataset_idempotent(dataset, tmp_path):
         if dataset in ("cyberlab", "microsoft-iot"):
             assert (
                 connection.execute(
-                    "SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label != 'malicious'"
+                    "SELECT count(*) FROM PROCESS_LAUNCHES WHERE dataset_label != 'unknown'"
                 ).fetchall()[0][0]
                 == 0
             )

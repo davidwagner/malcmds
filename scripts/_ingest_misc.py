@@ -351,7 +351,7 @@ def microsoft_iot(root, options):
             sequence = str(row.get("ID", index))
             group = "microsoft-iot:" + sequence
             for i, text in complete_inputs(row["Commands"]):
-                yield from emitted(text, f"{sequence}:{i}", group, "malicious", shell=True)
+                yield from emitted(text, f"{sequence}:{i}", group, "unknown", shell=True)
 
 
 def gzip_json_items(path, *, allow_truncated=False):
@@ -457,7 +457,7 @@ def cyberlab(root, options):
                         host = event.get("dst_host_identifier") or event.get("sensor") or ""
                         yield from emitted(text, f"{path.name}:{index}:{sid}:{n}",
                                            f"cyberlab:{path.name}:{host}:{sid}",
-                                           "malicious", shell=True)
+                                           "unknown", shell=True)
                     continue
                 for n, event in retained:
                     kind = event.get("eventid", "")
@@ -484,7 +484,7 @@ def cyberlab(root, options):
                         text,
                         f"{path.name}:{index}:{sid}:{n}",
                         session,
-                        "malicious",
+                        "unknown",
                         None,
                         shell=kind == "cowrie.command.input",
                     )

@@ -1,4 +1,4 @@
-"""Remote honeypot inputs retain attack labels and shell syntax in storage."""
+"""Remote honeypot inputs retain unknown labels and shell syntax in storage."""
 import gzip
 import json
 import zipfile
@@ -30,15 +30,15 @@ def test_published_honeypot_commands(tmp_path, dataset):
     with duckdb.connect(str(database)) as con:
         shells = con.execute('SELECT pgms,dataset_label,group_id,session_id,shell_input,tokens FROM SHELL_INPUTS ORDER BY record_id').fetchall()
         processes = con.execute('SELECT pgm,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall()
-    assert shells and all(r[1] == 'malicious' and r[2] is None and r[3] for r in shells)
-    assert processes and all(r[1] == 'malicious' and r[2] is None and r[3] for r in processes)
+    assert shells and all(r[1] == 'unknown' and r[2] is None and r[3] for r in shells)
+    assert processes and all(r[1] == 'unknown' and r[2] is None and r[3] for r in processes)
     assert {r[4] for r in shells} == set(inputs)
     assert any(';' in r[5] for r in shells), 'Bash parser lost multi-command input syntax'
     if dataset == 'cyberlab':
         assert sum(r[0].count('system') for r in shells) == 1, 'A failed handler echo must not duplicate original input'
-        assert [(r[0], r[1], r[2]) for r in processes if r[0] == 'missing'] == [('missing', 'malicious', None)]
+        assert [(r[0], r[1], r[2]) for r in processes if r[0] == 'missing'] == [('missing', 'unknown', None)]
     else:
-        assert all(r[1] == 'malicious' for r in processes)
+        assert all(r[1] == 'unknown' for r in processes)
     assert len({r[3] for r in shells}) == 1
     again = invoke(tmp_path, database, source)
     assert again.returncode == 0, again.stderr
@@ -49,7 +49,7 @@ def test_published_honeypot_commands(tmp_path, dataset):
 
 @pytest.mark.parametrize('source', ['microsoft', 'input', 'success', 'failed'])
 def test_attacker_commands_keep_connection_or_sequence_without_label_group(tmp_path, source):
-    """Ordinary commands retain attacker attribution and independent source sessions."""
+    """Commands retain unknown labels and independent source sessions."""
     if source == 'microsoft':
         records = [{'ID': sid, 'TimesSeen': 1000, 'Commands': ['uname -a; id']}
                    for sid in ['first', 'second']]
@@ -82,12 +82,12 @@ def test_attacker_commands_keep_connection_or_sequence_without_label_group(tmp_p
             rows = con.execute('SELECT pgms,dataset_label,group_id,session_id FROM SHELL_INPUTS').fetchall()
             assert len(rows) == 2, 'Each observed submission must remain one row'
             assert {row[3] for row in rows} == expected_sessions
-            assert all(row[:3] == (['uname', 'id'], 'malicious', None) for row in rows)
+            assert all(row[:3] == (['uname', 'id'], 'unknown', None) for row in rows)
             assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (4,)
         rows = con.execute('SELECT pgm,args,dataset_label,group_id,session_id FROM PROCESS_LAUNCHES').fetchall()
         assert len(rows) == 4, 'Sequence repetition counts and Cowrie handler echoes must not multiply commands'
         assert {row[4] for row in rows} == expected_sessions
         for session in expected_sessions:
             assert sorted((pgm, args, label, group) for pgm, args, label, group, sid in rows if sid == session) == [
-                ('id', [], 'malicious', None), ('uname', ['-a'], 'malicious', None),
-            ], 'Honeypot attribution must not depend on command syntax or Cowrie success/failure'
+                ('id', [], 'unknown', None), ('uname', ['-a'], 'unknown', None),
+            ], 'Command labels must not depend on command syntax or Cowrie success/failure'
