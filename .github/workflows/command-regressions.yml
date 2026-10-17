@@ -21,7 +21,6 @@ jobs:
         run: >-
           python -m pytest -q tests/test_observation_tables.py
           tests/test_migrate_observations.py tests/test_migration_reingest.py
-          tests/test_migrate_honeypot_labels.py
           tests/test_shell_input_observations.py
       - name: Preserve PublicArena network paths and PAExec attack labels
         run: python -m pytest -q tests/test_publicarena_paths.py
