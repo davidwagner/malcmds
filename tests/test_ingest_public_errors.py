@@ -126,7 +126,7 @@ def test_quasarnix_command_labels_and_bounded_reading(tmp_path):
 
 
 def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
-    """Behavior labels ignore replay severity; explicit native IDs survive."""
+    """Behavior labels ignore replay severity; each input gets its own session."""
     root = tmp_path / 'shell-honeypot'
     raw = [
         {'eventid': 'cowrie.session.connect', 'src_ip': '192.0.2.1', 'session': 'native-one', 'timestamp': '2024-01-01'},
@@ -154,10 +154,23 @@ def test_honeypot_native_sessions_positive_inputs_and_annotations(tmp_path):
         rows = connection.execute('SELECT pgms,dataset_label,group_id,session_id,shell_input FROM SHELL_INPUTS ORDER BY record_id').fetchall()
         by_input = {row[4]: row for row in rows}
         assert by_input['id'][:3] == (['id'], 'benign', None)
-        assert ':record:' in by_input['id'][3]
-        assert by_input['id; whoami'][:4] == (['id', 'whoami'], 'benign', None, 'shell-honeypot:2024:deployment:native:native-two')
+        assert by_input['id; whoami'][:3] == (['id', 'whoami'], 'benign', None)
         assert by_input['uname -a'][:3] == (['uname'], 'benign', None)
-        assert by_input['uname -a'][3].endswith('2024/cowrie/capture.jsonl:line:7')
+        prefix = 'shell-honeypot:record:2024/cowrie/capture.jsonl:line:'
+        assert {text: row[3] for text, row in by_input.items()} == {
+            'id': prefix + '3',
+            'id; whoami': prefix + '4',
+            '# comment': prefix + '5',
+            'uname -a': prefix + '7',
+        }
+        assert connection.execute(
+            'SELECT pgm,session_id FROM PROCESS_LAUNCHES ORDER BY record_id'
+        ).fetchall() == [
+            ('id', prefix + '3'),
+            ('id', prefix + '4'),
+            ('whoami', prefix + '4'),
+            ('uname', prefix + '7'),
+        ]
     bounded = tmp_path / 'bounded.duckdb'
     result = invoke(root, bounded, 'from _ingest_shell_honeypot import records\n', '--max-records', '2')
     assert result.returncode == 0, result.stderr
