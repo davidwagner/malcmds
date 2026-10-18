@@ -1,0 +1,74 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6"]
+# ///
+"""Import a headerless AI-label CSV into every matching command row.
+
+Example: ./scripts/import_labels --db cmds.duckdb --table SHELL_INPUTS \
+    --labels labels/shell_inputs_luna_labels.csv
+
+Columns: label,shell_input or label,pgm,arg1,arg2,... . A process with no arguments
+has two columns; an empty argument is a separate empty column. Labels must be
+malicious, benign, or unknown. Matching uses exact text and full argument arrays
+across all datasets. Conflicting known AI labels produce warnings and are
+overwritten. Repeated CSV commands apply in file order. All updates commit in
+one transaction; malformed input rolls everything back. The final label is
+recomputed using human override, then known AI label, then dataset label.
+"""
+
+import argparse
+import csv
+import sys
+from pathlib import Path
+
+import duckdb
+
+
+def import_labels(database, table, labels):
+    """Apply CSV labels atomically and refresh the stored final label."""
+    if not database.is_file():
+        raise ValueError(f'Database does not exist: {database}')
+    if labels.resolve() == database.resolve():
+        raise ValueError('Labels and database must be separate files')
+    csv.field_size_limit(sys.maxsize)
+    predicate = 'shell_input = ?' if table == 'SHELL_INPUTS' else 'pgm = ? AND args = ?'
+    updated = 0
+    with labels.open(newline='', encoding='utf-8') as stream, duckdb.connect(str(database)) as con:
+        con.execute('BEGIN')
+        for number, row in enumerate(csv.reader(stream, strict=True), 1):
+            if (len(row) < 2 or row[0] not in ('malicious', 'benign', 'unknown')
+                    or (table == 'SHELL_INPUTS' and len(row) != 2)):
+                raise ValueError(f'Invalid CSV record {number}: expected label and exact command fields')
+            label = row[0]
+            command = [row[1]] if table == 'SHELL_INPUTS' else [row[1], row[2:]]
+            conflicts = con.execute(f'''SELECT count(*) FROM {table} WHERE {predicate}
+                AND ai_label IS NOT NULL AND ai_label != 'unknown' AND ai_label != ?''',
+                [*command, label]).fetchall()[0][0]
+            if conflicts:
+                print(f'Warning: CSV record {number} overwrites {conflicts} conflicting AI labels', file=sys.stderr)
+            # Use the incoming label explicitly: SQL SET expressions read the old row.
+            result = con.execute(f'''UPDATE {table} SET ai_label = ?, label =
+                COALESCE(override_label, NULLIF(?, 'unknown'),
+                         NULLIF(dataset_label::VARCHAR, 'malicious-group'), 'unknown')
+                WHERE {predicate}''', [label, label, *command])
+            updated += result.fetchall()[0][0]
+        con.execute('COMMIT')
+    print(f'Updated {updated} matching rows.')
+
+
+def main():
+    """Read import options and report invalid input without a traceback."""
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--db', type=Path, default=Path('cmds.duckdb'))
+    parser.add_argument('--table', choices=('SHELL_INPUTS', 'PROCESS_LAUNCHES'), required=True)
+    parser.add_argument('--labels', type=Path, required=True)
+    options = parser.parse_args()
+    try:
+        import_labels(options.db, options.table, options.labels)
+    except (OSError, ValueError, csv.Error, duckdb.Error) as error:
+        parser.exit(1, f'{parser.prog}: {error}\n')
+
+
+if __name__ == '__main__':
+    main()
