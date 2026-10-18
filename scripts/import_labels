@@ -11,9 +11,10 @@ Example: ./scripts/import_labels --db cmds.duckdb --table SHELL_INPUTS \
 Columns: label,shell_input or label,pgm,arg1,arg2,... . A process with no arguments
 has two columns; an empty argument is a separate empty column. Labels must be
 malicious, benign, or unknown. Matching uses exact text and full argument arrays
-across all datasets. Conflicting known AI labels produce warnings and are
-overwritten. Repeated CSV commands apply in file order. All updates commit in
-one transaction; malformed input rolls everything back. The final label is
+across all datasets. Conflicting known AI labels produce warnings with the old
+label, new label, and command, and are overwritten. Repeated CSV commands apply
+in file order. All updates commit in one transaction; malformed input rolls
+everything back. The final label is
 recomputed using human override, then known AI label, then dataset label.
 """
 
@@ -42,11 +43,14 @@ def import_labels(database, table, labels):
                 raise ValueError(f'Invalid CSV record {number}: expected label and exact command fields')
             label = row[0]
             command = [row[1]] if table == 'SHELL_INPUTS' else [row[1], row[2:]]
-            conflicts = con.execute(f'''SELECT count(*) FROM {table} WHERE {predicate}
-                AND ai_label IS NOT NULL AND ai_label != 'unknown' AND ai_label != ?''',
-                [*command, label]).fetchall()[0][0]
-            if conflicts:
-                print(f'Warning: CSV record {number} overwrites {conflicts} conflicting AI labels', file=sys.stderr)
+            conflicts = con.execute(f'''SELECT ai_label, count(*) FROM {table} WHERE {predicate}
+                AND ai_label IN ('malicious', 'benign') AND ai_label != ?
+                GROUP BY ai_label ORDER BY ai_label''', [*command, label]).fetchall()
+            for old_label, count in conflicts:
+                description = (f'shell_input={row[1]!r}' if table == 'SHELL_INPUTS'
+                               else f'pgm={row[1]!r}, args={row[2:]!r}')
+                print(f'Warning: CSV record {number} overwrites {count} conflicting AI labels: '
+                      f'{old_label!r} -> {label!r}; {description}', file=sys.stderr)
             # Use the incoming label explicitly: SQL SET expressions read the old row.
             result = con.execute(f'''UPDATE {table} SET ai_label = ?, label =
                 COALESCE(override_label, NULLIF(?, 'unknown'),

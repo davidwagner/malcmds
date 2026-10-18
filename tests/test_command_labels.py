@@ -390,3 +390,36 @@ def test_csv_without_newline_and_changed_recovery_results(tmp_path, changed):
     else:
         with output.open(newline='') as stream:
             assert list(csv.reader(stream)) == [['benign', 'existing'], ['malicious', 'echo "a,b"\nnext']]
+
+
+@pytest.mark.parametrize('table,fields,description', [
+    ('SHELL_INPUTS', ['echo "a,b"\nnext'], 'shell_input=\'echo "a,b"\\nnext\''),
+    ('PROCESS_LAUNCHES', ['/bin/echo', 'a b', ''], "pgm='/bin/echo', args=['a b', '']"),
+    ('PROCESS_LAUNCHES', ['/bin/echo'], "pgm='/bin/echo', args=[]"),
+])
+@pytest.mark.parametrize('new_label', ['benign', 'malicious', 'unknown'])
+def test_import_reports_each_conflicting_label(tmp_path, table, fields, description, new_label):
+    """Report both known old labels and exact commands, retaining duplicate counts."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    old_labels = ['benign', 'benign', 'malicious', 'unknown', None]
+    command = fields if table == 'SHELL_INPUTS' else [fields[0], fields[1:]]
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'DELETE FROM {table}')
+        for old_label in old_labels:
+            values = [*command, 'example', old_label, None, 'benign', 'benign']
+            con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+    write_csv(labels, [[new_label, *fields], [new_label, *fields]])
+    result = run('import_labels', '--db', db, '--table', table, '--labels', labels)
+    assert result.returncode == 0, result.stderr
+    expected = []
+    for old_label in ('benign', 'malicious'):
+        if old_label != new_label:
+            expected.append(
+                f'Warning: CSV record 1 overwrites {old_labels.count(old_label)} conflicting AI labels: '
+                f'{old_label!r} -> {new_label!r}; {description}')
+    assert sorted(result.stderr.splitlines()) == sorted(expected)
+    assert result.stdout == 'Updated 10 matching rows.\n'
+    with duckdb.connect(str(db)) as con:
+        assert con.execute(f'SELECT ai_label, label FROM {table}').fetchall() == [
+            (new_label, 'benign' if new_label == 'unknown' else new_label)] * 5
