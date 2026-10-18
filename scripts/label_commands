@@ -15,7 +15,10 @@ Import the headerless CSV:
 
 Set OPENAI_API_KEY for online operations. luna uses gpt-6-luna; sol uses
  gpt-6.1-sol (latest family models checked 2026-10-17). Only commands with NULL
-or unknown ai_label are selected, visiting datasets in the given order. Each
+or unknown ai_label are selected by default; --label-all includes known labels.
+--sample N selects up to N random unique commands per dataset, without replacement,
+after filtering and excluding commands already in the CSV or selected earlier.
+Datasets are visited in the given order. Each
 exact shell input or pgm/args combination is prepared once across all datasets.
 Commands already in the output CSV (including unknown labels) are skipped when
 preparing a new job. Existing CSV rows are preserved, including duplicates.
@@ -58,12 +61,16 @@ def main():
     parser.add_argument('--output', type=Path)
     parser.add_argument('--model', choices=MODELS)
     parser.add_argument('--datasets', nargs='+')
+    parser.add_argument('--sample', type=int, help='randomly select up to N eligible commands per dataset', metavar='N')
+    parser.add_argument('--label-all', action='store_true', help='include commands with any existing ai_label')
     parser.add_argument('--state', type=Path, help='persistent job manifest (default: tmp/label_commands-HASH.json)')
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--collect', action='store_true')
     modes.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--results', nargs='+', type=Path, help='downloaded output/error JSONL; requires --collect')
     options = parser.parse_args()
+    if options.sample is not None and options.sample <= 0:
+        parser.error('--sample must be a positive integer')
     if options.results and not options.collect:
         parser.error('--results requires --collect')
     if not options.state and not options.output:
@@ -102,6 +109,11 @@ def main():
                 return int(bool(collect(state_path, state, paths)))
             config = {'db': str(options.db.resolve()), 'output': str(options.output.resolve()),
                       'table': options.table, 'model': options.model, 'datasets': options.datasets}
+            # Omit defaults so jobs prepared before these options remain resumable.
+            if options.sample is not None:
+                config['sample'] = options.sample
+            if options.label_all:
+                config['label_all'] = True
             if state is not None and state['config'] != config:
                 raise ValueError('Options differ from the saved job; use a different --state for a new job')
             if state is None:
