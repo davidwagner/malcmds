@@ -69,10 +69,10 @@ def prepare(tmp_path, table='SHELL_INPUTS', model='luna'):
     return db, output, state
 
 
-@pytest.mark.parametrize('table,model,count', [('SHELL_INPUTS', 'luna', 3),
+@pytest.mark.parametrize('table,model,count', [('SHELL_INPUTS', 'luna', 2),
                                               ('PROCESS_LAUNCHES', 'sol', 4)])
 def test_prepare_selects_unique_unknown_commands(tmp_path, table, model, count):
-    """Deduplication is per dataset and preserves full argument arrays."""
+    """Deduplication spans datasets and preserves full argument arrays."""
     db, output, state = prepare(tmp_path, table, model)
     manifest = json.loads(state.read_text())
     rows = [row for chunk in manifest['chunks'] for row in chunk['commands']]
@@ -85,7 +85,7 @@ def test_prepare_selects_unique_unknown_commands(tmp_path, table, model, count):
     assert all(r['url'] == '/v1/responses' for r in requests)
     assert not output.exists()
     if table == 'SHELL_INPUTS':
-        assert rows == [['echo "a,b"\nnext'], [''], ['echo "a,b"\nnext']]
+        assert rows == [['echo "a,b"\nnext'], ['']]
     else:
         assert sorted(rows) == sorted([['/bin/echo', 'a b', ''], ['/bin/echo', 'a', 'b'],
                                       ['/bin/echo'], ['echo']])
@@ -209,7 +209,7 @@ def test_failed_and_missing_results_are_reported(tmp_path, body, status):
         result = run('label_commands', '--collect', '--state', state, '--results', download)
         assert result.returncode == 1
     assert output.read_bytes() == b''
-    assert json.loads(state.read_text())['failures'] == 3
+    assert json.loads(state.read_text())['failures'] == 2
 
 
 def test_process_import_preserves_argument_boundaries(tmp_path):
@@ -383,7 +383,7 @@ def test_csv_without_newline_and_changed_recovery_results(tmp_path, changed):
         'body': {'status': 'completed', 'output': [{'type': 'message', 'content': [
             {'type': 'output_text', 'text': 'malicious'}]}]}}}))
     result = run('label_commands', '--collect', '--state', state, '--results', download)
-    assert result.returncode == 1  # Two requests have no result.
+    assert result.returncode == 1  # One request has no result.
     if changed:
         assert 'Results changed' in result.stderr
         assert output.read_bytes() == b'benign,existing'
@@ -502,3 +502,66 @@ def test_import_bulk_exact_text(tmp_path, table):
         assert con.execute(f'SELECT ai_label, label FROM {table} WHERE ai_label IS NOT NULL').fetchall() == [('unknown', 'unknown')]
         if table == 'PROCESS_LAUNCHES':
             assert con.execute('SELECT ai_label FROM PROCESS_LAUNCHES WHERE args IS NULL').fetchall() == [(None,)]
+
+
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+@pytest.mark.parametrize('label', ['benign', 'malicious', 'unknown'])
+def test_prepare_skips_csv_and_cross_dataset_duplicates(tmp_path, table, label):
+    """Prepare exact, unique requests without changing existing classifications."""
+    db, output, state = (tmp_path / name for name in ('cmds.duckdb', 'labels.csv', 'job.json'))
+    database(db)
+    fields = ['echo "a,b"\nnext'] if table == 'SHELL_INPUTS' else ['/bin/echo', 'a b', '']
+    with duckdb.connect(str(db)) as con:
+        con.execute(f"INSERT INTO {table} SELECT * REPLACE ('second' AS dataset) FROM {table} WHERE dataset='first'")
+    write_csv(output, [[label, *fields], [label, *fields]])
+    original = output.read_bytes()
+    result = run('label_commands', '--db', db, '--table', table, '--output', output,
+                 '--model', 'luna', '--datasets', 'first', 'second', 'first', '--state', state,
+                 '--prepare-only')
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads(state.read_text())
+    commands = [row for chunk in manifest['chunks'] for row in chunk['commands']]
+    expected = [['']] if table == 'SHELL_INPUTS' else [['/bin/echo'], ['/bin/echo', 'a', 'b'], ['echo']]
+    assert sorted(commands) == sorted(expected)
+    requests = [json.loads(line) for chunk in manifest['chunks']
+                for line in Path(chunk['input']).read_text().splitlines()]
+    assert len(requests) == len(expected)
+    assert len({r['body']['input'] for r in requests}) == len(expected)
+    assert output.read_bytes() == original
+
+
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+def test_prepare_all_commands_already_in_csv(tmp_path, table):
+    """Large quoted fields and empty arguments match exactly, without API calls."""
+    db, output, state = (tmp_path / name for name in ('cmds.duckdb', 'labels.csv', 'job.json'))
+    database(db)
+    text = 'é,"\n' + 'x' * 140_000
+    fields = [text] if table == 'SHELL_INPUTS' else [text, '', 'a b']
+    command = fields if table == 'SHELL_INPUTS' else [fields[0], fields[1:]]
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'DELETE FROM {table}')
+        values = [*command, 'first', None, None, 'unknown', 'unknown']
+        con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+    write_csv(output, [['unknown', *fields]])
+    original = output.read_bytes()
+    result = run('label_commands', '--db', db, '--table', table, '--output', output,
+                 '--model', 'luna', '--datasets', 'first', '--state', state)
+    assert result.returncode == 0, result.stderr
+    assert 'No requests to submit' in result.stdout
+    assert json.loads(state.read_text())['chunks'] == []
+    assert output.read_bytes() == original
+
+
+@pytest.mark.parametrize('contents', ['', 'invalid,command\n', 'benign\n',
+                                       'benign,command,extra\n', 'benign,"unterminated'])
+def test_prepare_validates_existing_csv(tmp_path, contents):
+    """Empty CSVs permit preparation; invalid records fail before submission."""
+    db, output, state = (tmp_path / name for name in ('cmds.duckdb', 'labels.csv', 'job.json'))
+    database(db)
+    output.write_text(contents)
+    result = run('label_commands', '--db', db, '--table', 'SHELL_INPUTS', '--output', output,
+                 '--model', 'luna', '--datasets', 'first', '--state', state, '--prepare-only')
+    assert result.returncode == (1 if contents else 0), result.stderr
+    assert state.exists() == (not contents)
+    assert 'Traceback' not in result.stderr
+    assert output.read_text() == contents
