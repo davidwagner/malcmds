@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 from _ingest import Command, ShellInput, select_files, shell_commands
+from _ingest_cli_templates import fill_templates
 from _ingest_quasarnix import reference_commands
 
 FILES = {
@@ -87,6 +88,8 @@ def records(root: Path, options: argparse.Namespace) -> Iterator[ShellInput]:
                     text = command_text(text, occurrence)
                     if not text.strip():
                         continue
+                    if dataset == 'cli-commands-explained':
+                        text = fill_templates(text, occurrence, options.seed)
                     examined += 1
                     if text in reference:
                         removed += 1
