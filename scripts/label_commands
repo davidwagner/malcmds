@@ -1,0 +1,114 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6", "httpx==0.28.1", "tqdm==4.67.1"]
+# ///
+"""Label unique commands using the OpenAI Batch API (completion within 24 hours).
+
+Submit:
+  ./scripts/label_commands --db cmds.duckdb --table SHELL_INPUTS \
+    --output labels/shell_inputs_luna_labels.csv --model luna --datasets lade shellrisk-bench
+Collect later (repeat until complete):
+  ./scripts/label_commands --collect --output labels/shell_inputs_luna_labels.csv
+Import the headerless CSV:
+  ./scripts/import_labels --table SHELL_INPUTS --labels labels/shell_inputs_luna_labels.csv
+
+Set OPENAI_API_KEY for online operations. luna uses gpt-6-luna; sol uses
+ gpt-6.1-sol (latest family models checked 2026-10-17). Only commands with NULL
+or unknown ai_label are selected, separately for each dataset in given order.
+Exact pgm and argument arrays are preserved; process prompts use a JSON object.
+
+--prepare-only saves input JSONL and state without API calls. Repeat the original
+command without --prepare-only to submit. The saved state also makes repeated
+submissions and collection safe. Keep state until collection completes; use
+--state tmp/new-job.json for a fresh run after importing the previous labels.
+The default state is under ./tmp/, keyed by the absolute output path. Run from
+the same directory when collecting, or use the printed --state path.
+
+CSV has no header: label,shell_input or label,pgm,arg1,arg2,... . Existing rows
+are preserved. Collection waits for all batches, then appends in dataset order.
+Failed requests are reported, skipped, and cause exit status 1. Import successful
+labels and start a new job to retry the remaining unknown commands. Exit status
+2 means batches are still processing. A completed job is never appended twice.
+--results accepts downloaded Batch output/error JSONL files for offline collection
+(including files from batches submitted manually using prepared input JSONL).
+Collect within 30 days before OpenAI deletes the batch result files.
+"""
+
+import argparse
+import fcntl
+import hashlib
+import json
+from pathlib import Path
+
+import duckdb
+import httpx
+from _command_labels import MODELS, TABLES, collect, download, prepare, submit
+
+
+def main():
+    """Prepare, submit, or collect a persistent command-classification job."""
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--db', type=Path, default=Path('cmds.duckdb'))
+    parser.add_argument('--table', choices=TABLES)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--model', choices=MODELS)
+    parser.add_argument('--datasets', nargs='+')
+    parser.add_argument('--state', type=Path, help='persistent job manifest (default: tmp/label_commands-HASH.json)')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--collect', action='store_true')
+    modes.add_argument('--prepare-only', action='store_true')
+    parser.add_argument('--results', nargs='+', type=Path, help='downloaded output/error JSONL; requires --collect')
+    options = parser.parse_args()
+    if options.results and not options.collect:
+        parser.error('--results requires --collect')
+    if not options.state and not options.output:
+        parser.error('--output or --state is required')
+    if not options.collect and not all((options.output, options.table, options.model, options.datasets)):
+        parser.error('submission requires --output, --table, --model, and --datasets')
+    state_path = options.state
+    if state_path is None:
+        digest = hashlib.sha256(str(options.output.resolve()).encode()).hexdigest()[:20]
+        state_path = Path('tmp') / f'label_commands-{digest}.json'
+    state_path = state_path.resolve()
+    try:
+        lock_path = Path(str(state_path) + '.lock')
+        protected = [options.db.resolve(), state_path, lock_path]
+        if options.output:
+            protected.append(options.output.resolve())
+        if len(set(protected)) != len(protected):
+            raise ValueError('Output, database, state, and lock must be separate files')
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            state = json.loads(state_path.read_text()) if state_path.exists() else None
+            if options.collect:
+                if state is None:
+                    raise ValueError(f'No job at {state_path}; submit or prepare first')
+                if options.output and str(options.output.resolve()) != state['config']['output']:
+                    raise ValueError('--output differs from the saved job')
+                if state['exported']:
+                    print('This job has already been appended.')
+                    return int(bool(state.get('failures')))
+                paths = options.results
+                if paths is None:
+                    paths = download(state_path, state) if state['chunks'] else []
+                if paths is None:
+                    return 2
+                return int(bool(collect(state_path, state, paths)))
+            config = {'db': str(options.db.resolve()), 'output': str(options.output.resolve()),
+                      'table': options.table, 'model': options.model, 'datasets': options.datasets}
+            if state is not None and state['config'] != config:
+                raise ValueError('Options differ from the saved job; use a different --state for a new job')
+            if state is None:
+                state = prepare(state_path, config)
+            print(f'State: {state_path}\nCollect with: ./scripts/label_commands --collect --state {state_path}')
+            if not options.prepare_only:
+                submit(state_path, state)
+            return 0
+    except (OSError, ValueError, duckdb.Error, httpx.HTTPError) as error:
+        parser.exit(1, f'{parser.prog}: {error}\n')
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
