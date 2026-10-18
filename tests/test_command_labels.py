@@ -413,13 +413,92 @@ def test_import_reports_each_conflicting_label(tmp_path, table, fields, descript
     result = run('import_labels', '--db', db, '--table', table, '--labels', labels)
     assert result.returncode == 0, result.stderr
     expected = []
-    for old_label in ('benign', 'malicious'):
+    for old_label in ('malicious', 'benign'):
         if old_label != new_label:
             expected.append(
                 f'Warning: CSV record 1 overwrites {old_labels.count(old_label)} conflicting AI labels: '
                 f'{old_label!r} -> {new_label!r}; {description}')
-    assert sorted(result.stderr.splitlines()) == sorted(expected)
+    assert result.stderr.splitlines() == expected
     assert result.stdout == 'Updated 10 matching rows.\n'
     with duckdb.connect(str(db)) as con:
         assert con.execute(f'SELECT ai_label, label FROM {table}').fetchall() == [
             (new_label, 'benign' if new_label == 'unknown' else new_label)] * 5
+
+
+@pytest.mark.parametrize('table,fields', [
+    ('SHELL_INPUTS', ['echo "a,b"\nnext']),
+    ('PROCESS_LAUNCHES', ['/bin/echo', 'a b', '']),
+])
+def test_import_interleaved_transitions(tmp_path, table, fields):
+    """Every repeated CSV event retains its count and ordered conflict warnings."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    command = fields if table == 'SHELL_INPUTS' else [fields[0], fields[1:]]
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'DELETE FROM {table}')
+        for old in ('benign', 'malicious', 'unknown', None):
+            values = [*command, 'data', old, 'unknown', 'malicious-group', 'unknown']
+            con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+    write_csv(labels, [['malicious', *fields], ['benign', 'absent'],
+                      ['unknown', *fields], ['benign', *fields],
+                      ['benign', *fields], ['malicious', *fields]])
+    result = run('import_labels', '--db', db, '--table', table, '--labels', labels)
+    assert result.returncode == 0, result.stderr
+    description = (f'shell_input={fields[0]!r}' if table == 'SHELL_INPUTS'
+                   else f'pgm={fields[0]!r}, args={fields[1:]!r}')
+    assert result.stderr.splitlines() == [
+        f'Warning: CSV record {number} overwrites {count} conflicting AI labels: '
+        f'{old!r} -> {new!r}; {description}'
+        for number, count, old, new in [(1, 1, 'benign', 'malicious'),
+                                      (3, 4, 'malicious', 'unknown'),
+                                      (6, 4, 'benign', 'malicious')]]
+    assert result.stdout == 'Updated 20 matching rows.\n'
+    with duckdb.connect(str(db)) as con:
+        assert con.execute(f'SELECT ai_label, label FROM {table}').fetchall() == [
+            ('malicious', 'unknown')] * 4
+
+
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+@pytest.mark.parametrize('contents', ['', 'benign,absent\n', 'malicious,known\n"unterminated'])
+def test_import_empty_unmatched_and_bad_quoting(tmp_path, table, contents):
+    """Empty/unmatched inputs are no-ops; a malformed tail leaves all rows intact."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    with duckdb.connect(str(db)) as con:
+        before = con.execute(f'SELECT * FROM {table}').fetchall()
+    labels.write_text(contents)
+    result = run('import_labels', '--db', db, '--table', table, '--labels', labels)
+    if 'unterminated' in contents:
+        assert result.returncode == 1
+        assert 'unexpected end of data' in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == 'Updated 0 matching rows.\n'
+    with duckdb.connect(str(db)) as con:
+        assert con.execute(f'SELECT * FROM {table}').fetchall() == before
+
+
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+def test_import_bulk_exact_text(tmp_path, table):
+    """Bulk staging preserves Unicode, escapes, empty fields and large CSV fields."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    text = 'é,\\"\n\x00' + 'x' * 140_000
+    fields = [text] if table == 'SHELL_INPUTS' else [text, '', 'a b', '\\n', 'é']
+    command = fields if table == 'SHELL_INPUTS' else [fields[0], fields[1:]]
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'DELETE FROM {table}')
+        values = [*command, 'data', None, None, 'malicious-group', 'unknown']
+        con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+        if table == 'PROCESS_LAUNCHES':
+            con.execute("INSERT INTO PROCESS_LAUNCHES VALUES (?, NULL, 'data', NULL, NULL, 'unknown', 'unknown')", [text])
+    write_csv(labels, [['benign', f'absent {i}'] for i in range(5_000)] +
+              [['malicious', *fields], ['unknown', *fields]])
+    result = run('import_labels', '--db', db, '--table', table, '--labels', labels)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == 'Updated 2 matching rows.\n'
+    assert result.stderr.startswith('Warning: CSV record 5002 overwrites 1 conflicting AI labels:')
+    with duckdb.connect(str(db)) as con:
+        assert con.execute(f'SELECT ai_label, label FROM {table} WHERE ai_label IS NOT NULL').fetchall() == [('unknown', 'unknown')]
+        if table == 'PROCESS_LAUNCHES':
+            assert con.execute('SELECT ai_label FROM PROCESS_LAUNCHES WHERE args IS NULL').fetchall() == [(None,)]
