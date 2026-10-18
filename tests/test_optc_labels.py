@@ -42,11 +42,17 @@ def install_labels(root, tasks, exported=(), inria=(), intervals=()):
 
 
 def labels(database):
-    """Read final labels while enforcing the existing persistent schema."""
+    """Read dataset labels and check the schema and initial final labels."""
     with duckdb.connect(str(database), read_only=True) as connection:
         assert [row[0] for row in connection.execute('DESCRIBE PROCESS_LAUNCHES').fetchall()] == list(COLUMNS), (
             'OpTC labels must use existing PROCESS_LAUNCHES columns; no evidence columns are needed')
-        assert connection.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
+        assert connection.execute('SHOW TABLES').fetchall() == [
+            ('INGESTED',), ('PROCESS_LAUNCHES',), ('SESSION_LABELS',), ('SHELL_INPUTS',)]
+        for dataset_label, ai_label, override_label, label in connection.execute(
+                'SELECT dataset_label,ai_label,override_label,label FROM PROCESS_LAUNCHES').fetchall():
+            assert ai_label is None
+            assert override_label is None
+            assert label == ('unknown' if dataset_label in (None, 'malicious-group') else dataset_label)
         return {record.removesuffix(':0'): (label, group) for record, label, group in
                 connection.execute('SELECT record_id,dataset_label,group_id FROM PROCESS_LAUNCHES').fetchall()}
 

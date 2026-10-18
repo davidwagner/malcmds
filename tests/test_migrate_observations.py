@@ -44,9 +44,9 @@ def test_schema_migration_preserves_process_rows_and_constraints(tmp_path):
     result = migrate(path, '--schema-only')
     assert result.returncode == 0, result.stderr
     with duckdb.connect(str(path)) as con:
-        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
+        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SESSION_LABELS',), ('SHELL_INPUTS',)]
         assert con.execute('SELECT * FROM PROCESS_LAUNCHES').fetchall() == [
-            ('/bin/id', 'id', [], 'optc', 'keep', 'benign', None, 'session', 'linux')]
+            ('/bin/id', 'id', [], 'optc', 'keep', 'benign', None, 'session', 'linux', None, None, 'benign')]
         assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
         assert con.execute('SELECT * FROM INGESTED ORDER BY dataset').fetchall() == [
             (name, name == 'optc') for name in sorted(('optc', 'cyberlab', 'kypo', 'lade',
@@ -103,3 +103,19 @@ def test_migration_rejects_mixed_old_and_new_tables(tmp_path):
     assert 'both legacy and new' in result.stderr
     with duckdb.connect(str(path)) as con:
         assert con.execute('SELECT count(*) FROM COMMANDS').fetchone() == (8,)
+
+
+def test_migration_initializes_all_dataset_labels(tmp_path):
+    """Retained native processes get NULL classifier labels and a final label."""
+    path = tmp_path / 'legacy.duckdb'
+    legacy_database(path)
+    with duckdb.connect(str(path)) as con:
+        for label in ('malicious', 'unknown', 'malicious-group'):
+            con.execute("INSERT INTO COMMANDS VALUES ('id','id',[],NULL,[],'optc',?,?,?,'session','linux')",
+                        [label, label, 'group' if label == 'malicious-group' else None])
+    result = migrate(path, '--schema-only')
+    assert result.returncode == 0, result.stderr
+    with duckdb.connect(str(path)) as con:
+        assert con.execute('SELECT dataset_label,ai_label,override_label,label FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [
+            ('benign', None, None, 'benign'), ('malicious', None, None, 'malicious'),
+            ('malicious-group', None, None, 'unknown'), ('unknown', None, None, 'unknown')]

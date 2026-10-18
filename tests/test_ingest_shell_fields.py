@@ -42,7 +42,12 @@ def records(root, options):
         assert parsed['5:0'] == {'pgm': 'echo', 'args': ['ab']}
         assert con.execute("SELECT pgm,args,record_id FROM PROCESS_LAUNCHES WHERE record_id='native'").fetchall() == [('/bin/sh', ['-c', 'echo x > y'], 'native')]
         assert [row[0] for row in con.execute('DESCRIBE PROCESS_LAUNCHES').fetchall()] == [
-            'pgm', 'pgm_base', 'args', 'dataset', 'record_id', 'dataset_label', 'group_id', 'session_id', 'os']
+            'pgm', 'pgm_base', 'args', 'dataset', 'record_id', 'dataset_label', 'group_id', 'session_id', 'os',
+            'ai_label', 'override_label', 'label']
+        for table in ('PROCESS_LAUNCHES', 'SHELL_INPUTS'):
+            assert con.execute(
+                f'SELECT DISTINCT ai_label,override_label,label FROM {table}').fetchall() == [
+                    (None, None, 'unknown')]
     again = invoke(tmp_path, database, source)
     assert json.loads(again.stdout)['skipped']
 

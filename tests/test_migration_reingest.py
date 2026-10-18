@@ -31,8 +31,8 @@ def test_default_migration_resumes_remaining_dataset_and_preserves_completed_wor
     # remain available when a failed migration is resumed.
     with duckdb.connect(str(database)) as con:
         con.execute("UPDATE INGESTED SET ingested=true WHERE dataset != 'quasarnix'")
-        con.execute("INSERT INTO PROCESS_LAUNCHES VALUES ('/bin/echo','echo',['previous'],'microsoft-iot','completed:0','malicious',NULL,'previous-session','linux')")
-        con.execute("INSERT INTO SHELL_INPUTS (shell_input,pgms,tokens,dataset,record_id,dataset_label,group_id,session_id,os) VALUES ('/bin/echo previous',['echo'],['/bin/echo','previous'],'microsoft-iot','completed','malicious',NULL,'previous-session','linux')")
+        con.execute("INSERT INTO PROCESS_LAUNCHES VALUES ('/bin/echo','echo',['previous'],'microsoft-iot','completed:0','malicious',NULL,'previous-session','linux',NULL,NULL,'malicious')")
+        con.execute("INSERT INTO SHELL_INPUTS (shell_input,pgms,tokens,dataset,record_id,dataset_label,group_id,session_id,os,label) VALUES ('/bin/echo previous',['echo'],['/bin/echo','previous'],'microsoft-iot','completed','malicious',NULL,'previous-session','linux','malicious')")
     interrupted = subprocess.run(invocation, capture_output=True, text=True, check=False)
     assert interrupted.returncode != 0
     assert 'quasarnix' in interrupted.stderr

@@ -59,10 +59,18 @@ def migrate_schema(database):
             con.execute('ALTER TABLE PROCESS_LAUNCHES DROP COLUMN shell_input')
             con.execute('ALTER TABLE PROCESS_LAUNCHES DROP COLUMN other_tokens')
             con.execute('ALTER TABLE PROCESS_LAUNCHES RENAME COLUMN label TO dataset_label')
+            _initialize(con)
+            con.execute('ALTER TABLE PROCESS_LAUNCHES ADD COLUMN ai_label final_label')
+            con.execute('ALTER TABLE PROCESS_LAUNCHES ADD COLUMN override_label final_label')
+            con.execute("ALTER TABLE PROCESS_LAUNCHES ADD COLUMN label final_label DEFAULT 'unknown'")
+            con.execute('ALTER TABLE PROCESS_LAUNCHES ALTER COLUMN label SET NOT NULL')
+            con.execute('ALTER TABLE PROCESS_LAUNCHES ALTER COLUMN label DROP DEFAULT')
             # DuckDB cannot commit a DELETE followed by ALTER on that table.
             # Alter first, then remove the datasets inside the same transaction.
             con.execute(f'DELETE FROM PROCESS_LAUNCHES WHERE dataset IN ({placeholders})', DATASETS)
-            _initialize(con)
+            con.execute("""UPDATE PROCESS_LAUNCHES SET label = CASE
+                WHEN dataset_label = 'malicious-group' THEN 'unknown'
+                ELSE dataset_label::VARCHAR END""")
             con.execute('CREATE TABLE IF NOT EXISTS INGESTED (dataset VARCHAR, ingested BOOLEAN)')
             con.execute(f'DELETE FROM INGESTED WHERE dataset IN ({placeholders})', DATASETS)
             con.executemany('INSERT INTO INGESTED VALUES (?, false)', [(name,) for name in DATASETS])
