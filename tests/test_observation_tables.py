@@ -26,7 +26,7 @@ def records(root, options):
     assert (summary['processed'], summary['stored'], summary['process_launches'], summary['shell_inputs']) == (3, 6, 4, 2)
     with duckdb.connect(str(database)) as con:
         assert con.execute('SHOW TABLES').fetchall() == [
-            ('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
+            ('INGESTED',), ('PROCESS_LAUNCHES',), ('SESSION_LABELS',), ('SHELL_INPUTS',)]
         assert con.execute('SELECT pgm, args FROM PROCESS_LAUNCHES ORDER BY record_id').fetchall() == [
             ('/bin/ls', ['dir name']), ('./go', []), ('./go', []), ('/usr/bin/id', [])]
         assert con.execute('SELECT record_id, pgms, tokens FROM SHELL_INPUTS ORDER BY record_id').fetchall() == [

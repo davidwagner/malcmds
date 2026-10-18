@@ -18,15 +18,11 @@ def test_retry_replaces_dataset_and_preserves_other_datasets(tmp_path, markers):
     root.mkdir()
     database = tmp_path / 'commands.duckdb'
     with duckdb.connect(str(database)) as con:
-        con.execute("CREATE TYPE command_label AS ENUM ('malicious', 'benign', 'unknown', 'malicious-group')")
-        con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
-        con.execute("""CREATE TABLE PROCESS_LAUNCHES (
-            pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
-            dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
-            group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
-            CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
+        from _ingest import _initialize
+
+        _initialize(con)
         for dataset in (root.name, 'other'):
-            con.execute("INSERT INTO PROCESS_LAUNCHES VALUES ('old', 'old', [], ?, 'stale', 'unknown', NULL, 'session', 'linux')", [dataset])
+            con.execute("INSERT INTO PROCESS_LAUNCHES VALUES ('old', 'old', [], ?, 'stale', 'unknown', NULL, 'session', 'linux', NULL, NULL, 'unknown')", [dataset])
         if markers is not None:
             con.execute('CREATE TABLE INGESTED (dataset VARCHAR, ingested BOOLEAN)')
             con.executemany('INSERT INTO INGESTED VALUES (?, ?)', [(root.name, value) for value in markers])
@@ -64,7 +60,7 @@ def test_completed_dataset_initializes_tables_without_opening_reader(tmp_path):
     assert json.loads(result.stdout)['skipped'] is True
     with duckdb.connect(str(database)) as con:
         assert con.execute('SELECT ingested FROM INGESTED ORDER BY ingested').fetchall() == [(False,), (True,)]
-        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SHELL_INPUTS',)]
+        assert con.execute('SHOW TABLES').fetchall() == [('INGESTED',), ('PROCESS_LAUNCHES',), ('SESSION_LABELS',), ('SHELL_INPUTS',)]
         assert con.execute('SELECT count(*) FROM PROCESS_LAUNCHES').fetchone() == (0,)
         assert con.execute('SELECT count(*) FROM SHELL_INPUTS').fetchone() == (0,)
 

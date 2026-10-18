@@ -178,13 +178,15 @@ def test_arrow_and_duckdb_assumptions(tmp_path):
     assert decoded.equals(table), 'Arrow IPC lz4 round trip changed the batch'
     with duckdb.connect() as con:
         con.execute("CREATE TYPE command_label AS ENUM ('malicious', 'benign', 'unknown', 'malicious-group')")
+        con.execute("CREATE TYPE final_label AS ENUM ('malicious', 'benign', 'unknown')")
         con.execute("CREATE TYPE command_os AS ENUM ('windows', 'linux')")
         con.execute('CREATE TABLE t (pgm VARCHAR, pgm_base VARCHAR, args VARCHAR[], dataset VARCHAR, '
-                    'record_id VARCHAR, dataset_label command_label, group_id VARCHAR, session_id VARCHAR, os command_os)')
+                    'record_id VARCHAR, dataset_label command_label, group_id VARCHAR, session_id VARCHAR, os command_os, '
+                    'ai_label final_label, override_label final_label, label final_label)')
         con.register('batch', decoded)
         con.execute('INSERT INTO t SELECT * FROM batch')
         assert con.execute('SELECT * FROM t').fetchall() == [
             ('C:\\Windows\\cmd.exe', 'cmd.exe', ['/c', 'x'], 'optc', 'r', 'malicious-group', 'g',
-             'optc:record:r', 'windows'),
+             'optc:record:r', 'windows', None, None, 'unknown'),
             ('cmd.exe', 'cmd.exe', ['retained duplicate'], 'optc', 'r', 'unknown', None,
-             'optc:record:r', 'windows')], 'DuckDB no longer casts Arrow strings into the PROCESS_LAUNCHES columns'
+             'optc:record:r', 'windows', None, None, 'unknown')], 'DuckDB no longer casts Arrow strings into the PROCESS_LAUNCHES columns'

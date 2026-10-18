@@ -408,6 +408,7 @@ def arguments(dataset_dir):
 def _initialize(con):
     for name, values in (
         ("command_label", "'malicious', 'benign', 'unknown', 'malicious-group'"),
+        ("final_label", "'malicious', 'benign', 'unknown'"),
         ("command_os", "'windows', 'linux'"),
     ):
         con.execute(f"CREATE TYPE IF NOT EXISTS {name} AS ENUM ({values})")
@@ -415,17 +416,24 @@ def _initialize(con):
         pgm VARCHAR NOT NULL, pgm_base VARCHAR NOT NULL, args VARCHAR[] NOT NULL,
         dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
+        ai_label final_label, override_label final_label, label final_label NOT NULL,
         CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
     con.execute("""CREATE TABLE IF NOT EXISTS SHELL_INPUTS (
         shell_input VARCHAR NOT NULL, pgms VARCHAR[] NOT NULL, tokens VARCHAR[] NOT NULL,
         dataset VARCHAR NOT NULL, record_id VARCHAR NOT NULL, dataset_label command_label NOT NULL,
         group_id VARCHAR, session_id VARCHAR NOT NULL, os command_os NOT NULL,
+        ai_label final_label, override_label final_label, label final_label NOT NULL,
         CHECK ((dataset_label = 'malicious-group') = (group_id IS NOT NULL)))""")
+
+    con.execute("""CREATE TABLE IF NOT EXISTS SESSION_LABELS (
+        dataset VARCHAR NOT NULL, session_id VARCHAR NOT NULL,
+        ai_label final_label, override_label final_label,
+        label final_label NOT NULL DEFAULT 'unknown')""")
 
 
 COLUMNS = (
     "pgm", "pgm_base", "args", "dataset", "record_id", "dataset_label",
-    "group_id", "session_id", "os",
+    "group_id", "session_id", "os", "ai_label", "override_label", "label",
 )
 SCHEMA = pa.schema(
     [(name, pa.list_(pa.string()) if name == "args" else pa.string()) for name in COLUMNS]
@@ -449,7 +457,8 @@ def _session_id(observation: Command | ShellInput, dataset: str) -> str:
 
 def _metadata(command, dataset):
     return [dataset, command.record_id, command.label, command.group_id,
-            _session_id(command, dataset), command.os]
+            _session_id(command, dataset), command.os, None, None,
+            "unknown" if command.label == "malicious-group" else command.label]
 
 
 def command_table(commands, dataset):
