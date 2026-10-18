@@ -20,5 +20,5 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - run: python -m pip install duckdb==1.5.6 httpx==0.28.1 tqdm==4.67.1 pytest pytest-xdist
+      - run: python -m pip install duckdb==1.5.6 httpx==0.28.1 tqdm==4.67.1 pytest pytest-xdist uv
       - run: python -m pytest -q -n auto tests/test_command_labels.py tests/test_import_overrides.py
