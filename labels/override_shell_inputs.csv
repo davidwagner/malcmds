@@ -1,3 +1,8 @@
+malicious,/bin/busybox TSUNAMI
+malicious,/bin/busybox VFMKV
+malicious,cat /proc/mounts; /bin/busybox VFMKV
+malicious,tftp; wget; /bin/busybox VFMKV
+unknown,ping ; sh
 benign,shutdown -h now
 benign,sudo systemctl stop cron
 benign,mkfs.ext3 /dev/sda6
