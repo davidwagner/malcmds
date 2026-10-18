@@ -15,7 +15,10 @@ Import the headerless CSV:
 
 Set OPENAI_API_KEY for online operations. luna uses gpt-6-luna; sol uses
  gpt-6.1-sol (latest family models checked 2026-10-17). Only commands with NULL
-or unknown ai_label are selected, separately for each dataset in given order.
+or unknown ai_label are selected, visiting datasets in the given order. Each
+exact shell input or pgm/args combination is prepared once across all datasets.
+Commands already in the output CSV (including unknown labels) are skipped when
+preparing a new job. Existing CSV rows are preserved, including duplicates.
 Exact pgm and argument arrays are preserved; process prompts use a JSON object.
 
 --prepare-only saves input JSONL and state without API calls. Repeat the original
@@ -36,6 +39,7 @@ Collect within 30 days before OpenAI deletes the batch result files.
 """
 
 import argparse
+import csv
 import fcntl
 import hashlib
 import json
@@ -106,7 +110,7 @@ def main():
             if not options.prepare_only:
                 submit(state_path, state)
             return 0
-    except (OSError, ValueError, duckdb.Error, httpx.HTTPError) as error:
+    except (OSError, ValueError, csv.Error, duckdb.Error, httpx.HTTPError) as error:
         parser.exit(1, f'{parser.prog}: {error}\n')
 
 

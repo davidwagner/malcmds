@@ -54,9 +54,19 @@ def prepare(state_path, config):
     database = Path(config['db'])
     if not database.is_file():
         raise ValueError(f'Database does not exist: {database}')
+    table = config['table']
+    seen = set()
+    output = Path(config['output'])
+    if output.exists():
+        csv.field_size_limit(sys.maxsize)
+        with output.open(newline='', encoding='utf-8') as stream:
+            for number, row in enumerate(csv.reader(stream, strict=True), 1):
+                if (len(row) < 2 or row[0] not in LABELS
+                        or (table == 'SHELL_INPUTS' and len(row) != 2)):
+                    raise ValueError(f'Invalid CSV record {number}: expected label and exact command fields')
+                seen.add(tuple(row[1:]))
     directory = Path(tempfile.mkdtemp(dir=state_path.parent, prefix=state_path.stem + '-'))
     state = {'config': config, 'chunks': [], 'exported': False, 'directory': str(directory)}
-    table = config['table']
     columns = 'shell_input' if table == 'SHELL_INPUTS' else 'pgm, args'
     with duckdb.connect(str(database), read_only=True) as con:
         for dataset in config['datasets']:
@@ -69,6 +79,10 @@ def prepare(state_path, config):
                 while rows := cursor.fetchmany(1000):
                     for row in rows:
                         command = [row[0]] if table == 'SHELL_INPUTS' else [row[0], *row[1]]
+                        identity = tuple(command)
+                        if identity in seen:
+                            continue
+                        seen.add(identity)
                         text = row[0] if table == 'SHELL_INPUTS' else json.dumps(
                             {'pgm': row[0], 'args': row[1]}, ensure_ascii=False)
                         if chunk is None:
