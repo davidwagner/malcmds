@@ -1,0 +1,25 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["duckdb==1.5.6"]
+# ///
+"""Import a headerless human-override CSV into every matching command row.
+
+Example: ./scripts/import_overrides --db cmds.duckdb --table SHELL_INPUTS \
+    --labels labels/shell_inputs_overrides.csv
+
+Columns: label,shell_input or label,pgm,arg1,arg2,... . A process with no arguments
+has two columns; an empty argument is a separate empty column. Labels must be
+malicious, benign, or unknown. Matching uses exact text and full argument arrays
+across all datasets. Conflicting known override labels produce warnings with the old
+label, new label, and command, and are overwritten. Repeated CSV commands apply
+in file order. All updates commit in one transaction; malformed input rolls
+everything back. The final label is
+set to the override, including unknown. AI and dataset labels are preserved.
+CSV records are held in memory; database matching and updates use bulk joins.
+"""
+
+from _import_labels import main
+
+if __name__ == '__main__':
+    main(__doc__, override=True)
