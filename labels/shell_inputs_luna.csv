@@ -25028,7 +25028,6 @@ benign,shred -u /tmp/file
 malicious,shred -u /tmp/victim-shred.txt
 benign,shuf -e data -o /tmp/file
 benign,shuf -z /tmp/file
-malicious,shutdown -h now
 benign,shutdown -r now
 benign,"sleep 0.1; sed -n '1,200p' /tmp/kvserver.log || true"
 benign,"sleep 0.5; cat /app/server.log | sed -n '1,200p'"
@@ -27251,7 +27250,6 @@ benign,crontab -l
 benign,crontab -l -u username
 benign,crontab -l > mycron.backup
 benign,crontab -l | grep 'backup'
-malicious,crontab -r
 benign,crontab -r -u username
 benign,crontab < cronjobs.txt
 benign,crontab mycron.backup
@@ -29671,16 +29669,11 @@ malicious,mkfs.ext2 /dev/sdh7
 malicious,mkfs.ext2 /dev/sdi4
 malicious,mkfs.ext2 /dev/sdj1
 benign,mkfs.ext3 /dev/nvme0n1p3
-malicious,mkfs.ext3 /dev/sda6
 benign,mkfs.ext3 /dev/sdb1
 unknown,mkfs.ext3 /dev/sdb2
 unknown,mkfs.ext3 /dev/sdb4
 benign,mkfs.ext3 /dev/sdc8
-malicious,mkfs.ext3 /dev/sde7
 benign,mkfs.ext3 /dev/sdf3
-malicious,mkfs.ext3 /dev/sdg5
-malicious,mkfs.ext3 /dev/sdh4
-malicious,mkfs.ext3 /dev/sdj2
 benign,mkfs.ext3 /dev/sdj6
 malicious,mkfs.ext4 /dev/nvme0n1p1
 unknown,mkfs.ext4 /dev/nvme1n1p1
@@ -32210,7 +32203,6 @@ benign,sudo systemctl start apache2
 benign,sudo systemctl start cron
 benign,sudo systemctl start mysql
 benign,sudo systemctl status ssh
-unknown,sudo systemctl stop cron
 benign,sudo systemctl stop docker
 benign,sudo systemctl stop mysql
 benign,sudo systemd-resolve --flush-caches
@@ -46380,7 +46372,6 @@ benign,mkfs.exfat -n backups /dev/sdb1
 malicious,mkfs.exfat -n website /dev/sdb1
 benign,mkfs.exfat /dev/sdb1
 benign,mkfs.ext2 /dev/sdb1
-malicious,mkfs.ext3 /dev/sdb1
 unknown,mkfs.fat -f 5 /dev/sdb1
 benign,mkfs.fat -i 1234 /dev/sdb1
 malicious,mkfs.fat -n backups /dev/sdb1

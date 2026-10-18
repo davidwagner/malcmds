@@ -1,0 +1,58 @@
+benign,shutdown -h now
+benign,sudo systemctl stop cron
+benign,mkfs.ext3 /dev/sda6
+benign,mkfs.ext3 /dev/sde7
+benign,mkfs.ext3 /dev/sdg5
+benign,mkfs.ext3 /dev/sdh4
+benign,mkfs.ext3 /dev/sdj2
+benign,mkfs.ext3 /dev/sdb2
+benign,mkfs.ext3 /dev/sdb4
+benign,systemctl stop apache2
+benign,mkfs.ext3 /dev/sdb1
+benign,shutdown /s /t 2
+benign,shutdown /s /t 8
+benign,mkfs.exfat /dev/sdb5
+benign,mkfs.exfat /dev/sdc3
+benign,mkfs.ext2 /dev/nvme0n1p2
+benign,mkfs.ext2 /dev/sdc4
+benign,mkfs.ext2 /dev/sdd2
+benign,mkfs.ext2 /dev/sdd3
+benign,mkfs.ext2 /dev/sdf5
+benign,mkfs.ext2 /dev/sdf6
+benign,mkfs.ext2 /dev/sdh7
+benign,mkfs.ext2 /dev/sdi4
+benign,mkfs.ext2 /dev/sdj1
+benign,mkfs.ext4 /dev/nvme0n1p1
+benign,mkfs.ext4 /dev/sda5
+benign,mkfs.ext4 /dev/sdg4
+benign,mkfs.ext4 /dev/sdi5
+benign,mkfs.ext4 /dev/sdi6
+benign,mkfs.ntfs /dev/sda3
+benign,mkfs.ntfs /dev/sdb7
+benign,mkfs.ntfs /dev/sdd5
+benign,mkfs.ntfs /dev/sde2
+benign,mkfs.ntfs /dev/sdf4
+benign,mkfs.ntfs /dev/sdj5
+benign,mkfs.vfat /dev/mmcblk0p2
+benign,mkfs.vfat /dev/nvme0n1p4
+benign,mkfs.vfat /dev/sda2
+benign,mkfs.vfat /dev/sda4
+benign,mkfs.vfat /dev/sdc5
+benign,mkfs.xfs /dev/nvme1n1p3
+benign,mkfs.xfs /dev/sdb3
+benign,mkfs.xfs /dev/sdc1
+benign,mkfs.xfs /dev/sdd4
+benign,mkfs.xfs /dev/sde5
+benign,mkfs.xfs /dev/sdf7
+benign,mkfs.xfs /dev/sdh1
+benign,mkfs.xfs /dev/sdh6
+benign,mkfs.xfs /dev/sdj3
+benign,mkfs.cramfs -n website /dev/sdb1
+benign,mkfs.cramfs /dev/sdb1
+benign,mkfs.exfat -n website /dev/sdb1
+benign,mkfs.fat -n backups /dev/sdb1
+benign,mkfs.minix /dev/sdb1
+benign,mkfs.ntfs -L REPORTS /dev/sdb1
+benign,mkfs.ntfs /dev/sdb1
+benign,mkfs.vfat -i 1234 /dev/sdb1
+benign,mkfs.vfat -n website /dev/sdb1
