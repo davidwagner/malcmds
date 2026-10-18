@@ -565,3 +565,88 @@ def test_prepare_validates_existing_csv(tmp_path, contents):
     assert state.exists() == (not contents)
     assert 'Traceback' not in result.stderr
     assert output.read_text() == contents
+
+
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+@pytest.mark.parametrize('label_all', [False, True])
+@pytest.mark.parametrize('sample', [None, 3, 100])
+def test_sample_filters_and_deduplicates_before_selection(tmp_path, table, label_all, sample):
+    """Each dataset fills its sample from commands still eligible for this job."""
+    db, output, state = (tmp_path / name for name in ('cmds.duckdb', 'out.csv', 'job.json'))
+    columns = 'shell_input VARCHAR' if table == 'SHELL_INPUTS' else 'pgm VARCHAR, args VARCHAR[]'
+    with duckdb.connect(str(db)) as con:
+        con.execute(f'CREATE TABLE {table} ({columns}, dataset VARCHAR, ai_label VARCHAR)')
+        for dataset in ('first', 'second'):
+            for number in range(10):
+                command = [str(number)] if table == 'SHELL_INPUTS' else ['echo', [str(number), '', 'a b']]
+                label = [None, 'unknown', 'benign', 'malicious'][number % 4]
+                values = [*command, dataset, label]
+                for _ in range(number + 1):
+                    con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+    excluded = ['0'] if table == 'SHELL_INPUTS' else ['echo', '0', '', 'a b']
+    write_csv(output, [['unknown', *excluded]])
+    original = output.read_bytes()
+    args = ['--db', db, '--table', table, '--output', output, '--model', 'luna',
+            '--datasets', 'first', 'second', 'absent', '--state', state, '--prepare-only']
+    if sample is not None:
+        args += ['--sample', sample]
+    if label_all:
+        args += ['--label-all']
+    result = run('label_commands', *args)
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads(state.read_text())
+    eligible = set(range(1, 10)) if label_all else {1, 4, 5, 8, 9}
+    seen = set()
+    for dataset in ('first', 'second'):
+        commands = [row for chunk in manifest['chunks'] if chunk['dataset'] == dataset
+                    for row in chunk['commands']]
+        numbers = {int(row[0 if table == 'SHELL_INPUTS' else 1]) for row in commands}
+        assert len(commands) == len(numbers) == min(sample or 100, len(eligible - seen))
+        assert numbers <= eligible - seen
+        if table == 'PROCESS_LAUNCHES':
+            assert all(row == ['echo', row[1], '', 'a b'] for row in commands)
+        seen |= numbers
+    assert all(chunk['dataset'] != 'absent' for chunk in manifest['chunks'])
+    assert output.read_bytes() == original
+    repeated = run('label_commands', *args)
+    assert repeated.returncode == 0, repeated.stderr
+    assert json.loads(state.read_text()) == manifest
+    changed = run('label_commands', *args, '--sample', 2)
+    assert changed.returncode == 1
+    assert 'Options differ' in changed.stderr
+    if not label_all:
+        changed = run('label_commands', *args, '--label-all')
+        assert changed.returncode == 1
+        assert 'Options differ' in changed.stderr
+
+
+@pytest.mark.parametrize('value', ['0', '-1', '1.5', 'abc'])
+def test_sample_rejects_invalid_size(tmp_path, value):
+    """Invalid sample sizes fail during argument parsing."""
+    result = run('label_commands', '--sample', value)
+    assert result.returncode == 2
+    assert '--sample' in result.stderr
+    assert 'unrecognized arguments' not in result.stderr
+
+
+def test_sample_million_records(tmp_path):
+    """A million distinct commands produce only 1,000 saved requests."""
+    db, state = tmp_path / 'cmds.duckdb', tmp_path / 'job.json'
+    with duckdb.connect(str(db)) as con:
+        con.execute('''CREATE TABLE SHELL_INPUTS AS SELECT i::VARCHAR AS shell_input,
+            'data' AS dataset, NULL::VARCHAR AS ai_label FROM range(1000000) t(i)''')
+    result = run('label_commands', '--db', db, '--table', 'SHELL_INPUTS',
+                 '--output', tmp_path / 'out.csv', '--model', 'luna', '--datasets', 'data',
+                 '--state', state, '--prepare-only', '--sample', 1000)
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads(state.read_text())
+    commands = [row for chunk in manifest['chunks'] for row in chunk['commands']]
+    numbers = {int(row[0]) for row in commands}
+    assert len(commands) == len(numbers) == 1000
+    assert all(0 <= number < 1000000 for number in numbers)
+    # A random sample of 1,000 spans both halves with overwhelming probability.
+    assert min(numbers) < 500000 <= max(numbers)
+    requests = [json.loads(line) for chunk in manifest['chunks']
+                for line in Path(chunk['input']).read_text().splitlines()]
+    assert len(requests) == 1000
+    assert {r['body']['input'].split('\n', 1)[1] for r in requests} == {row[0] for row in commands}

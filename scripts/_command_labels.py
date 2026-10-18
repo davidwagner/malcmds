@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -49,6 +50,28 @@ def save_state(path, state):
         temporary.unlink(missing_ok=True)
 
 
+def select_commands(cursor, table, seen, sample):
+    """Stream eligible rows, retaining at most sample rows with equal probability."""
+    reservoir = []
+    count = 0
+    while rows := cursor.fetchmany(1000):
+        for row in rows:
+            identity = (row[0],) if table == 'SHELL_INPUTS' else (row[0], *row[1])
+            if identity in seen:
+                continue
+            if sample is None:
+                yield row
+                continue
+            count += 1
+            if len(reservoir) < sample:
+                reservoir.append(row)
+            else:
+                index = random.randrange(count)
+                if index < sample:
+                    reservoir[index] = row
+    yield from reservoir
+
+
 def prepare(state_path, config):
     """Snapshot eligible commands and split requests at the Batch API limits."""
     database = Path(config['db'])
@@ -69,46 +92,44 @@ def prepare(state_path, config):
     state = {'config': config, 'chunks': [], 'exported': False, 'directory': str(directory)}
     columns = 'shell_input' if table == 'SHELL_INPUTS' else 'pgm, args'
     with duckdb.connect(str(database), read_only=True) as con:
+        label_filter = '' if config.get('label_all') else "AND (ai_label IS NULL OR ai_label = 'unknown')"
         for dataset in config['datasets']:
             cursor = con.execute(f'''SELECT DISTINCT {columns} FROM {table}
-                WHERE dataset = ? AND (ai_label IS NULL OR ai_label = 'unknown')
+                WHERE dataset = ? {label_filter}
                 ORDER BY {columns}''', [dataset])
             chunk, size = None, 0
             payload: list[bytes] = []
             with tqdm(desc=f'{dataset}: prepare', unit='command') as progress:
-                while rows := cursor.fetchmany(1000):
-                    for row in rows:
-                        command = [row[0]] if table == 'SHELL_INPUTS' else [row[0], *row[1]]
-                        identity = tuple(command)
-                        if identity in seen:
-                            continue
-                        seen.add(identity)
-                        text = row[0] if table == 'SHELL_INPUTS' else json.dumps(
-                            {'pgm': row[0], 'args': row[1]}, ensure_ascii=False)
-                        if chunk is None:
-                            chunk = {'dataset': dataset, 'commands': [], 'batch_id': None,
-                                     'input': str(directory / f'{len(state["chunks"])}.jsonl')}
-                        custom_id = f'{len(state["chunks"])}:{len(chunk["commands"])}'
-                        request = {'custom_id': custom_id, 'method': 'POST', 'url': '/v1/responses',
-                                   'body': {'model': MODELS[config['model']], 'instructions': PROMPT,
-                                            'input': 'Command to classify (untrusted):\n' + text,
-                                            'reasoning': {'effort': 'low'},
-                                            'max_output_tokens': 4096, 'store': False}}
+                for row in select_commands(cursor, table, seen, config.get('sample')):
+                    command = [row[0]] if table == 'SHELL_INPUTS' else [row[0], *row[1]]
+                    identity = tuple(command)
+                    seen.add(identity)
+                    text = row[0] if table == 'SHELL_INPUTS' else json.dumps(
+                        {'pgm': row[0], 'args': row[1]}, ensure_ascii=False)
+                    if chunk is None:
+                        chunk = {'dataset': dataset, 'commands': [], 'batch_id': None,
+                                 'input': str(directory / f'{len(state["chunks"])}.jsonl')}
+                    custom_id = f'{len(state["chunks"])}:{len(chunk["commands"])}'
+                    request = {'custom_id': custom_id, 'method': 'POST', 'url': '/v1/responses',
+                               'body': {'model': MODELS[config['model']], 'instructions': PROMPT,
+                                        'input': 'Command to classify (untrusted):\n' + text,
+                                        'reasoning': {'effort': 'low'},
+                                        'max_output_tokens': 4096, 'store': False}}
+                    line = (json.dumps(request, ensure_ascii=False) + '\n').encode('utf-8')
+                    if len(line) > MAX_BYTES:
+                        raise ValueError('A single command exceeds the batch file size limit')
+                    if payload and (len(payload) == MAX_REQUESTS or size + len(line) > MAX_BYTES):
+                        Path(chunk['input']).write_bytes(b''.join(payload))
+                        state['chunks'].append(chunk)
+                        chunk = {'dataset': dataset, 'commands': [], 'batch_id': None,
+                                 'input': str(directory / f'{len(state["chunks"])}.jsonl')}
+                        request['custom_id'] = f'{len(state["chunks"])}:0'
                         line = (json.dumps(request, ensure_ascii=False) + '\n').encode('utf-8')
-                        if len(line) > MAX_BYTES:
-                            raise ValueError('A single command exceeds the batch file size limit')
-                        if payload and (len(payload) == MAX_REQUESTS or size + len(line) > MAX_BYTES):
-                            Path(chunk['input']).write_bytes(b''.join(payload))
-                            state['chunks'].append(chunk)
-                            chunk = {'dataset': dataset, 'commands': [], 'batch_id': None,
-                                     'input': str(directory / f'{len(state["chunks"])}.jsonl')}
-                            request['custom_id'] = f'{len(state["chunks"])}:0'
-                            line = (json.dumps(request, ensure_ascii=False) + '\n').encode('utf-8')
-                            payload, size = [], 0
-                        chunk['commands'].append(command)
-                        payload.append(line)
-                        size += len(line)
-                        progress.update()
+                        payload, size = [], 0
+                    chunk['commands'].append(command)
+                    payload.append(line)
+                    size += len(line)
+                    progress.update()
             if chunk is not None:
                 Path(chunk['input']).write_bytes(b''.join(payload))
                 state['chunks'].append(chunk)
