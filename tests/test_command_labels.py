@@ -131,6 +131,88 @@ def test_collect_downloaded_results_and_import(tmp_path, table):
             assert con.execute("SELECT count(*) FROM PROCESS_LAUNCHES WHERE ai_label='malicious'").fetchone() == (5,)
 
 
+@pytest.mark.parametrize('table', ['SHELL_INPUTS', 'PROCESS_LAUNCHES'])
+@pytest.mark.parametrize('script', ['import_labels', 'import_overrides'])
+def test_import_quote_heavy_bulk_finishes(tmp_path, table, script):
+    """Quote-heavy bulk imports finish promptly and preserve exact commands."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    payload = "'" * 65_536 + 'é,"\\\n\x00'
+    fields = [payload] if table == 'SHELL_INPUTS' else [payload, '', 'a b', '\\n']
+    command = fields if table == 'SHELL_INPUTS' else [fields[0], fields[1:]]
+    with duckdb.connect(str(db)) as con:
+        values = [*command, 'data', None, None, 'unknown', 'unknown']
+        con.execute(f'INSERT INTO {table} VALUES ({", ".join("?" for _ in values)})', values)
+    write_csv(labels, [['malicious', *fields]] +
+              [['benign', f'{i}{payload}'] for i in range(128)])
+    original = labels.read_bytes()
+    staging = tmp_path / 'staging'
+    staging.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'scripts' / script), '--db', str(db),
+         '--table', table, '--labels', str(labels)],
+        capture_output=True, text=True, check=False, timeout=15,
+        env={**os.environ, 'TMPDIR': str(staging)})
+    assert list(staging.iterdir()) == []
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == 'Updated 1 matching rows.\n'
+    assert result.stderr == ''
+    assert labels.read_bytes() == original
+    column = 'override_label' if script == 'import_overrides' else 'ai_label'
+    with duckdb.connect(str(db)) as con:
+        actual = con.execute(
+            f"SELECT * FROM {table} WHERE {column} = 'malicious'").fetchall()
+    expected = [*command, 'data', None, None, 'unknown', 'malicious']
+    expected[-3 if script == 'import_overrides' else -4] = 'malicious'
+    assert actual == [tuple(expected)]
+
+
+def test_import_record_larger_than_json_reader_default(tmp_path):
+    """A single record larger than 16 MiB still imports without truncation."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    database(db)
+    command = 'x' * (17 * 1024 * 1024) + 'é,"\\\n\x00'
+    with duckdb.connect(str(db)) as con:
+        con.execute("INSERT INTO SHELL_INPUTS VALUES (?, 'data', NULL, NULL, 'unknown', 'unknown')",
+                    [command])
+    write_csv(labels, [['malicious', command]])
+    result = run('import_labels', '--db', db, '--table', 'SHELL_INPUTS', '--labels', labels)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == 'Updated 1 matching rows.\n'
+    with duckdb.connect(str(db)) as con:
+        assert con.execute(
+            "SELECT shell_input, label FROM SHELL_INPUTS WHERE ai_label='malicious'"
+        ).fetchall() == [(command, 'malicious')]
+
+
+def test_import_update_failure_rolls_back_and_removes_staging(tmp_path):
+    """A real database constraint failure commits no changes or staging files."""
+    db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'
+    with duckdb.connect(str(db)) as con:
+        con.execute("""CREATE TABLE SHELL_INPUTS (
+            shell_input VARCHAR, ai_label VARCHAR, override_label VARCHAR,
+            dataset_label VARCHAR, label VARCHAR,
+            CHECK (shell_input != 'blocked' OR ai_label != 'malicious'))""")
+        con.execute("""INSERT INTO SHELL_INPUTS VALUES
+            ('allowed', NULL, NULL, 'benign', 'benign'),
+            ('blocked', NULL, NULL, 'benign', 'benign')""")
+        before = con.execute('SELECT * FROM SHELL_INPUTS ORDER BY shell_input').fetchall()
+    write_csv(labels, [['malicious', 'allowed'], ['malicious', 'blocked']])
+    staging = tmp_path / 'staging'
+    staging.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'scripts/import_labels'), '--db', str(db),
+         '--table', 'SHELL_INPUTS', '--labels', str(labels)],
+        capture_output=True, text=True, check=False,
+        env={**os.environ, 'TMPDIR': str(staging)})
+    assert result.returncode == 1
+    assert 'CHECK constraint failed' in result.stderr
+    assert 'Traceback' not in result.stderr
+    assert list(staging.iterdir()) == []
+    with duckdb.connect(str(db)) as con:
+        assert con.execute('SELECT * FROM SHELL_INPUTS ORDER BY shell_input').fetchall() == before
+
+
 def test_import_is_transactional_and_last_duplicate_wins(tmp_path):
     """Invalid rows roll back earlier updates; repeated commands follow CSV order."""
     db, labels = tmp_path / 'cmds.duckdb', tmp_path / 'labels.csv'

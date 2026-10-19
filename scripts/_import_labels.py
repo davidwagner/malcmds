@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import duckdb
@@ -37,12 +38,19 @@ def import_labels(database, table, labels, *, override=False):
             con.execute('BEGIN')
             # One row per exact command keeps both joins bounded by the table size,
             # even when the CSV and database contain many copies of that command.
-            # Bind one JSON string to avoid Python object conversion per staged field.
-            con.execute('''CREATE TEMP TABLE incoming AS
-                SELECT unnest(from_json(?, '[{"command":["VARCHAR"],"label":"VARCHAR"}]'),
-                              recursive := true)''',
-                [json.dumps([{'command': command, 'label': label}
-                             for command, label in final_labels.items()])])
+            # Bind only a file path, not a huge constant that the binder SQL-escapes.
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.jsonl') as staged:
+                maximum_object_size = 16 * 1024 * 1024
+                for command, label in final_labels.items():
+                    record = json.dumps({'command': command, 'label': label})
+                    staged.write(record + '\n')
+                    maximum_object_size = max(maximum_object_size, len(record) + 1)
+                staged.flush()
+                con.execute('''CREATE TEMP TABLE incoming AS
+                    SELECT * FROM read_json(?, format='newline_delimited',
+                        columns={command: 'VARCHAR[]', label: 'VARCHAR'},
+                        maximum_object_size=?)''',
+                    [staged.name, maximum_object_size])
             counts = {}
             for command, old_label, count in con.execute(f'''
                     SELECT incoming.command, target.{column}, count(*)
