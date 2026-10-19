@@ -180,7 +180,6 @@ malicious,wpscan --url url --enumerate vp --wp-content-dir remote/path/to/wp-con
 malicious,wpscan --url url --proxy protocol://ip:port --proxy-auth username:password
 malicious,wpscan --url url --stealthy
 malicious,wpscan --url url --usernames username|path/to/usernames.txt --passwords path/to/passwords.txt threads 20
-
 malicious,"./sqlmap.py --url=""https://example.org/index.html"" --data=""name=alice"" --banner"
 malicious,./sqlmap.py -r example.http --batch
 malicious,./sqlmap.py -r example.http --is-dba
